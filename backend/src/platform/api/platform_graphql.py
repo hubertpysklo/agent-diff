@@ -18,6 +18,7 @@ class PlatformGraphQL(ariadne.asgi.GraphQL):
             request.state.principal = principal
             return {"request": request, "session": session, "principal": principal}
         except Exception:
+            session.rollback()
             session.close()
             raise
 

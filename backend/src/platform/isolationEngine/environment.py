@@ -12,7 +12,7 @@ class EnvironmentHandler:
         self.session_manager = session_manager
 
     def create_schema(self, schema: str) -> None:
-        with self.session_manager.get_meta_session() as conn:
+        with self.session_manager.base_engine.begin() as conn:
             conn.execute(text(f'CREATE SCHEMA "{schema}"'))
 
     def migrate_schema(self, template_schema: str, target_schema: str) -> None:
