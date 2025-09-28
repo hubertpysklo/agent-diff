@@ -3,6 +3,8 @@ from backend.src.platform.isolationEngine.session import SessionManager
 from sqlalchemy import inspect
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSONB
+from backend.src.platform.db.schema import Diff
+from typing import Any
 
 
 class Differ:
@@ -92,11 +94,13 @@ class Differ:
                 deletes.extend(rows)
         return deletes
 
-    def get_diff(self, before_suffix: str, after_suffix: str) -> list[dict]:
+    def get_diff(
+        self, before_suffix: str, after_suffix: str
+    ) -> dict[str, list[dict[str, Any]]]:
         inserts = self.get_inserts(before_suffix, after_suffix)
         updates = self.get_updates(before_suffix, after_suffix)
         deletes = self.get_deletes(before_suffix, after_suffix)
-        return inserts + updates + deletes
+        return {"inserts": inserts, "updates": updates, "deletes": deletes}
 
     def archive_snapshots(self, suffix: str) -> None:
         with self.engine.begin() as conn:
@@ -107,5 +111,19 @@ class Differ:
                 """
                 conn.execute(text(sql))
 
-    def store_diff(self, diff: list[dict], suffix: str) -> None:
-        pass
+    def store_diff(
+        self, diff: list[dict], before_suffix: str, after_suffix: str
+    ) -> None:
+        session = self.session_manager.get_meta_session()
+        env_id, _ = self.session_manager.lookup_environment(self.schema)
+        diff_object = Diff(
+            environmentId=env_id,
+            beforeSuffix=before_suffix,
+            afterSuffix=after_suffix,
+            diff=diff,
+            createdAt=datetime.now(),
+            updatedAt=datetime.now(),
+        )
+        session.add(diff_object)
+        session.commit()
+        session.close()
