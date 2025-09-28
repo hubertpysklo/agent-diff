@@ -140,3 +140,15 @@ class ApiKey(PlatformBase):
     lastUsedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Diff(PlatformBase):
+    pass
+
+
+class TestRun(PlatformBase):
+    pass
+
+
+class TestSuite(PlatformBase):
+    pass

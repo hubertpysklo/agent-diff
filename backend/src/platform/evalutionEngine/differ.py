@@ -1,13 +1,8 @@
 from sqlalchemy import text
 from backend.src.platform.isolationEngine.session import SessionManager
-import json
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import MetaData
 from sqlalchemy import inspect
-from sqlalchemy import select
-from sqlalchemy.sql import table, column
-from sqlalchemy.sql.elements import quoted_name
 from datetime import datetime
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 class Differ:
@@ -46,21 +41,38 @@ class Differ:
                 inserts.extend(rows)
         return inserts
 
-    def get_updates(self, before_suffix: str, after_suffix: str) -> list[dict]:
+    def get_updates(
+        self,
+        before_suffix: str,
+        after_suffix: str,
+        exclude_cols: list[str] | list[str] = ["id"],
+    ) -> list[dict]:
         updates = []
         with self.engine.begin() as conn:
             for t in self.tables:
-                before_table = f"{t}_snapshot_{before_suffix}"
-                after_table = f"{t}_snapshot_{after_suffix}"
-                q_updates = f"""
+                before = f"{t}_snapshot_{before_suffix}"
+                after = f"{t}_snapshot_{after_suffix}"
+
+                cols = [
+                    c["name"] for c in self.inspector.get_columns(t, schema=self.schema)
+                ]
+                compare_cols = [c for c in cols if c not in exclude_cols]
+                if not compare_cols:
+                    continue
+
+                cmp_expr = " OR ".join(
+                    f"a.{self.q(c)} IS DISTINCT FROM b.{self.q(c)}"
+                    for c in compare_cols
+                )
+
+                sql = f"""
                     SELECT a.*
-                    FROM {self.q(self.schema)}.{self.q(after_table)} AS a
-                    LEFT JOIN {self.q(self.schema)}.{self.q(before_table)} AS b
-                    ON a.id = b.id
-                    WHERE b.id IS NOT NULL
+                    FROM {self.q(self.schema)}.{self.q(after)} AS a
+                    JOIN {self.q(self.schema)}.{self.q(before)} AS b
+                      ON a.id = b.id
+                    WHERE {cmp_expr}
                 """
-                rows = conn.execute(text(q_updates)).mappings().all()
-                updates.extend(rows)
+                updates.extend(conn.exec_driver_sql(sql).mappings().all())
         return updates
 
     def get_deletes(self, before_suffix: str, after_suffix: str) -> list[dict]:
@@ -86,13 +98,14 @@ class Differ:
         deletes = self.get_deletes(before_suffix, after_suffix)
         return inserts + updates + deletes
 
-    def normalize(self, data: list[dict]) -> list[dict]:
-        for d in data:
-            for k, v in d.items():
-                if isinstance(v, datetime):
-                    d[k] = v.isoformat()
-                elif isinstance(v, list):
-                    d[v] = self.normalize(v)
-                elif isinstance(v, dict):
-                    d[k] = self.normalize(v)
-        return data
+    def archive_snapshots(self, suffix: str) -> None:
+        with self.engine.begin() as conn:
+            for t in self.tables:
+                snapshot_table = f"{t}_snapshot_{suffix}"
+                sql = f"""
+                    DROP TABLE IF EXISTS {self.q(self.schema)}.{self.q(snapshot_table)}
+                """
+                conn.execute(text(sql))
+
+    def store_diff(self, diff: list[dict], suffix: str) -> None:
+        pass
