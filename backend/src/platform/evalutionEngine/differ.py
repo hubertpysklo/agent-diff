@@ -8,9 +8,12 @@ from typing import Any
 
 
 class Differ:
-    def __init__(self, schema: str, session_manager: SessionManager):
+    def __init__(
+        self, schema: str, environment_id: str, session_manager: SessionManager
+    ):
         self.session_manager = session_manager
         self.schema = schema
+        self.environment_id = environment_id
         self.engine = session_manager.base_engine
         self.inspector = inspect(self.engine)
         self.tables = self.inspector.get_table_names(schema=self.schema)
@@ -112,18 +115,25 @@ class Differ:
                 conn.execute(text(sql))
 
     def store_diff(
-        self, diff: list[dict], before_suffix: str, after_suffix: str
+        self,
+        diff: dict[str, list[dict[str, Any]]],
+        before_suffix: str,
+        after_suffix: str,
     ) -> None:
         session = self.session_manager.get_meta_session()
-        env_id, _ = self.session_manager.lookup_environment(self.schema)
-        diff_object = Diff(
-            environmentId=env_id,
-            beforeSuffix=before_suffix,
-            afterSuffix=after_suffix,
-            diff=diff,
-            createdAt=datetime.now(),
-            updatedAt=datetime.now(),
-        )
-        session.add(diff_object)
-        session.commit()
-        session.close()
+        try:
+            diff_object = Diff(
+                environmentId=self.environment_id,
+                beforeSuffix=before_suffix,
+                afterSuffix=after_suffix,
+                diff=diff,
+                createdAt=datetime.now(),
+                updatedAt=datetime.now(),
+            )
+            session.add(diff_object)
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
