@@ -1,7 +1,7 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, DateTime, Enum, UniqueConstraint, Integer, Boolean
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy import ForeignKey
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import ForeignKey, Text
 from datetime import datetime
 from uuid import uuid4
 
@@ -12,6 +12,7 @@ class PlatformBase(DeclarativeBase):
 
 class Organization(PlatformBase):
     __tablename__ = "organizations"
+    __table_args__ = ({"schema": "public"},)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     createdAt: Mapped[datetime] = mapped_column(
@@ -24,6 +25,7 @@ class Organization(PlatformBase):
 
 class User(PlatformBase):
     __tablename__ = "users"
+    __table_args__ = ({"schema": "public"},)
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
@@ -41,6 +43,7 @@ class User(PlatformBase):
 
 class OrganizationMembership(PlatformBase):
     __tablename__ = "organization_memberships"
+    __table_args__ = ({"schema": "public"},)
     userId: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     organizationId: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), primary_key=True
@@ -51,6 +54,7 @@ class OrganizationMembership(PlatformBase):
 
 class TemplateEnvironment(PlatformBase):
     __tablename__ = "environments"
+    __table_args__ = ({"schema": "public"},)
     __table_args__ = (
         UniqueConstraint(
             "service",
@@ -61,7 +65,7 @@ class TemplateEnvironment(PlatformBase):
             "version",
             name="uq_environments_identity",
         ),
-        {"schema": "meta"},  # keep control-plane out of state routing
+        {"schema": "public"},
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -99,7 +103,7 @@ class RunTimeEnvironment(PlatformBase):
     __tablename__ = "run_time_environments"
     __table_args__ = (
         UniqueConstraint("schema", name="uq_run_time_environments_schema"),
-        {"schema": "meta"},
+        {"schema": "public"},
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -129,6 +133,7 @@ class RunTimeEnvironment(PlatformBase):
 
 class ApiKey(PlatformBase):
     __tablename__ = "api_keys"
+    __table_args__ = ({"schema": "public"},)
     id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid4
     )
@@ -138,5 +143,93 @@ class ApiKey(PlatformBase):
     revokedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     userId: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     lastUsedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Diff(PlatformBase):
+    __tablename__ = "diffs"
+    __table_args__ = ({"schema": "public"},)
+    id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    environmentId: Mapped[UUID] = mapped_column(
+        ForeignKey("run_time_environments.id"), nullable=False
+    )
+    beforeSuffix: Mapped[str] = mapped_column(String(255), nullable=False)
+    afterSuffix: Mapped[str] = mapped_column(String(255), nullable=False)
+    diff: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class Test(PlatformBase):
+    __tablename__ = "tests"
+    __table_args__ = ({"schema": "public"},)
+    id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str] = mapped_column(
+        Enum("actionEval", "retriEval", "compositeEval", name="test_type"),
+        nullable=False,
+    )
+    expectedOutput: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class TestSuite(PlatformBase):
+    __tablename__ = "test_suites"
+    __table_args__ = ({"schema": "public"},)
+    id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    owner: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    visibility: Mapped[str] = mapped_column(
+        Enum("public", "private", name="test_suite_visibility"),
+        nullable=False,
+        default="private",
+    )
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class TestMembership(PlatformBase):
+    __tablename__ = "test_memberships"
+    __table_args__ = ({"schema": "public"},)
+    id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    testId: Mapped[UUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    testSuiteId: Mapped[UUID] = mapped_column(
+        ForeignKey("test_suites.id"), nullable=False
+    )
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+
+class TestRun(PlatformBase):
+    __tablename__ = "test_runs"
+    __table_args__ = ({"schema": "public"},)
+    id: Mapped[UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid4
+    )
+    testId: Mapped[UUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    testSuiteId: Mapped[UUID] = mapped_column(
+        ForeignKey("test_suites.id"), nullable=False
+    )
+    environmentId: Mapped[UUID] = mapped_column(
+        ForeignKey("run_time_environments.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        Enum("pending", "running", "completed", "failed", name="test_run_status"),
+        nullable=False,
+        default="pending",
+    )
+    result: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
