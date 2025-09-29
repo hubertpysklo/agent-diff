@@ -1,0 +1,167 @@
+{
+    "$schema": "",
+    "title": "Diff Universe DSL v0.1",
+    "type": "object",
+    "properties": {
+        "dsl_version": {
+            "type": "string",
+            "enum": [
+                "0.1"
+            ]
+        },
+        "masks": {
+            "type": "array",
+            "description": "Global fields to always ignore when computing diffs (e.g. timestamps, audit fields).",
+            "items": {
+                "type": "string",
+                "minLength": 1
+            },
+            "uniqueItems": true
+        },
+        "added": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/changeBlock"
+            }
+        },
+        "removed": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/changeBlock"
+            }
+        },
+        "changed": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/changeBlock"
+            }
+        }
+    },
+    "required": [
+        "dsl_version"
+    ],
+    "additionalProperties": false,
+    "$defs": {
+        "changeBlock": {
+            "type": "object",
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Name of the entity/table (e.g. issues, users)."
+                },
+                "where": {
+                    "type": "object",
+                    "description": "Filter to identify the target entity (business keys).",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                        "type": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "null"
+                        ]
+                    }
+                },
+                "assert": {
+                    "type": "object",
+                    "description": "Expected AFTER state of selected entity. At least one asserted field must differ from before snapshot.",
+                    "minProperties": 1,
+                    "additionalProperties": {
+                        "$ref": "#/$defs/predicate"
+                    }
+                },
+                "increment": {
+                    "type": "object",
+                    "description": "Row count delta (used for added/removed).",
+                    "properties": {
+                        "count": {
+                            "type": "integer"
+                        }
+                    },
+                    "required": [
+                        "count"
+                    ],
+                    "additionalProperties": false
+                },
+                "ignore": {
+                    "type": "array",
+                    "description": "Local fields to ignore for this block only.",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "uniqueItems": true
+                }
+            },
+            "required": [
+                "entity"
+            ],
+            "additionalProperties": false
+        },
+        "predicate": {
+            "type": "object",
+            "minProperties": 1,
+            "maxProperties": 1,
+            "properties": {
+                "eq": {
+                    "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "ne": {
+                    "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "in": {
+                    "type": "array",
+                    "items": {
+                        "type": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                },
+                "not_in": {
+                    "type": "array",
+                    "items": {
+                        "type": [
+                            "string",
+                            "number",
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "minItems": 1,
+                    "uniqueItems": true
+                },
+                "contains": {
+                    "type": "string"
+                },
+                "not_contains": {
+                    "type": "string"
+                },
+                "not_eq": {
+                    "type": [
+                        "string",
+                        "number",
+                        "boolean",
+                        "null"
+                    ]
+                }
+            },
+            "additionalProperties": false
+        }
+    }
+}

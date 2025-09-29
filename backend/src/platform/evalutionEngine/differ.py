@@ -2,7 +2,6 @@ from sqlalchemy import text
 from backend.src.platform.isolationEngine.session import SessionManager
 from sqlalchemy import inspect
 from datetime import datetime
-from sqlalchemy.dialects.postgresql import JSONB
 from backend.src.platform.db.schema import Diff
 from typing import Any
 
@@ -30,7 +29,7 @@ class Differ:
                 conn.execute(text(sql))
 
     def get_inserts(self, before_suffix: str, after_suffix: str) -> list[dict]:
-        inserts = []
+        inserts: list[dict] = []
         with self.engine.begin() as conn:
             for t in self.tables:
                 before_table = f"{t}_snapshot_{before_suffix}"
@@ -43,14 +42,17 @@ class Differ:
                     WHERE b.id IS NULL
                 """
                 rows = conn.execute(text(q_inserts)).mappings().all()
-                inserts.extend(rows)
+                for r in rows:
+                    item = dict(r)
+                    item["__table__"] = t
+                    inserts.append(item)
         return inserts
 
     def get_updates(
         self,
         before_suffix: str,
         after_suffix: str,
-        exclude_cols: list[str] | list[str] = ["id"],
+        exclude_cols: list[str] = ["id"],
     ) -> list[dict]:
         updates = []
         with self.engine.begin() as conn:
@@ -70,18 +72,32 @@ class Differ:
                     for c in compare_cols
                 )
 
+                proj_cols = ", ".join(
+                    [f"a.{self.q(c)} AS after_{c}" for c in cols]
+                    + [f"b.{self.q(c)} AS before_{c}" for c in cols]
+                )
                 sql = f"""
-                    SELECT a.*
+                    SELECT {proj_cols}
                     FROM {self.q(self.schema)}.{self.q(after)} AS a
                     JOIN {self.q(self.schema)}.{self.q(before)} AS b
                       ON a.id = b.id
                     WHERE {cmp_expr}
                 """
-                updates.extend(conn.exec_driver_sql(sql).mappings().all())
+                rows = conn.exec_driver_sql(sql).mappings().all()
+                for r in rows:
+                    after_map = {c: r.get(f"after_{c}") for c in cols}
+                    before_map = {c: r.get(f"before_{c}") for c in cols}
+                    updates.append(
+                        {
+                            "__table__": t,
+                            "after": after_map,
+                            "before": before_map,
+                        }
+                    )
         return updates
 
     def get_deletes(self, before_suffix: str, after_suffix: str) -> list[dict]:
-        deletes = []
+        deletes: list[dict] = []
         with self.engine.begin() as conn:
             for t in self.tables:
                 before_table = f"{t}_snapshot_{before_suffix}"
@@ -94,7 +110,10 @@ class Differ:
                     WHERE a.id IS NULL
                 """
                 rows = conn.execute(text(q_deletes)).mappings().all()
-                deletes.extend(rows)
+                for r in rows:
+                    item = dict(r)
+                    item["__table__"] = t
+                    deletes.append(item)
         return deletes
 
     def get_diff(
