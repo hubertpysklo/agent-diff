@@ -1,0 +1,1938 @@
+type Query {
+  """
+  All teams you the user can administrate. Administrable teams are teams whose settings the user can change, but to whose issues the user doesn't necessarily have access to.
+  """
+  administrableTeams(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned teams."""
+    filter: TeamFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): TeamConnection!
+
+  """All agent activities."""
+  agentActivities(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned agent activities."""
+    filter: AgentActivityFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): AgentActivityConnection!
+
+  """A specific agent activity."""
+  agentActivity(
+    """The identifier of the agent activity to retrieve."""
+    id: String!
+  ): AgentActivity!
+
+  """A specific agent session."""
+  agentSession(
+    """The identifier of the agent session to retrieve."""
+    id: String!
+  ): AgentSession!
+
+  """All agent sessions."""
+  agentSessions(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): AgentSessionConnection!
+
+  """All API keys for the user."""
+  apiKeys(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): ApiKeyConnection!
+
+  """Get basic information for an application."""
+  applicationInfo(
+    """The client ID of the application."""
+    clientId: String!
+  ): Application!
+
+  """
+  Get information for an application and whether a user has approved it for the given scopes.
+  """
+  applicationWithAuthorization(
+    """Actor mode used for the authorization."""
+    actor: String = "user"
+
+    """The client ID of the application."""
+    clientId: String!
+
+    """Redirect URI for the application."""
+    redirectUri: String
+
+    """Scopes being requested by the application."""
+    scope: [String!]!
+  ): UserAuthorizedApplication!
+
+  """[Internal] All archived teams of the organization."""
+  archivedTeams: [Team!]!
+
+  "\nOne specific issue attachment.\n[Deprecated] 'url' can no longer be used as the 'id' parameter. Use 'attachmentsForUrl' instead"
+  attachment(id: String!): Attachment!
+
+  "\nQuery an issue by its associated attachment, and its id.\n"
+  attachmentIssue(
+    """
+    `id` of the attachment for which you'll want to get the issue for. [Deprecated] `url` as the `id` parameter.
+    """
+    id: String!
+  ): Issue! @deprecated(reason: "Will be removed in near future, please use `attachmentsForURL` to get attachments and their issues instead.")
+
+  """
+  [Internal] Get a list of all unique attachment sources in the workspace.
+  """
+  attachmentSources(
+    """
+    (optional) if provided will only return attachment sources for the given team.
+    """
+    teamId: String
+  ): AttachmentSourcesPayload!
+
+  """
+  All issue attachments.
+  
+  To get attachments for a given URL, use `attachmentsForURL` query.
+  """
+  attachments(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned attachments."""
+    filter: AttachmentFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): AttachmentConnection!
+
+  """Returns issue attachments for a given `url`."""
+  attachmentsForURL(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """The attachment URL."""
+    url: String!
+  ): AttachmentConnection!
+
+  """All audit log entries."""
+  auditEntries(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned audit entries."""
+    filter: AuditEntryFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): AuditEntryConnection!
+
+  """List of audit entry types."""
+  auditEntryTypes: [AuditEntryType!]!
+
+  """User's active sessions."""
+  authenticationSessions: [AuthenticationSessionResponse!]!
+
+  """Fetch users belonging to this user account."""
+  availableUsers: AuthResolverResponse!
+
+  """A specific comment."""
+  comment(
+    """The hash of the comment to retrieve."""
+    hash: String
+
+    """The identifier of the comment to retrieve."""
+    id: String
+
+    """[Deprecated] The issue for which to find the comment."""
+    issueId: String @deprecated(reason: "Not in use anymore, please use `id` or `hash` directly.")
+  ): Comment!
+
+  """All comments."""
+  comments(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned comments."""
+    filter: CommentFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): CommentConnection!
+
+  """One specific custom view."""
+  customView(id: String!): CustomView!
+
+  """[INTERNAL] Suggests metadata for a view based on it's filters."""
+  customViewDetailsSuggestion(filter: JSONObject!, modelName: String): CustomViewSuggestionPayload!
+
+  """
+  Whether a custom view has other subscribers than the current user in the organization.
+  """
+  customViewHasSubscribers(
+    """The identifier of the custom view."""
+    id: String!
+  ): CustomViewHasSubscribersPayload!
+
+  """Custom views for the user."""
+  customViews(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned custom views."""
+    filter: CustomViewFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """[INTERNAL] Sort returned custom views."""
+    sort: [CustomViewSortInput!]
+  ): CustomViewConnection!
+
+  """One specific customer."""
+  customer(id: String!): Customer!
+
+  """One specific customer need"""
+  customerNeed(
+    """The hash of the need to retrieve."""
+    hash: String
+
+    """The identifier of the need to retrieve."""
+    id: String
+  ): CustomerNeed!
+
+  """All customer needs."""
+  customerNeeds(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned customers needs."""
+    filter: CustomerNeedFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): CustomerNeedConnection!
+
+  """One specific customer status."""
+  customerStatus(id: String!): CustomerStatus!
+
+  """All customer statuses."""
+  customerStatuses(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): CustomerStatusConnection!
+
+  """One specific customer tier."""
+  customerTier(id: String!): CustomerTier!
+
+  """All customer tiers."""
+  customerTiers(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): CustomerTierConnection!
+
+  """All customers."""
+  customers(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned customers."""
+    filter: CustomerFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """Sort returned customers."""
+    sorts: [CustomerSortInput!]
+  ): CustomerConnection!
+
+  """One specific cycle."""
+  cycle(id: String!): Cycle!
+
+  """All cycles."""
+  cycles(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned users."""
+    filter: CycleFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): CycleConnection!
+
+  """One specific document."""
+  document(id: String!): Document!
+
+  """A collection of document content history entries."""
+  documentContentHistory(id: String!): DocumentContentHistoryPayload!
+
+  """All documents in the workspace."""
+  documents(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned documents."""
+    filter: DocumentFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): DocumentConnection!
+
+  """One specific email intake address."""
+  emailIntakeAddress(id: String!): EmailIntakeAddress!
+
+  """A specific emoji."""
+  emoji(
+    """The identifier or the name of the emoji to retrieve."""
+    id: String!
+  ): Emoji!
+
+  """All custom emojis."""
+  emojis(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): EmojiConnection!
+
+  """One specific entity link."""
+  entityExternalLink(id: String!): EntityExternalLink!
+
+  """One specific external user."""
+  externalUser(
+    """The identifier of the external user to retrieve."""
+    id: String!
+  ): ExternalUser!
+
+  """All external users for the organization."""
+  externalUsers(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): ExternalUserConnection!
+
+  """
+  [INTERNAL] Webhook failure events for webhooks that belong to an OAuth application. (last 50)
+  """
+  failuresForOauthWebhooks(
+    """The identifier of the OAuth client to retrieve failures for."""
+    oauthClientId: String!
+  ): [WebhookFailureEvent!]!
+
+  """One specific favorite."""
+  favorite(id: String!): Favorite!
+
+  """The user's favorites."""
+  favorites(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): FavoriteConnection!
+
+  """
+  [Internal] Fetch an arbitrary set of data using natural language query. Be specific about what you want including properties for each entity, sort order, filters, limit and properties.
+  """
+  fetchData(
+    """
+    Natural language query describing what data to fetch.
+        
+        Examples:
+        - "All issues for the project with id 12345678-1234-1234-1234-123456789abc including comments"
+        - "The latest project update for each project that's a part of the initiative with id 12345678-1234-1234-1234-123456789abc, including it's sub-initiatives"
+    """
+    query: String!
+  ): FetchDataPayload!
+
+  """One specific initiative."""
+  initiative(id: String!): Initiative!
+
+  """One specific initiative relation."""
+  initiativeRelation(id: String!): ProjectRelation!
+
+  """All initiative relationships."""
+  initiativeRelations(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): InitiativeRelationConnection!
+
+  """One specific initiativeToProject."""
+  initiativeToProject(id: String!): InitiativeToProject!
+
+  """returns a list of initiative to project entities."""
+  initiativeToProjects(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): InitiativeToProjectConnection!
+
+  """A specific  initiative update."""
+  initiativeUpdate(
+    """The identifier of the  initiative update to retrieve."""
+    id: String!
+  ): InitiativeUpdate!
+
+  """All  InitiativeUpdates."""
+  initiativeUpdates(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned initiative updates."""
+    filter: InitiativeUpdateFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): InitiativeUpdateConnection!
+
+  """All initiatives in the workspace."""
+  initiatives(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned initiatives."""
+    filter: InitiativeFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """[INTERNAL] Sort returned initiatives."""
+    sort: [InitiativeSortInput!]
+  ): InitiativeConnection!
+
+  """One specific integration."""
+  integration(id: String!): Integration!
+
+  """Checks if the integration has all required scopes."""
+  integrationHasScopes(
+    """The integration ID."""
+    integrationId: String!
+
+    """Required scopes."""
+    scopes: [String!]!
+  ): IntegrationHasScopesPayload!
+
+  """One specific integrationTemplate."""
+  integrationTemplate(id: String!): IntegrationTemplate!
+
+  """Template and integration connections."""
+  integrationTemplates(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): IntegrationTemplateConnection!
+
+  """All integrations."""
+  integrations(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): IntegrationConnection!
+
+  """One specific set of settings."""
+  integrationsSettings(id: String!): IntegrationsSettings!
+
+  """One specific issue."""
+  issue(id: String!): Issue!
+
+  """Find issues that are related to a given Figma file key."""
+  issueFigmaFileKeySearch(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """The Figma file key."""
+    fileKey: String!
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): IssueConnection!
+
+  """Suggests filters for an issue view based on a text prompt."""
+  issueFilterSuggestion(
+    """The ID of the project if filtering a project view"""
+    projectId: String
+    prompt: String!
+  ): IssueFilterSuggestionPayload!
+
+  """Checks a CSV file validity against a specific import service."""
+  issueImportCheckCSV(
+    """CSV storage url."""
+    csvUrl: String!
+
+    """The service the CSV containing data from."""
+    service: String!
+  ): IssueImportCheckPayload!
+
+  """
+  Checks whether it will be possible to setup sync for this project or repository at the end of import
+  """
+  issueImportCheckSync(
+    """The ID of the issue import for which to check sync eligibility"""
+    issueImportId: String!
+  ): IssueImportSyncCheckPayload!
+
+  """
+  Checks whether a custom JQL query is valid and can be used to filter issues of a Jira import
+  """
+  issueImportJqlCheck(
+    """Jira user account email."""
+    jiraEmail: String!
+
+    """Jira installation or cloud hostname."""
+    jiraHostname: String!
+
+    """Jira project key to use as the base filter of the query."""
+    jiraProject: String!
+
+    """Jira personal access token to access Jira REST API."""
+    jiraToken: String!
+
+    """The JQL query to validate."""
+    jql: String!
+  ): IssueImportJqlCheckPayload!
+
+  """One specific label."""
+  issueLabel(id: String!): IssueLabel!
+
+  """All issue labels."""
+  issueLabels(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned issue labels."""
+    filter: IssueLabelFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): IssueLabelConnection!
+
+  """Issue priority values and corresponding labels."""
+  issuePriorityValues: [IssuePriorityValue!]!
+
+  """One specific issue relation."""
+  issueRelation(id: String!): IssueRelation!
+
+  """All issue relationships."""
+  issueRelations(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): IssueRelationConnection!
+
+  """
+  [DEPRECATED] Search issues. This endpoint is deprecated and will be removed in the future – use `searchIssues` instead.
+  """
+  issueSearch(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned issues."""
+    filter: IssueFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """[Deprecated] Search string to look for."""
+    query: String
+  ): IssueConnection!
+
+  """Suggests issue title based on a customer request."""
+  issueTitleSuggestionFromCustomerRequest(request: String!): IssueTitleSuggestionFromCustomerRequestPayload!
+
+  """Find issue based on the VCS branch name."""
+  issueVcsBranchSearch(
+    """The VCS branch name to search for."""
+    branchName: String!
+  ): Issue
+
+  """All issues."""
+  issues(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned issues."""
+    filter: IssueFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """[INTERNAL] Sort returned issues."""
+    sort: [IssueSortInput!]
+  ): IssueConnection!
+
+  """One specific notification."""
+  notification(id: String!): Notification!
+
+  """One specific notification subscription."""
+  notificationSubscription(id: String!): NotificationSubscription!
+
+  """The user's notification subscriptions."""
+  notificationSubscriptions(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): NotificationSubscriptionConnection!
+
+  """All notifications."""
+  notifications(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filters returned notifications."""
+    filter: NotificationFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): NotificationConnection!
+
+  """[Internal] A number of unread notifications."""
+  notificationsUnreadCount: Int!
+
+  """The user's organization."""
+  organization: Organization!
+
+  """[INTERNAL] Checks whether the domain can be claimed."""
+  organizationDomainClaimRequest(
+    """The ID of the organization domain to claim."""
+    id: String!
+  ): OrganizationDomainClaimPayload!
+
+  """Does the organization exist."""
+  organizationExists(urlKey: String!): OrganizationExistsPayload!
+
+  """One specific organization invite."""
+  organizationInvite(id: String!): OrganizationInvite!
+
+  """One specific organization invite."""
+  organizationInviteDetails(id: String!): OrganizationInviteDetailsPayload!
+
+  """All invites for the organization."""
+  organizationInvites(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): OrganizationInviteConnection!
+
+  """[INTERNAL] Get organization metadata by urlKey or organization id."""
+  organizationMeta(urlKey: String!): OrganizationMeta
+
+  """One specific project."""
+  project(id: String!): Project!
+
+  """Suggests filters for a project view based on a text prompt."""
+  projectFilterSuggestion(prompt: String!): ProjectFilterSuggestionPayload!
+
+  """One specific label."""
+  projectLabel(id: String!): ProjectLabel!
+
+  """All project labels."""
+  projectLabels(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned project labels."""
+    filter: ProjectLabelFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): ProjectLabelConnection!
+
+  """One specific project milestone."""
+  projectMilestone(id: String!): ProjectMilestone!
+
+  """All milestones for the project."""
+  projectMilestones(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned project milestones."""
+    filter: ProjectMilestoneFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): ProjectMilestoneConnection!
+
+  """One specific project relation."""
+  projectRelation(id: String!): ProjectRelation!
+
+  """All project relationships."""
+  projectRelations(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): ProjectRelationConnection!
+
+  """One specific project status."""
+  projectStatus(id: String!): ProjectStatus!
+
+  """
+  [INTERNAL] Count of projects using this project status across the organization.
+  """
+  projectStatusProjectCount(
+    """The identifier of the project status to find the project count for."""
+    id: String!
+  ): ProjectStatusCountPayload!
+
+  """All project statuses."""
+  projectStatuses(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): ProjectStatusConnection!
+
+  """A specific project update."""
+  projectUpdate(
+    """The identifier of the project update to retrieve."""
+    id: String!
+  ): ProjectUpdate!
+
+  """All project updates."""
+  projectUpdates(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned project updates."""
+    filter: ProjectUpdateFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): ProjectUpdateConnection!
+
+  """All projects."""
+  projects(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned projects."""
+    filter: ProjectFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """[INTERNAL] Sort returned projects."""
+    sort: [ProjectSortInput!]
+  ): ProjectConnection!
+
+  """Sends a test push message."""
+  pushSubscriptionTest(
+    """The send strategy to use."""
+    sendStrategy: SendStrategy = push
+
+    """Whether to send to mobile devices."""
+    targetMobile: Boolean = false
+  ): PushSubscriptionTestPayload!
+
+  """The status of the rate limiter."""
+  rateLimitStatus: RateLimitPayload!
+
+  """One specific roadmap."""
+  roadmap(id: String!): Roadmap! @deprecated(reason: "Roadmaps are deprecated, use initiatives instead.")
+
+  """One specific roadmapToProject."""
+  roadmapToProject(id: String!): RoadmapToProject! @deprecated(reason: "RoadmapToProject is deprecated, use InitiativeToProject instead.")
+  roadmapToProjects(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): RoadmapToProjectConnection! @deprecated(reason: "RoadmapToProject is deprecated, use InitiativeToProject instead.")
+
+  """All roadmaps in the workspace."""
+  roadmaps(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): RoadmapConnection! @deprecated(reason: "Roadmaps are deprecated, use initiatives instead.")
+
+  """Search documents."""
+  searchDocuments(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """Should associated comments be searched (default: false)."""
+    includeComments: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """Size of search snippet to return (default: 100)"""
+    snippetSize: Float @deprecated(reason: "No longer supported.")
+
+    """UUID of a team to use as a boost."""
+    teamId: String
+
+    """Search string to look for."""
+    term: String!
+  ): DocumentSearchPayload!
+
+  """Search issues."""
+  searchIssues(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned issues."""
+    filter: IssueFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """Should associated comments be searched (default: false)."""
+    includeComments: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """Size of search snippet to return (default: 100)"""
+    snippetSize: Float @deprecated(reason: "No longer supported.")
+
+    """UUID of a team to use as a boost."""
+    teamId: String
+
+    """Search string to look for."""
+    term: String!
+  ): IssueSearchPayload!
+
+  """Search projects."""
+  searchProjects(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """Should associated comments be searched (default: false)."""
+    includeComments: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """Size of search snippet to return (default: 100)"""
+    snippetSize: Float @deprecated(reason: "No longer supported.")
+
+    """UUID of a team to use as a boost."""
+    teamId: String
+
+    """Search string to look for."""
+    term: String!
+  ): ProjectSearchPayload!
+
+  """Search for various resources using natural language."""
+  semanticSearch(
+    """Filters to apply to the semantic search results of each type."""
+    filters: SemanticSearchFilters
+
+    """Whether to include archived results in the search (default: false)."""
+    includeArchived: Boolean
+
+    """The maximum number of results to return (default: 50)."""
+    maxResults: Int
+
+    """Search query to look for."""
+    query: String!
+
+    """The types of results to return (default: all)."""
+    types: [SemanticSearchResultType!]
+  ): SemanticSearchPayload!
+
+  """Fetch SSO login URL for the email provided."""
+  ssoUrlFromEmail(
+    """Email to query the SSO login URL by."""
+    email: String!
+
+    """Whether the client is the desktop app."""
+    isDesktop: Boolean
+  ): SsoUrlFromEmailResponse!
+
+  """
+  [Internal] AI summary of the latest project updates for the given projects
+  """
+  summarizeProjectUpdates(
+    """The identifiers of the projects to summarize."""
+    ids: [String!]!
+  ): SummaryPayload!
+
+  """One specific team."""
+  team(id: String!): Team!
+
+  """One specific team membership."""
+  teamMembership(id: String!): TeamMembership!
+
+  """All team memberships."""
+  teamMemberships(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): TeamMembershipConnection!
+
+  """
+  All teams whose issues can be accessed by the user. This might be different from `administrableTeams`, which also includes teams whose settings can be changed by the user.
+  """
+  teams(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned teams."""
+    filter: TeamFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): TeamConnection!
+
+  """A specific template."""
+  template(
+    """The identifier of the template to retrieve."""
+    id: String!
+  ): Template!
+
+  """All templates from all users."""
+  templates: [Template!]!
+
+  """Returns all templates that are associated with the integration type."""
+  templatesForIntegration(
+    """The type of integration for which to return associated templates."""
+    integrationType: String!
+  ): [Template!]!
+
+  """A specific time schedule."""
+  timeSchedule(
+    """The identifier of the time schedule to retrieve."""
+    id: String!
+  ): TimeSchedule!
+
+  """All time schedules."""
+  timeSchedules(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): TimeScheduleConnection!
+
+  """All triage responsibilities."""
+  triageResponsibilities(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): TriageResponsibilityConnection!
+
+  """A specific triage responsibility."""
+  triageResponsibility(
+    """The identifier of the triage responsibility to retrieve."""
+    id: String!
+  ): TriageResponsibility!
+
+  """One specific user."""
+  user(
+    """
+    The identifier of the user to retrieve. To retrieve the authenticated user, use `viewer` query.
+    """
+    id: String!
+  ): User!
+
+  """The user's settings."""
+  userSettings: UserSettings!
+
+  """All users for the organization."""
+  users(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned users."""
+    filter: UserFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """Should query return disabled/suspended users (default: false)."""
+    includeDisabled: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+
+    """[INTERNAL] Sort returned users."""
+    sort: [UserSortInput!]
+  ): UserConnection!
+
+  """
+  Verify that we received the correct response from the GitHub Enterprise Server.
+  """
+  verifyGitHubEnterpriseServerInstallation(
+    """The integration ID."""
+    integrationId: String!
+  ): GitHubEnterpriseServerInstallVerificationPayload!
+
+  """The currently authenticated user."""
+  viewer: User!
+
+  """A specific webhook."""
+  webhook(
+    """The identifier of the webhook to retrieve."""
+    id: String!
+  ): Webhook!
+
+  """All webhooks."""
+  webhooks(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): WebhookConnection!
+
+  """One specific state."""
+  workflowState(id: String!): WorkflowState!
+
+  """All issue workflow states."""
+  workflowStates(
+    """A cursor to be used with first for forward pagination"""
+    after: String
+
+    """A cursor to be used with last for backward pagination."""
+    before: String
+
+    """Filter returned workflow states."""
+    filter: WorkflowStateFilter
+
+    """
+    The number of items to forward paginate (used with after). Defaults to 50.
+    """
+    first: Int
+
+    """Should archived resources be included (default: false)"""
+    includeArchived: Boolean
+
+    """
+    The number of items to backward paginate (used with before). Defaults to 50.
+    """
+    last: Int
+
+    """
+    By which field should the pagination order by. Available options are createdAt (default) and updatedAt.
+    """
+    orderBy: PaginationOrderBy
+  ): WorkflowStateConnection!
+}
