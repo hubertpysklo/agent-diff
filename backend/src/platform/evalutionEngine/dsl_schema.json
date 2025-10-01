@@ -112,7 +112,7 @@
                         "null"
                     ]
                 },
-                "neq": {
+                "ne": {
                     "type": [
                         "string",
                         "number",
