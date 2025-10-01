@@ -7,10 +7,10 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.16.5",
     "ariadne>=0.26.2",
+    "jsonschema>=4.25.1",
     "psycopg2-binary>=2.9.10",
     "pyjwt>=2.10.1",
     "python-dotenv>=1.1.1",
-    "pyyaml>=6.0.3",
     "sqlalchemy>=2.0.43",
     "starlette>=0.48.0",
 ]

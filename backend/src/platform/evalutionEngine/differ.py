@@ -52,7 +52,7 @@ class Differ:
         self,
         before_suffix: str,
         after_suffix: str,
-        exclude_cols: list[str] = ["id"],
+        exclude_cols: list[str] | None = None,
     ) -> list[dict]:
         updates = []
         with self.engine.begin() as conn:
@@ -63,7 +63,11 @@ class Differ:
                 cols = [
                     c["name"] for c in self.inspector.get_columns(t, schema=self.schema)
                 ]
-                compare_cols = [c for c in cols if c not in exclude_cols]
+                if exclude_cols is not None:
+                    compare_cols = [c for c in cols if c not in exclude_cols]
+                else:
+                    compare_cols = cols
+
                 if not compare_cols:
                     continue
 

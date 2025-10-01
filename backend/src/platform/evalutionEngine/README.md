@@ -1,68 +1,71 @@
 
 
-# Diff Universe DSL
+# Diff Universe Assertions (JSON)
 
-Diff Universe DSL is a lightweight, human-readable format for describing expected state changes in isolated environments.
-It is designed for evaluating LLM agents and system behaviors by comparing before/after snapshots.
-Think of it as a Git diff for your data.
+Define expected state changes as JSON that the engine validates against `dsl_schema.json`, then evaluate against diffs produced by `Differ`.
 
 ---
 
-## Quick Example
+## Quick Example (JSON)
 
-```yaml
-dsl_version: "0.1"
-
-masks:                # global fields to ignore in all diffs
-  - updated_at
-  - archived_at
-
-added:
-  - entity: issue
-    where: { project: Frontend }
-    assert:
-      title.eq: Artem
-    increment:
-      count: 1
-
-removed:
-  - entity: issue
-    where: { id: 2 }
-    increment:
-      count: -1
-
-changed:
-  - entity: issue
-    where: { name: Artem }
-    assert:
-      description.contains: hi
-    ignore:            # local ignore for this block
-      - sort_order
+```json
+{
+  "version": "0.1",
+  "scenario": "at_risk_project_updates",
+  "task": "Add 'At Risk' comments to at-risk projects",
+  "ignore_fields": {
+    "global": ["createdAt", "updatedAt", "id"]
+  },
+  "assertions": [
+    {
+      "diff_type": "added",
+      "entity": "comments",
+      "where": { "projectId": {"eq": 1}, "body": {"contains": "At Risk"} },
+      "expected_count": 3,
+      "description": "Alpha project gets 3 comments"
+    },
+    {
+      "diff_type": "added",
+      "entity": "comments",
+      "where": { "projectId": {"eq": 3}, "body": {"contains": "At Risk"} },
+      "expected_count": 2,
+      "description": "Gamma project gets 2 comments"
+    },
+    {
+      "diff_type": "added",
+      "entity": "comments",
+      "where": { "projectId": {"eq": 2} },
+      "expected_count": 0,
+      "description": "Beta project unchanged"
+    }
+  ]
+}
 ```
 
 ---
 
 ## Core Concepts
 
-* **entity** – the table or resource (e.g. `issues`, `users`, `messages`)
-* **where** – filters to identify records by business keys
-* **assert** – expected after-state using predicates
-* **increment** – expected row-count delta (`+1` for add, `-1` for remove)
-* **masks** – global fields to ignore in all diffs
-* **ignore** – per-block fields to ignore
+- **version**: schema version (currently `0.1`).
+- **ignore_fields**: fields to ignore globally and per-entity when diffing.
+- **assertions**: list of checks. Each assertion has:
+  - **diff_type**: `added` | `removed` | `changed` | `unchanged`.
+  - **entity**: table/resource name (matches `__table__` in diff rows).
+  - **where**: field predicates to match rows; primitives imply `eq`.
+  - **expected_count**: exact number or `{min,max}` range. If omitted, defaults to “at least 1” for added/removed/changed, and “0” for unchanged.
+  - **expected_changes** (changed only): `{ field: { from, to } }` where `from`/`to` accept primitives or predicates. With `strict=true` (default), only listed fields may change.
 
 ---
 
 ## Predicates
 
-Available operators inside `assert`:
+Operators supported in predicates (in `where` and in `expected_changes.from/to`):
 
-| Operator        | Example                         | Meaning                        |
-| --------------- | ------------------------------- | ------------------------------ |
-| `eq`            | `status.eq: done`               | value must equal               |
-| `ne` / `not_eq` | `priority.ne: low`              | value must not equal           |
-| `in`            | `status.in: [open, backlog]`    | value must be in list          |
-| `not_in`        | `status.not_in: [done, closed]` | value must not be in list      |
-| `contains`      | `description.contains: hi`      | string contains substring      |
-| `not_contains`  | `title.not_contains: draft`     | string must not contain string |
+- **eq**, **ne**
+- **in**, **not_in**
+- **contains**, **not_contains**, **i_contains**, **starts_with**, **ends_with**, **i_starts_with**, **i_ends_with**, **regex**
+- **gt**, **gte**, **lt**, **lte**
+- **exists** (boolean), **has_any**, **has_all** (for arrays)
+
+See full contract in `dsl_schema.json`.
 
