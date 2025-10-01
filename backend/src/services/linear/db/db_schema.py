@@ -23,6 +23,10 @@ class Organization(LinearBase):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     urlKey: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    allowedAuthServices: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, nullable=False
+    )
+    region: Mapped[str] = mapped_column(String(32), default="us", nullable=False)
     allowMembersToInvite: Mapped[bool] = mapped_column(Boolean, default=True)
     restrictLabelManagementToAdmins: Mapped[bool] = mapped_column(
         Boolean, default=False
@@ -33,6 +37,16 @@ class Organization(LinearBase):
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     users: Mapped[list["User"]] = relationship(
         "User",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+    )
+    teams: Mapped[list["Team"]] = relationship(
+        "Team",
+        back_populates="organization",
+        cascade="all, delete-orphan",
+    )
+    projects: Mapped[list["Project"]] = relationship(
+        "Project",
         back_populates="organization",
         cascade="all, delete-orphan",
     )
@@ -107,6 +121,15 @@ class Team(LinearBase):
     archivedAt: Mapped[datetime | None] = mapped_column(DateTime)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    organization: Mapped["Organization"] = relationship(
+        "Organization",
+        back_populates="teams",
+    )
+    issues: Mapped[list["Issue"]] = relationship(
+        "Issue",
+        back_populates="team",
+        cascade="all, delete-orphan",
+    )
 
 
 class TeamMembership(LinearBase):
@@ -179,6 +202,33 @@ class Issue(LinearBase):
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     completedAt: Mapped[datetime | None] = mapped_column(DateTime)
     canceledAt: Mapped[datetime | None] = mapped_column(DateTime)
+    team: Mapped["Team"] = relationship(
+        "Team",
+        back_populates="issues",
+    )
+    attachments: Mapped[list["Attachment"]] = relationship(
+        "Attachment",
+        foreign_keys="Attachment.issueId",
+        back_populates="issue",
+        cascade="all, delete-orphan",
+    )
+    originalAttachments: Mapped[list["Attachment"]] = relationship(
+        "Attachment",
+        foreign_keys="Attachment.originalIssueId",
+        back_populates="originalIssue",
+    )
+    blocks: Mapped[list["IssueRelation"]] = relationship(
+        "IssueRelation",
+        foreign_keys="IssueRelation.issueId",
+        back_populates="issue",
+        cascade="all, delete-orphan",
+    )
+    blocked_by: Mapped[list["IssueRelation"]] = relationship(
+        "IssueRelation",
+        foreign_keys="IssueRelation.relatedIssueId",
+        back_populates="relatedIssue",
+        cascade="all, delete-orphan",
+    )
 
 
 class Project(LinearBase):
@@ -200,6 +250,7 @@ class Project(LinearBase):
         String(64), ForeignKey("issues.id")
     )
     statusId: Mapped[str] = mapped_column(String(64), ForeignKey("project_statuses.id"))
+    statusType: Mapped[str | None] = mapped_column(String(32))
     completedAt: Mapped[datetime | None] = mapped_column(DateTime)
     startDate: Mapped[date | None] = mapped_column(Date)
     startedAt: Mapped[datetime | None] = mapped_column(DateTime)
@@ -209,6 +260,10 @@ class Project(LinearBase):
     archivedAt: Mapped[datetime | None] = mapped_column(DateTime)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    organization: Mapped["Organization"] = relationship(
+        "Organization",
+        back_populates="projects",
+    )
 
 
 class ProjectMember(LinearBase):
@@ -275,3 +330,57 @@ class WorkflowState(LinearBase):
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     archivedAt: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class IssueRelation(LinearBase):
+    __tablename__ = "issue_relations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    issueId: Mapped[str] = mapped_column(String(64), ForeignKey("issues.id"), nullable=False)
+    relatedIssueId: Mapped[str] = mapped_column(String(64), ForeignKey("issues.id"), nullable=False)
+    type: Mapped[str] = mapped_column(String(32), nullable=False)
+    archivedAt: Mapped[datetime | None] = mapped_column(DateTime)
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    issue: Mapped["Issue"] = relationship(
+        "Issue",
+        foreign_keys=[issueId],
+        back_populates="blocks",
+    )
+    relatedIssue: Mapped["Issue"] = relationship(
+        "Issue",
+        foreign_keys=[relatedIssueId],
+        back_populates="blocked_by",
+    )
+
+class Attachment(LinearBase):
+    __tablename__ = "attachments"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    issueId: Mapped[str] = mapped_column(String(64), ForeignKey("issues.id"), nullable=False)
+    originalIssueId: Mapped[str | None] = mapped_column(String(64), ForeignKey("issues.id"))
+    creatorId: Mapped[str | None] = mapped_column(String(64), ForeignKey("users.id"))
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    subtitle: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str] = mapped_column(String(1024), unique=True, nullable=False)
+    bodyData: Mapped[str | None] = mapped_column(Text)
+    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    source: Mapped[dict | None] = mapped_column(JSONB)
+    sourceType: Mapped[str | None] = mapped_column(String(64))
+    groupBySource: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    archivedAt: Mapped[datetime | None] = mapped_column(DateTime)
+    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+
+    issue: Mapped["Issue"] = relationship(
+        "Issue",
+        foreign_keys=[issueId],
+        back_populates="attachments",
+    )
+    originalIssue: Mapped["Issue" | None] = relationship(
+        "Issue",
+        foreign_keys=[originalIssueId],
+        back_populates="originalAttachments",
+    )
+    creator: Mapped["User" | None] = relationship("User")
