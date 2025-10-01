@@ -49,7 +49,7 @@ POST /linear/graphql
 
 - Run a diff (Python) using the evaluation engine:
 ```python
-from backend.src.platform.evalutionEngine.differ import Differ
+from backend.src.platform.evaluationEngine.differ import Differ
 from backend.src.platform.isolationEngine.session import SessionManager
 from sqlalchemy import create_engine
 
@@ -90,7 +90,7 @@ uv run pytest   # when tests are added
   - environment.py: create/mirror/seed/register env
   - session.py: meta/env/token sessions
   - auth.py: JWT
-- backend/src/platform/evalutionEngine/
+- backend/src/platform/evaluationEngine/
   - differ.py: snapshot schema + SQL diff
   - (assertions.py, core.py): assertion DSL and orchestration (WIP)
 - backend/src/platform/api/
