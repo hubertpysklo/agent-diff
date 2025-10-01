@@ -1,92 +1,31 @@
 {
     "$schema": "",
     "title": "Diff Universe DSL v0.1",
+    "description": "Schema for defining expected state changes in isolated environments",
     "type": "object",
     "properties": {
-        "dsl_version": {
+        "version": {
             "type": "string",
             "enum": [
                 "0.1"
-            ]
+            ],
+            "description": "DSL version"
         },
-        "masks": {
-            "type": "array",
-            "description": "Global fields to always ignore when computing diffs (e.g. timestamps, audit fields).",
-            "items": {
-                "type": "string",
-                "minLength": 1
-            },
-            "uniqueItems": true
+        "scenario": {
+            "type": "string",
+            "description": "Human-readable test scenario name"
         },
-        "added": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/changeBlock"
-            }
+        "task": {
+            "type": "string",
+            "description": "What the agent was asked to do"
         },
-        "removed": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/changeBlock"
-            }
-        },
-        "changed": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/changeBlock"
-            }
-        }
-    },
-    "required": [
-        "dsl_version"
-    ],
-    "additionalProperties": false,
-    "$defs": {
-        "changeBlock": {
+        "ignore_fields": {
             "type": "object",
+            "description": "Fields to ignore when computing diffs",
             "properties": {
-                "entity": {
-                    "type": "string",
-                    "minLength": 1,
-                    "description": "Name of the entity/table (e.g. issues, users)."
-                },
-                "where": {
-                    "type": "object",
-                    "description": "Filter to identify the target entity (business keys).",
-                    "minProperties": 1,
-                    "additionalProperties": {
-                        "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                        ]
-                    }
-                },
-                "assert": {
-                    "type": "object",
-                    "description": "Expected AFTER state of selected entity. At least one asserted field must differ from before snapshot.",
-                    "minProperties": 1,
-                    "additionalProperties": {
-                        "$ref": "#/$defs/predicate"
-                    }
-                },
-                "increment": {
-                    "type": "object",
-                    "description": "Row count delta (used for added/removed).",
-                    "properties": {
-                        "count": {
-                            "type": "integer"
-                        }
-                    },
-                    "required": [
-                        "count"
-                    ],
-                    "additionalProperties": false
-                },
-                "ignore": {
+                "global": {
                     "type": "array",
-                    "description": "Local fields to ignore for this block only.",
+                    "description": "Fields to ignore across all entities",
                     "items": {
                         "type": "string",
                         "minLength": 1
@@ -94,73 +33,331 @@
                     "uniqueItems": true
                 }
             },
+            "patternProperties": {
+                "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+                    "type": "array",
+                    "description": "Fields to ignore for specific entity",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "uniqueItems": true
+                }
+            },
+            "additionalProperties": false
+        },
+        "assertions": {
+            "type": "array",
+            "description": "List of assertions to check against the diff",
+            "items": {
+                "$ref": "#/$defs/assertion"
+            },
+            "minItems": 1
+        },
+        "aggregates": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/aggregate"
+            }
+        },
+        "strict": {
+            "type": "boolean",
+            "default": true
+        }
+    },
+    "required": [
+        "version",
+        "assertions"
+    ],
+    "additionalProperties": false,
+    "$defs": {
+        "assertion": {
+            "type": "object",
+            "description": "A single assertion about the diff",
+            "properties": {
+                "diff_type": {
+                    "type": "string",
+                    "enum": [
+                        "added",
+                        "removed",
+                        "changed",
+                        "unchanged"
+                    ],
+                    "description": "Type of change to check for"
+                },
+                "entity": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Name of the entity/table (e.g., 'issues', 'comments')"
+                },
+                "where": {
+                    "type": "object",
+                    "description": "Filters to match entities in the diff. Engine auto-resolves relationships from schema.",
+                    "additionalProperties": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/$defs/predicate"
+                            },
+                            {
+                                "type": [
+                                    "string",
+                                    "number",
+                                    "boolean",
+                                    "null"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "expected_count": {
+                    "oneOf": [
+                        {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "Exact count expected"
+                        },
+                        {
+                            "type": "object",
+                            "description": "Count range",
+                            "properties": {
+                                "min": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                },
+                                "max": {
+                                    "type": "integer",
+                                    "minimum": 0
+                                }
+                            },
+                            "anyOf": [
+                                {
+                                    "required": [
+                                        "min"
+                                    ]
+                                },
+                                {
+                                    "required": [
+                                        "max"
+                                    ]
+                                }
+                            ],
+                            "additionalProperties": false
+                        }
+                    ],
+                    "description": "Expected number of entities matching the filters"
+                },
+                "expected_changes": {
+                    "type": "object",
+                    "description": "For 'changed' type: what fields changed and how. Only checked fields listed here; unlisted fields must not change (except those in ignore).",
+                    "additionalProperties": {
+                        "$ref": "#/$defs/change_expectation"
+                    }
+                },
+                "ignore": {
+                    "type": "array",
+                    "description": "Additional fields to ignore for this assertion only (additive with global/entity ignores)",
+                    "items": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "uniqueItems": true
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Human-readable explanation of what this assertion checks"
+                }
+            },
             "required": [
+                "diff_type",
                 "entity"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "allOf": [
+                {
+                    "if": {
+                        "properties": {
+                            "diff_type": {
+                                "enum": [
+                                    "changed"
+                                ]
+                            }
+                        }
+                    },
+                    "then": {
+                        "properties": {
+                            "expected_changes": {
+                                "type": "object",
+                                "minProperties": 1
+                            }
+                        }
+                    }
+                }
+            ]
         },
         "predicate": {
             "type": "object",
+            "description": "Condition to match against a field value",
             "minProperties": 1,
             "maxProperties": 1,
             "properties": {
                 "eq": {
-                    "type": [
-                        "string",
-                        "number",
-                        "boolean",
-                        "null"
-                    ]
+                    "description": "Equals"
                 },
-                "neq": {
-                    "type": [
-                        "string",
-                        "number",
-                        "boolean",
-                        "null"
-                    ]
+                "ne": {
+                    "description": "Not equals"
+                },
+                "contains": {
+                    "type": "string",
+                    "description": "String contains substring"
+                },
+                "not_contains": {
+                    "type": "string",
+                    "description": "String does not contain substring"
                 },
                 "in": {
                     "type": "array",
-                    "items": {
-                        "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                        ]
-                    },
-                    "minItems": 1,
-                    "uniqueItems": true
+                    "description": "Value is in list",
+                    "minItems": 1
                 },
                 "not_in": {
                     "type": "array",
-                    "items": {
-                        "type": [
-                            "string",
-                            "number",
-                            "boolean",
-                            "null"
-                        ]
-                    },
-                    "minItems": 1,
-                    "uniqueItems": true
+                    "description": "Value is not in list",
+                    "minItems": 1
                 },
-                "contains": {
+                "gt": {
+                    "type": "number",
+                    "description": "Greater than"
+                },
+                "gte": {
+                    "type": "number",
+                    "description": "Greater than or equal"
+                },
+                "lt": {
+                    "type": "number",
+                    "description": "Less than"
+                },
+                "lte": {
+                    "type": "number",
+                    "description": "Less than or equal"
+                },
+                "exists": {
+                    "type": "boolean",
+                    "description": "Field exists (true) or is null (false)"
+                },
+                "starts_with": {
+                    "type": "string",
+                    "description": "String starts with prefix"
+                },
+                "ends_with": {
+                    "type": "string",
+                    "description": "String ends with suffix"
+                },
+                "regex": {
+                    "type": "string",
+                    "description": "Matches regular expression"
+                },
+                "has_any": {
+                    "type": "array"
+                },
+                "has_all": {
+                    "type": "array"
+                },
+                "i_contains": {
                     "type": "string"
                 },
-                "not_contains": {
+                "i_starts_with": {
                     "type": "string"
                 },
-                "not_eq": {
-                    "type": [
-                        "string",
-                        "number",
-                        "boolean",
-                        "null"
+                "i_ends_with": {
+                    "type": "string"
+                }
+            },
+            "additionalProperties": false
+        },
+        "change_expectation": {
+            "type": "object",
+            "properties": {
+                "from": {
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/predicate"
+                        },
+                        {
+                            "type": [
+                                "string",
+                                "number",
+                                "boolean",
+                                "null"
+                            ]
+                        }
+                    ]
+                },
+                "to": {
+                    "oneOf": [
+                        {
+                            "$ref": "#/$defs/predicate"
+                        },
+                        {
+                            "type": [
+                                "string",
+                                "number",
+                                "boolean",
+                                "null"
+                            ]
+                        }
                     ]
                 }
             },
+            "additionalProperties": false
+        },
+        "aggregate": {
+            "type": "object",
+            "properties": {
+                "fn": {
+                    "enum": [
+                        "sum",
+                        "avg",
+                        "min",
+                        "max",
+                        "count"
+                    ]
+                },
+                "field": {
+                    "type": "string"
+                },
+                "op": {
+                    "enum": [
+                        "eq",
+                        "ne",
+                        "gt",
+                        "gte",
+                        "lt",
+                        "lte",
+                        "between"
+                    ]
+                },
+                "value": {
+                    "oneOf": [
+                        {
+                            "type": "number"
+                        },
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "number"
+                            },
+                            "minItems": 2,
+                            "maxItems": 2
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "fn",
+                "field",
+                "op",
+                "value"
+            ],
             "additionalProperties": false
         }
     }
