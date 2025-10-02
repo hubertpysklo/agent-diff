@@ -25,6 +25,7 @@ from db_schema import (
 Query = QueryType()
 ProjectStatusObject = ObjectType("ProjectStatus")
 AttachmentObject = ObjectType("Attachment")
+IssueObject = ObjectType("Issue")
 
 
 SUPPORTED_PROJECT_FIELDS: set[str] = {
@@ -146,6 +147,36 @@ ISSUE_PRIORITY_MAP = (
     {"priority": 4, "label": "Low"},
 )
 
+
+def _issue_relation_connection(session, stmt, first: int | None):
+    if first is not None and first <= 0:
+        raise GraphQLError("first must be greater than 0")
+
+    limit = first if first is not None else 50
+    fetch_limit = limit + 1
+
+    ordered_stmt = stmt.order_by(IssueRelation.createdAt, IssueRelation.id).limit(fetch_limit)
+    relations = session.execute(ordered_stmt).scalars().all()
+
+    has_next_page = len(relations) > limit
+    if has_next_page:
+        relations = relations[:limit]
+
+    edges = [{"cursor": relation.id, "node": relation} for relation in relations]
+    start_cursor = edges[0]["cursor"] if edges else None
+    end_cursor = edges[-1]["cursor"] if edges else None
+
+    return {
+        "edges": edges,
+        "nodes": relations,
+        "pageInfo": {
+            "startCursor": start_cursor,
+            "endCursor": end_cursor,
+            "hasNextPage": has_next_page,
+            "hasPreviousPage": False,
+        },
+    }
+
 # Skipped Querry:
 # - organizationDomainClaimRequest
 # - externalUsers
@@ -186,7 +217,7 @@ class GraphQLWithSession(GraphQL):
     
 @Query.field("organizationExists")
 def resolve_organizationExists(_parent, info, urlKey: str):
-    session = getattr(info.context.state, "db_session", None)
+    session = info.context.state.db_session
     created_session = False
     if session is None:
         session = SessionLocal()
@@ -481,12 +512,6 @@ def resolve_issueRelations(
     if org_id is None:
         raise GraphQLError("Organization context is missing")
 
-    if first is not None and first <= 0:
-        raise GraphQLError("first must be greater than 0")
-
-    limit = first if first is not None else 50
-    fetch_limit = limit + 1
-
     stmt = (
         select(IssueRelation)
         .join(Issue, IssueRelation.issue)
@@ -497,28 +522,65 @@ def resolve_issueRelations(
     if not includeArchived:
         stmt = stmt.where(IssueRelation.archivedAt.is_(None))
 
-    stmt = stmt.order_by(IssueRelation.createdAt, IssueRelation.id).limit(fetch_limit)
+    return _issue_relation_connection(session, stmt, first)
 
-    relations = session.execute(stmt).scalars().all()
 
-    has_next_page = len(relations) > limit
-    if has_next_page:
-        relations = relations[:limit]
+@IssueObject.field("relations")
+def resolve_issue_relations_field(
+    issue,
+    info,
+    after: str | None = None,
+    before: str | None = None,
+    first: int | None = None,
+    includeArchived: bool | None = False,
+    last: int | None = None,
+    orderBy: str | None = None,
+):
+    unsupported_args = {"after": after, "before": before, "last": last, "orderBy": orderBy}
+    if any(value is not None for value in unsupported_args.values()):
+        raise GraphQLError("Pagination parameters are not supported")
 
-    edges = [{"cursor": relation.id, "node": relation} for relation in relations]
-    start_cursor = edges[0]["cursor"] if edges else None
-    end_cursor = edges[-1]["cursor"] if edges else None
+    session = info.context.state.db_session
 
-    return {
-        "edges": edges,
-        "nodes": relations,
-        "pageInfo": {
-            "startCursor": start_cursor,
-            "endCursor": end_cursor,
-            "hasNextPage": has_next_page,
-            "hasPreviousPage": False,
-        },
-    }
+    stmt = select(IssueRelation).where(IssueRelation.issueId == issue.id)
+
+    org_id = getattr(info.context.state, "org_id", None)
+    if org_id is not None:
+        stmt = stmt.join(Issue, IssueRelation.issue).join(Team, Issue.team).where(Team.organizationId == org_id)
+
+    if not includeArchived:
+        stmt = stmt.where(IssueRelation.archivedAt.is_(None))
+
+    return _issue_relation_connection(session, stmt, first)
+
+
+@IssueObject.field("inverseRelations")
+def resolve_issue_inverse_relations_field(
+    issue,
+    info,
+    after: str | None = None,
+    before: str | None = None,
+    first: int | None = None,
+    includeArchived: bool | None = False,
+    last: int | None = None,
+    orderBy: str | None = None,
+):
+    unsupported_args = {"after": after, "before": before, "last": last, "orderBy": orderBy}
+    if any(value is not None for value in unsupported_args.values()):
+        raise GraphQLError("Pagination parameters are not supported")
+
+    session = info.context.state.db_session
+
+    stmt = select(IssueRelation).where(IssueRelation.relatedIssueId == issue.id)
+
+    org_id = getattr(info.context.state, "org_id", None)
+    if org_id is not None:
+        stmt = stmt.join(Issue, IssueRelation.relatedIssue).join(Team, Issue.team).where(Team.organizationId == org_id)
+
+    if not includeArchived:
+        stmt = stmt.where(IssueRelation.archivedAt.is_(None))
+
+    return _issue_relation_connection(session, stmt, first)
 
 
 @Query.field("organization")
