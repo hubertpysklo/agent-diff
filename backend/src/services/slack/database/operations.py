@@ -1,4 +1,4 @@
-from src.matrixes.slack.database.schema import (
+from backend.src.services.slack.database.schema import (
     User,
     Team,
     Channel,
