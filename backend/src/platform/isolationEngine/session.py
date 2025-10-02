@@ -17,6 +17,11 @@ class SessionManager:
         self.token_handler = token_handler
 
     def get_meta_session(self):
+        """
+        Returns a raw session for platform database.
+        Caller MUST manually commit/rollback and close the session.
+        Use with_meta_session() instead for automatic cleanup.
+        """
         return sessionmaker(bind=self.base_engine)(expire_on_commit=False)
 
     @contextmanager
@@ -45,6 +50,11 @@ class SessionManager:
             return env.schema, env.lastUsedAt
 
     def get_session_for_schema(self, schema: str):
+        """
+        Returns a raw session bound to a specific schema.
+        Caller MUST manually commit/rollback and close the session.
+        Use with_session_for_schema() instead for automatic cleanup.
+        """
         translated_engine = self.base_engine.execution_options(
             schema_translate_map={None: schema}
         )
@@ -63,6 +73,11 @@ class SessionManager:
             session.close()
 
     def get_session_for_environment(self, environment_id: str):
+        """
+        Returns a raw session bound to an environment's schema.
+        Caller MUST manually commit/rollback and close the session.
+        Use with_session_for_environment() instead for automatic cleanup.
+        """
         schema, _ = self.lookup_environment(environment_id)
         translated = self.base_engine.execution_options(
             schema_translate_map={None: schema}

@@ -19,6 +19,11 @@ class CoreIsolationEngine:
         self.environment_handler = environment_handler
 
     def get_session_for_token(self, token: str):
+        """
+        Returns a raw session for the environment specified in the token.
+        Caller MUST manually commit/rollback and close the session.
+        Used by GraphQL handlers that need request-scoped sessions.
+        """
         claims = self.token.decode_token(token)
         schema, _ = self.sessions.lookup_environment(claims["environment_id"])
         translated = self.sessions.base_engine.execution_options(
