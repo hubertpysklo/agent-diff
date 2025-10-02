@@ -48,6 +48,13 @@ class SessionManager:
         )
         return Session(bind=translated, expire_on_commit=False)
 
+    def get_session_for_environment(self, environment_id: str) -> Session:
+        schema, _ = self.lookup_environment(environment_id)
+        translated = self.base_engine.execution_options(
+            schema_translate_map={None: schema}
+        )
+        return Session(bind=translated, expire_on_commit=False)
+
     @contextmanager
     def with_session(self, token: str):
         sess = self.get_session_for_token(token)
