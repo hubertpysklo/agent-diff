@@ -1,48 +1,80 @@
-from dataclasses import dataclass
-from typing import Any, Mapping
-
+from typing import Any
 from platform.evalutionEngine.compiler import DSLCompiler
-from platform.evalutionEngine.assertion import AssertionEngine
 from platform.evalutionEngine.differ import Differ
+from platform.evalutionEngine.assertion import AssertionEngine
 from platform.isolationEngine.session import SessionManager
+from uuid import uuid4
+from platform.evalutionEngine.testmanager import TestManager, TestSpec
 
 
-class TestManager:
-    def __init__(
-        self,
-        compiler: DSLCompiler,
-        assertion_engine: AssertionEngine,
-        differ: Differ,
-        session_manager: SessionManager,
-    ):
-        self.compiler = compiler
-        self.assertion_engine = assertion_engine
-        self.differ = differ
-        self.session_manager = session_manager
+"""
+To do refractor TestManager from EvaluationEnvinge to services.
+"""
 
-    def get_test(self, test_id: str) -> Test:
+
+class CoreEvaluationEngine:
+    def __init__(self, sessions: SessionManager):
+        self.sessions = sessions
+        self.compiler = DSLCompiler()
+        self.test_manager = TestManager(self.compiler, self.sessions)
+
+    @staticmethod
+    def generate_suffix(prefix: str) -> str:
+        return f"{prefix}_{uuid4().hex[:8]}"
+
+    def compile(self, spec: dict[str, Any]) -> dict[str, Any]:
+        return self.compiler.compile(spec)
+
+    def add_test(self, test: TestSpec) -> None:
+        return self.test_manager.add_test(test)
+
+    def get_test(self, test_id: str):
         return self.test_manager.get_test(test_id)
 
-    def add_test(self, test: Test) -> None:
-        self.test_manager.add_test(test)
+    def take_before(
+        self, *, schema: str, environment_id: str, suffix: str | None = None
+    ) -> str:
+        sfx = suffix or self.generate_suffix("before")
+        differ = Differ(
+            schema=schema, environment_id=environment_id, session_manager=self.sessions
+        )
+        differ.create_snapshot(sfx)
+        return sfx
 
+    def take_after(
+        self, *, schema: str, environment_id: str, suffix: str | None = None
+    ) -> str:
+        sfx = suffix or self.generate_suffix("after")
+        differ = Differ(
+            schema=schema, environment_id=environment_id, session_manager=self.sessions
+        )
+        differ.create_snapshot(sfx)
+        return sfx
 
-class TestRunner:
-    def __init__(self, test_manager: TestManager, session_manager: SessionManager):
-        self.test_manager = test_manager
-        self.session_manager = session_manager
+    def compute_diff(
+        self,
+        *,
+        schema: str,
+        environment_id: str,
+        before_suffix: str,
+        after_suffix: str,
+    ) -> dict[str, list[dict[str, Any]]]:
+        differ = Differ(
+            schema=schema, environment_id=environment_id, session_manager=self.sessions
+        )
+        return differ.get_diff(before_suffix, after_suffix)
 
-    def take_before_snapshot(self, test_id: str) -> dict:
-        return self.test_manager.take_snapshot(test_id)
+    def archive(self, *, schema: str, environment_id: str, suffixes: list[str]) -> None:
+        differ = Differ(
+            schema=schema, environment_id=environment_id, session_manager=self.sessions
+        )
+        for sfx in suffixes:
+            differ.archive_snapshots(sfx)
 
-    def take_after_snapshot(self, test_id: str) -> dict:
-        return self.test_manager.take_after_snapshot(test_id)
-
-    def get_diff(self, test_id: str) -> dict:
-        return self.test_manager.get_diff(test_id)
-
-    def add_run(self, run: Run) -> None:
-        self.test_manager.add_run(run)
-
-    def get_result(self, test_id: str) -> dict:
-        return self.test_manager.get_result(test_id)
+    def evaluate(
+        self,
+        *,
+        compiled_spec: dict[str, Any],
+        diff: dict[str, list[dict[str, Any]]],
+    ) -> dict:
+        return AssertionEngine(compiled_spec).evaluate(diff)

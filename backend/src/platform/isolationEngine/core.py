@@ -7,7 +7,7 @@ from .types import InitEnvRequest, InitEnvResult
 from datetime import datetime, timedelta
 
 
-class Core:
+class CoreIsolationEngine:
     def __init__(
         self,
         token: TokenHandler,
