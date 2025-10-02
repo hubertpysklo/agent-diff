@@ -1,10 +1,10 @@
 from typing import Any
-from platform.evalutionEngine.compiler import DSLCompiler
-from platform.evalutionEngine.differ import Differ
-from platform.evalutionEngine.assertion import AssertionEngine
+from platform.evaluationEngine.compiler import DSLCompiler
+from platform.evaluationEngine.differ import Differ
+from platform.evaluationEngine.assertion import AssertionEngine
 from platform.isolationEngine.session import SessionManager
 from uuid import uuid4
-from platform.evalutionEngine.testmanager import TestManager, TestSpec
+from platform.evaluationEngine.testmanager import TestManager, TestSpec
 
 
 """

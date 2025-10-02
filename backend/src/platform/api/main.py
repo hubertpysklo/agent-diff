@@ -4,7 +4,7 @@ from backend.src.platform.isolationEngine.session import SessionManager
 from starlette.applications import Starlette
 from os import environ
 from backend.src.platform.isolationEngine.core import CoreIsolationEngine
-from backend.src.platform.evalutionEngine.core import CoreEvaluationEngine
+from backend.src.platform.evaluationEngine.core import CoreEvaluationEngine
 from backend.src.platform.isolationEngine.environment import EnvironmentHandler
 
 

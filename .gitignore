@@ -28,6 +28,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+../CLAUDE.md
+
+.claude
 
 
 # PyInstaller
