@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 from typing_extensions import Literal
-from platform.evalutionEngine.compiler import DSLCompiler
+from platform.evaluationEngine.compiler import DSLCompiler
 from platform.isolationEngine.session import SessionManager
 import json
 from backend.src.platform.db.schema import Test
@@ -32,9 +32,7 @@ class TestManager:
     def add_test(self, test: TestSpec) -> None:
         with self.session_manager.with_meta_session() as session:
             eo = self._as_dict(test.expectedOutput)
-            compiled = (
-                self.compiler.compile(eo) if test.type == "actionEval" else eo
-            )
+            compiled = self.compiler.compile(eo) if test.type == "actionEval" else eo
             compiledTest = Test(
                 name=test.name,
                 prompt=test.prompt,
