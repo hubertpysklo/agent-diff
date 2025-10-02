@@ -142,9 +142,6 @@ def _changed_keys(
     return {k for k in keys if k not in ignores and before.get(k) != after.get(k)}
 
 
-## Note: compilation/normalization lives in compiler.py
-
-
 class AssertionEngine:
     def __init__(self, compiled_spec: Mapping[str, Any]):
         self.spec = compiled_spec

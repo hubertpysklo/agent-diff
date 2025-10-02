@@ -81,7 +81,7 @@ class EnvironmentHandler:
         expires_at: datetime | None,
         last_used_at: datetime,
     ) -> None:
-        with self.session_manager.get_meta_session() as s:
+        with self.session_manager.with_meta_session() as s:
             s.add(
                 RunTimeEnvironment(
                     id=environment_id,

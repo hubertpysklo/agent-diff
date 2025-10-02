@@ -50,8 +50,7 @@ class KeyHandler:
         key_hash_b64, key_salt_b64 = hash_secret(secret)
         expires_at = datetime.now() + timedelta(days=days_valid)
 
-        session = self.session_manager.get_meta_session()
-        try:
+        with self.session_manager.with_meta_session() as session:
             session.add(
                 ApiKey(
                     id=key_uuid,
@@ -62,9 +61,6 @@ class KeyHandler:
                     lastUsedAt=None,
                 )
             )
-            session.commit()
-        finally:
-            session.close()
 
         return {
             "token": token,

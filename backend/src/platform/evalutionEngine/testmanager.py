@@ -30,26 +30,21 @@ class TestManager:
         return v if isinstance(v, dict) else json.loads(v)
 
     def add_test(self, test: TestSpec) -> None:
-        with self.session_manager.get_meta_session() as session:
-            try:
-                eo = self._as_dict(test.expectedOutput)
-                compiled = (
-                    self.compiler.compile(eo) if test.type == "actionEval" else eo
-                )
-                compiledTest = Test(
-                    name=test.name,
-                    prompt=test.prompt,
-                    type=test.type,
-                    expectedOutput=compiled,
-                )
-                session.add(compiledTest)
-                session.commit()
-            except Exception:
-                session.rollback()
-                raise
+        with self.session_manager.with_meta_session() as session:
+            eo = self._as_dict(test.expectedOutput)
+            compiled = (
+                self.compiler.compile(eo) if test.type == "actionEval" else eo
+            )
+            compiledTest = Test(
+                name=test.name,
+                prompt=test.prompt,
+                type=test.type,
+                expectedOutput=compiled,
+            )
+            session.add(compiledTest)
 
     def get_test(self, test_id: str) -> Test:
-        with self.session_manager.get_meta_session() as session:
+        with self.session_manager.with_meta_session() as session:
             test = session.query(Test).filter(Test.id == test_id).first()
             if test is None:
                 raise ValueError(f"Test with id {test_id} not found")

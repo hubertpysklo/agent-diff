@@ -1,10 +1,10 @@
 from .auth import TokenHandler
 from .session import SessionManager
-from contextlib import contextmanager
 from .environment import EnvironmentHandler
 from uuid import uuid4
 from .types import InitEnvRequest, InitEnvResult
 from datetime import datetime, timedelta
+from sqlalchemy.orm import Session
 
 
 class CoreIsolationEngine:
@@ -21,14 +21,10 @@ class CoreIsolationEngine:
     def get_session_for_token(self, token: str):
         claims = self.token.decode_token(token)
         schema, _ = self.sessions.lookup_environment(claims["environment_id"])
-        return self.sessions.get_session_for_schema(schema)
-
-    @contextmanager
-    def with_session(self, token: str):
-        claims = self.token.decode_token(token)
-        schema, _ = self.sessions.lookup_environment(claims["environment_id"])
-        with self.sessions.get_session_for_schema(schema) as s:
-            yield s
+        translated = self.sessions.base_engine.execution_options(
+            schema_translate_map={None: schema}
+        )
+        return Session(bind=translated, expire_on_commit=False)
 
     def init_env_and_issue_token(self, request: InitEnvRequest) -> InitEnvResult:
         evn_uuid = uuid4()
