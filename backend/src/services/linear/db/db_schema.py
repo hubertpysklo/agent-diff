@@ -11,6 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from datetime import datetime
+from datetime import timezone
 from datetime import date
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -167,6 +168,11 @@ class User(LinearBase):
         "Organization",
         back_populates="users",
     )
+    assignedIssues: Mapped[list["Issue"]] = relationship(
+        "Issue",
+        foreign_keys="Issue.assigneeId",
+        back_populates="assignee",
+    )
 
 
 class Issue(LinearBase):
@@ -216,6 +222,11 @@ class Issue(LinearBase):
         "Attachment",
         foreign_keys="Attachment.originalIssueId",
         back_populates="originalIssue",
+    )
+    assignee: Mapped["User" | None] = relationship(
+        "User",
+        foreign_keys=[assigneeId],
+        back_populates="assignedIssues",
     )
     blocks: Mapped[list["IssueRelation"]] = relationship(
         "IssueRelation",
