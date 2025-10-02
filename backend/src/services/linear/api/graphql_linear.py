@@ -1,15 +1,24 @@
 from ariadne.asgi import GraphQL
-from backend.src.platform.isolationEngine.core import Core
+from backend.src.platform.isolationEngine.core import CoreIsolationEngine
+from backend.src.platform.evalutionEngine.core import CoreEvaluationEngine
 
 
 class GraphQLWithSession(GraphQL):
-    def __init__(self, schema, session_provider: Core):
+    def __init__(
+        self,
+        schema,
+        coreIsolationEngine: CoreIsolationEngine,
+        coreEvaluationEngine: CoreEvaluationEngine,
+    ):
         super().__init__(schema)
-        self.session_provider = session_provider
+        self.coreIsolationEngine = coreIsolationEngine
+        self.coreEvaluationEngine = coreEvaluationEngine
 
     async def context_value(self, request):
         token = request.headers.get("Authorization")
-        session = self.session_provider.get_session_for_token(token) if token else None
+        session = (
+            self.coreIsolationEngine.get_session_for_token(token) if token else None
+        )
         request.state.db_session = session
         return {"request": request, "session": session}
 

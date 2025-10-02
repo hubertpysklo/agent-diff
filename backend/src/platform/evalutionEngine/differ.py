@@ -143,8 +143,7 @@ class Differ:
         before_suffix: str,
         after_suffix: str,
     ) -> None:
-        session = self.session_manager.get_meta_session()
-        try:
+        with self.session_manager.with_meta_session() as session:
             diff_object = Diff(
                 environmentId=self.environment_id,
                 beforeSuffix=before_suffix,
@@ -154,9 +153,3 @@ class Differ:
                 updatedAt=datetime.now(),
             )
             session.add(diff_object)
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()

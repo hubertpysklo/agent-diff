@@ -16,8 +16,25 @@ class SessionManager:
         self.base_engine = base_engine
         self.token_handler = token_handler
 
-    def get_meta_session(self) -> Session:
+    def get_meta_session(self):
+        """
+        Returns a raw session for platform database.
+        Caller MUST manually commit/rollback and close the session.
+        Use with_meta_session() instead for automatic cleanup.
+        """
         return sessionmaker(bind=self.base_engine)(expire_on_commit=False)
+
+    @contextmanager
+    def with_meta_session(self):
+        session = self.get_meta_session()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     def lookup_environment(self, env_id: str):
         with Session(bind=self.base_engine) as s:
@@ -32,23 +49,35 @@ class SessionManager:
             s.commit()
             return env.schema, env.lastUsedAt
 
-    def get_session_for_schema(self, schema: str) -> Session:
+    def get_session_for_schema(self, schema: str):
+        """
+        Returns a raw session bound to a specific schema.
+        Caller MUST manually commit/rollback and close the session.
+        Use with_session_for_schema() instead for automatic cleanup.
+        """
         translated_engine = self.base_engine.execution_options(
-            schema_translate_map={
-                None: schema,
-            }
+            schema_translate_map={None: schema}
         )
         return sessionmaker(bind=translated_engine)()
 
-    def get_session_for_token(self, token: str) -> Session:
-        claims = self.token_handler.decode_token(token)
-        schema, _ = self.lookup_environment(claims["environment_id"])
-        translated = self.base_engine.execution_options(
-            schema_translate_map={None: schema}
-        )
-        return Session(bind=translated, expire_on_commit=False)
+    @contextmanager
+    def with_session_for_schema(self, schema: str):
+        session = self.get_session_for_schema(schema)
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
-    def get_session_for_environment(self, environment_id: str) -> Session:
+    def get_session_for_environment(self, environment_id: str):
+        """
+        Returns a raw session bound to an environment's schema.
+        Caller MUST manually commit/rollback and close the session.
+        Use with_session_for_environment() instead for automatic cleanup.
+        """
         schema, _ = self.lookup_environment(environment_id)
         translated = self.base_engine.execution_options(
             schema_translate_map={None: schema}
@@ -56,13 +85,13 @@ class SessionManager:
         return Session(bind=translated, expire_on_commit=False)
 
     @contextmanager
-    def with_session(self, token: str):
-        sess = self.get_session_for_token(token)
+    def with_session_for_environment(self, environment_id: str):
+        session = self.get_session_for_environment(environment_id)
         try:
-            yield sess
-            sess.commit()
-        except:
-            sess.rollback()
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
             raise
         finally:
-            sess.close()
+            session.close()
