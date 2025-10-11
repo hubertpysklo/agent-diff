@@ -1,4 +1,6 @@
+from dataclasses import dataclass
 from typing import Any
+from typing_extensions import Literal
 from platform.evaluationEngine.compiler import DSLCompiler
 from platform.evaluationEngine.differ import Differ
 from platform.evaluationEngine.assertion import AssertionEngine
@@ -10,6 +12,13 @@ from platform.evaluationEngine.testmanager import TestManager, TestSpec
 """
 To do refractor TestManager from EvaluationEnvinge to services.
 """
+
+
+@dataclass
+class SnapshotResult:
+    suffix: str
+    schema: str
+    environment_id: str
 
 
 class CoreEvaluationEngine:
@@ -31,25 +40,42 @@ class CoreEvaluationEngine:
     def get_test(self, test_id: str):
         return self.test_manager.get_test(test_id)
 
-    def take_before(
-        self, *, schema: str, environment_id: str, suffix: str | None = None
-    ) -> str:
-        sfx = suffix or self.generate_suffix("before")
+    def take_snapshot(
+        self,
+        *,
+        schema: str,
+        environment_id: str,
+        prefix: Literal["before", "after"],
+        suffix: str | None = None,
+    ) -> SnapshotResult:
+        sfx = suffix or self.generate_suffix(prefix)
         differ = Differ(
-            schema=schema, environment_id=environment_id, session_manager=self.sessions
+            schema=schema,
+            environment_id=environment_id,
+            session_manager=self.sessions,
         )
         differ.create_snapshot(sfx)
-        return sfx
+        return SnapshotResult(suffix=sfx, schema=schema, environment_id=environment_id)
+
+    def take_before(
+        self, *, schema: str, environment_id: str, suffix: str | None = None
+    ) -> SnapshotResult:
+        return self.take_snapshot(
+            schema=schema,
+            environment_id=environment_id,
+            prefix="before",
+            suffix=suffix,
+        )
 
     def take_after(
         self, *, schema: str, environment_id: str, suffix: str | None = None
-    ) -> str:
-        sfx = suffix or self.generate_suffix("after")
-        differ = Differ(
-            schema=schema, environment_id=environment_id, session_manager=self.sessions
+    ) -> SnapshotResult:
+        return self.take_snapshot(
+            schema=schema,
+            environment_id=environment_id,
+            prefix="after",
+            suffix=suffix,
         )
-        differ.create_snapshot(sfx)
-        return sfx
 
     def compute_diff(
         self,
@@ -62,6 +88,7 @@ class CoreEvaluationEngine:
         differ = Differ(
             schema=schema, environment_id=environment_id, session_manager=self.sessions
         )
+
         return differ.get_diff(before_suffix, after_suffix)
 
     def archive(self, *, schema: str, environment_id: str, suffixes: list[str]) -> None:

@@ -29,10 +29,9 @@ share/python-wheels/
 MANIFEST
 
 ../CLAUDE.md
-
 .claude
-
 ./CLAUDE.md
+CLAUDE.md
 
 
 # PyInstaller

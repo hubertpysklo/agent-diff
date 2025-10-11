@@ -1,20 +1,21 @@
 from __future__ import annotations
-from datetime import datetime
-from sqlalchemy.orm import Session, sessionmaker
-from .auth import TokenHandler
-from sqlalchemy import Engine
-from backend.src.platform.db.schema import RunTimeEnvironment
+
 from contextlib import contextmanager
+from datetime import datetime
+from uuid import UUID
+
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from backend.src.platform.db.schema import RunTimeEnvironment
 
 
 class SessionManager:
     def __init__(
         self,
         base_engine: Engine,
-        token_handler: TokenHandler,
     ):
         self.base_engine = base_engine
-        self.token_handler = token_handler
 
     def get_meta_session(self):
         """
@@ -37,10 +38,11 @@ class SessionManager:
             session.close()
 
     def lookup_environment(self, env_id: str):
+        env_uuid = self._to_uuid(env_id)
         with Session(bind=self.base_engine) as s:
             env = (
                 s.query(RunTimeEnvironment)
-                .filter(RunTimeEnvironment.id == env_id)
+                .filter(RunTimeEnvironment.id == env_uuid)
                 .one_or_none()
             )
             if env is None or env.status != "ready":
@@ -95,3 +97,10 @@ class SessionManager:
             raise
         finally:
             session.close()
+
+    @staticmethod
+    def _to_uuid(value: str) -> UUID:
+        try:
+            return UUID(value)
+        except ValueError:
+            return UUID(hex=value)
