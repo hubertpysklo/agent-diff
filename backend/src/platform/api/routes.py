@@ -89,7 +89,7 @@ async def get_test_suite(request: Request) -> JSONResponse:
         tests=[
             TestSummary(id=t.id, name=t.name, prompt=t.prompt, type=t.type)
             for t in tests
-        ],
+        ],  # Possibly add the expected state in response later for local diff runner
     )
     return JSONResponse(payload.dict(by_alias=True))
 
@@ -101,7 +101,7 @@ async def init_environment(request: Request) -> JSONResponse:
     test = session.query(Test).filter(Test.id == body.testId).one_or_none()
     if test is None:
         return JSONResponse(
-            APIError(detail="test not found").dict(),
+            APIError(detail="test not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
@@ -122,9 +122,7 @@ async def init_environment(request: Request) -> JSONResponse:
         expiresAt=expires_at if isinstance(expires_at, datetime) else None,
         schemaName=str(result["schema"]),
     )
-    return JSONResponse(
-        response.dict(by_alias=True), status_code=status.HTTP_201_CREATED
-    )
+    return JSONResponse(response.model_dump(), status_code=status.HTTP_201_CREATED)
 
 
 async def start_run(request: Request) -> JSONResponse:
@@ -134,7 +132,7 @@ async def start_run(request: Request) -> JSONResponse:
     test = session.query(Test).filter(Test.id == body.testId).one_or_none()
     if test is None:
         return JSONResponse(
-            APIError(detail="test not found").dict(),
+            APIError(detail="test not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
@@ -165,9 +163,7 @@ async def start_run(request: Request) -> JSONResponse:
         status=run.status,
         beforeSnapshot=before_result.suffix,
     )
-    return JSONResponse(
-        response.dict(by_alias=True), status_code=status.HTTP_201_CREATED
-    )
+    return JSONResponse(response.model_dump(), status_code=status.HTTP_201_CREATED)
 
 
 async def end_run(request: Request) -> JSONResponse:
@@ -177,7 +173,7 @@ async def end_run(request: Request) -> JSONResponse:
     run = session.query(TestRun).filter(TestRun.id == body.runId).one_or_none()
     if run is None:
         return JSONResponse(
-            APIError(detail="run not found").dict(),
+            APIError(detail="run not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
@@ -227,7 +223,7 @@ async def end_run(request: Request) -> JSONResponse:
         passed=bool(evaluation.get("passed")),
         score=evaluation.get("score"),
     )
-    return JSONResponse(response.dict(by_alias=True))
+    return JSONResponse(response.model_dump())
 
 
 async def get_run_result(request: Request) -> JSONResponse:
@@ -236,7 +232,7 @@ async def get_run_result(request: Request) -> JSONResponse:
     run = session.query(TestRun).filter(TestRun.id == run_id).one_or_none()
     if run is None:
         return JSONResponse(
-            APIError(detail="run not found").dict(),
+            APIError(detail="run not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
     payload = TestResultResponse(
@@ -248,7 +244,7 @@ async def get_run_result(request: Request) -> JSONResponse:
         diff=run.result.get("diff") if run.result else None,
         createdAt=run.createdAt,
     )
-    return JSONResponse(payload.dict(by_alias=True))
+    return JSONResponse(payload.model_dump())
 
 
 async def delete_environment(request: Request) -> JSONResponse:
@@ -261,7 +257,7 @@ async def delete_environment(request: Request) -> JSONResponse:
     )
     if env is None:
         return JSONResponse(
-            APIError(detail="environment not found").dict(),
+            APIError(detail="environment not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
 
@@ -270,7 +266,7 @@ async def delete_environment(request: Request) -> JSONResponse:
     core.environment_handler.mark_environment_status(env_id, "deleted")
 
     response = DeleteEnvResponse(environmentId=str(env_id), status="deleted")
-    return JSONResponse(response.dict(by_alias=True))
+    return JSONResponse(response.model_dump())
 
 
 routes = [
