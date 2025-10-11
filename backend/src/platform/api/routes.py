@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import or_
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -42,7 +43,17 @@ def _principal_from_request(request: Request) -> dict[str, Any]:
 
 async def list_test_suites(request: Request) -> JSONResponse:
     session = request.state.db_session
-    suites = session.query(TestSuite).order_by(TestSuite.createdAt.desc()).all()
+    suites = (
+        session.query(TestSuite)
+        .order_by(TestSuite.createdAt.desc())
+        .filter(
+            or_(
+                TestSuite.visibility == "public",
+                TestSuite.owner == request.state.principal.user_id,
+            )
+        )
+        .all()
+    )
     payload = [
         TestSuiteSummary(
             id=s.id,

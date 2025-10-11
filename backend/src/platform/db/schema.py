@@ -13,7 +13,7 @@ class PlatformBase(DeclarativeBase):
 class Organization(PlatformBase):
     __tablename__ = "organizations"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     createdAt: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
@@ -26,7 +26,7 @@ class Organization(PlatformBase):
 class User(PlatformBase):
     __tablename__ = "users"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -44,8 +44,8 @@ class User(PlatformBase):
 class OrganizationMembership(PlatformBase):
     __tablename__ = "organization_memberships"
     __table_args__ = ({"schema": "public"},)
-    userId: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    organizationId: Mapped[int] = mapped_column(
+    userId: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    organizationId: Mapped[str] = mapped_column(
         ForeignKey("organizations.id"), primary_key=True
     )
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -81,8 +81,8 @@ class TemplateEnvironment(PlatformBase):
         nullable=False,
         default="global",
     )
-    ownerOrgId: Mapped[int | None] = mapped_column(nullable=True)
-    ownerUserId: Mapped[int | None] = mapped_column(nullable=True)
+    ownerOrgId: Mapped[str | None] = mapped_column(nullable=True)
+    ownerUserId: Mapped[str | None] = mapped_column(nullable=True)
     kind: Mapped[str] = mapped_column(
         Enum("schema", "artifact", "jsonb", name="template_kind"),
         nullable=False,
