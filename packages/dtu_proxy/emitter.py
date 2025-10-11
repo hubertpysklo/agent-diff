@@ -26,5 +26,3 @@ class NoopEmitter:
 
 
 DEFAULT_EMITTER: RequestEmitter = NoopEmitter()
-
-
