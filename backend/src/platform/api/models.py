@@ -30,13 +30,10 @@ class TestSuiteDetail(TestSuiteSummary):
 
 class InitEnvRequestBody(BaseModel):
     testId: UUID
-    templateSchema: Optional[str]
-    ttlSeconds: Optional[int]
-    impersonateUserId: Optional[str]
-    impersonateEmail: Optional[str]
-
-    class Config:
-        allow_population_by_field_name = True
+    templateSchema: Optional[str] = None
+    ttlSeconds: Optional[int] = None
+    impersonateUserId: Optional[str] = None
+    impersonateEmail: Optional[str] = None
 
 
 class InitEnvResponse(BaseModel):
