@@ -31,6 +31,7 @@ from backend.src.platform.db.schema import (
     RunTimeEnvironment,
 )
 from backend.src.platform.evaluationEngine.core import CoreEvaluationEngine
+from backend.src.platform.evaluationEngine.differ import Differ
 from backend.src.platform.isolationEngine.core import CoreIsolationEngine
 
 
@@ -193,6 +194,16 @@ async def end_run(request: Request) -> JSONResponse:
         diff_payload = core_eval.compute_diff(
             schema=rte.schema,
             environment_id=str(run.environmentId),
+            before_suffix=run.beforeSnapshotSuffix,
+            after_suffix=after.suffix,
+        )
+        differ = Differ(
+            schema=rte.schema,
+            environment_id=str(run.environmentId),
+            session_manager=request.app.state.sessions,
+        )
+        differ.store_diff(
+            diff_payload,
             before_suffix=run.beforeSnapshotSuffix,
             after_suffix=after.suffix,
         )

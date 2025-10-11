@@ -88,6 +88,7 @@ class CoreEvaluationEngine:
         differ = Differ(
             schema=schema, environment_id=environment_id, session_manager=self.sessions
         )
+
         return differ.get_diff(before_suffix, after_suffix)
 
     def archive(self, *, schema: str, environment_id: str, suffixes: list[str]) -> None:
