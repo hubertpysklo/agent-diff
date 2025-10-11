@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class APIError(BaseModel):
@@ -29,63 +29,61 @@ class TestSuiteDetail(TestSuiteSummary):
 
 
 class InitEnvRequestBody(BaseModel):
-    testId: UUID = Field(..., alias="testId")
-    templateSchema: Optional[str] = Field(None, alias="templateSchema")
-    ttlSeconds: Optional[int] = Field(1800, alias="ttlSeconds")
-    impersonateUserId: Optional[str] = Field(None, alias="impersonateUserId")
-    impersonateEmail: Optional[str] = Field(None, alias="impersonateEmail")
+    testId: UUID
+    templateSchema: Optional[str]
+    ttlSeconds: Optional[int]
+    impersonateUserId: Optional[str]
+    impersonateEmail: Optional[str]
 
     class Config:
         allow_population_by_field_name = True
 
 
 class InitEnvResponse(BaseModel):
-    environmentId: str = Field(..., alias="environmentId")
-    schemaName: str = Field(
-        ..., alias="schemaName"
-    )  # Changed alias from "schema" to "schemaName"
-    environmentUrl: str = Field(..., alias="environmentUrl")
-    expiresAt: Optional[datetime] = Field(None, alias="expiresAt")
+    environmentId: str
+    schemaName: str
+    environmentUrl: str
+    expiresAt: Optional[datetime]
 
     class Config:
         allow_population_by_field_name = True
 
 
 class StartRunRequest(BaseModel):
-    envId: str = Field(..., alias="envId")
-    testId: UUID = Field(..., alias="testId")
-    testSuiteId: Optional[UUID] = Field(None, alias="testSuiteId")
+    envId: str
+    testId: UUID
+    testSuiteId: Optional[UUID]
 
 
 class StartRunResponse(BaseModel):
-    runId: str = Field(..., alias="runId")
+    runId: str
     status: str
-    beforeSnapshot: str = Field(..., alias="beforeSnapshot")
+    beforeSnapshot: str
 
 
 class EndRunRequest(BaseModel):
-    runId: str = Field(..., alias="runId")
+    runId: str
 
 
 class EndRunResponse(BaseModel):
-    runId: str = Field(..., alias="runId")
+    runId: str
     status: str
     passed: bool
     score: Any
 
 
 class TestResultResponse(BaseModel):
-    runId: str = Field(..., alias="runId")
+    runId: str
     status: str
     passed: bool
     score: Any
     failures: List[str]
     diff: Any
-    createdAt: datetime = Field(..., alias="createdAt")
+    createdAt: datetime
 
 
 class DeleteEnvResponse(BaseModel):
-    environmentId: str = Field(..., alias="environmentId")
+    environmentId: str
     status: str
 
 
