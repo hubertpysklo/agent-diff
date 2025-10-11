@@ -1,63 +1,57 @@
-from .auth import TokenHandler
 from .session import SessionManager
 from .environment import EnvironmentHandler
 from uuid import uuid4
-from .types import InitEnvRequest, InitEnvResult
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
+from backend.src.platform.db.schema import RunTimeEnvironment
 
 
 class CoreIsolationEngine:
     def __init__(
         self,
-        token: TokenHandler,
         sessions: SessionManager,
         environment_handler: EnvironmentHandler,
     ):
-        self.token = token
         self.sessions = sessions
         self.environment_handler = environment_handler
 
-    def get_session_for_token(self, token: str):
-        """
-        Returns a raw session for the environment specified in the token.
-        Caller MUST manually commit/rollback and close the session.
-        Used by GraphQL handlers that need request-scoped sessions.
-        """
-        claims = self.token.decode_token(token)
-        schema, _ = self.sessions.lookup_environment(claims["environment_id"])
-        translated = self.sessions.base_engine.execution_options(
-            schema_translate_map={None: schema}
-        )
-        return Session(bind=translated, expire_on_commit=False)
-
-    def init_env_and_issue_token(self, request: InitEnvRequest) -> InitEnvResult:
+    def create_environment(
+        self,
+        *,
+        template_schema: str,
+        ttl_seconds: int,
+        impersonate_user_id: str | None = None,
+        impersonate_email: str | None = None,
+    ) -> dict[str, str | datetime | None]:
         evn_uuid = uuid4()
         environment_id = evn_uuid.hex
         environment_schema = f"state_{environment_id}"
         self.environment_handler.create_schema(environment_schema)
-        self.environment_handler.migrate_schema(
-            request.environment_schema, environment_schema
-        )
+        self.environment_handler.migrate_schema(template_schema, environment_schema)
         self.environment_handler.seed_data_from_template(
-            request.environment_schema, environment_schema
+            template_schema, environment_schema
         )
+        expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
         self.environment_handler.set_runtime_environment(
             environment_id=environment_id,
             schema=environment_schema,
-            expires_at=datetime.now() + timedelta(seconds=request.ttl_seconds),
+            expires_at=expires_at,
             last_used_at=datetime.now(),
         )
-        token = self.token.issue_token(
-            environment_id=environment_id,
-            user_id=request.user_id,
-            impersonate_user_id=request.impersonate_user_id,
-            token_ttl_seconds=request.ttl_seconds,
-        )
-        return InitEnvResult(
-            environment_id=environment_id,
-            impersonate_user_id=request.impersonate_user_id,
-            user_id=request.user_id,
-            expires_at=datetime.now() + timedelta(seconds=request.ttl_seconds),
-            token=token,
-        )
+        return {
+            "environment_id": environment_id,
+            "schema": environment_schema,
+            "expires_at": expires_at,
+            "impersonate_user_id": impersonate_user_id,
+            "impersonate_email": impersonate_email,
+        }
+
+    def get_schema_for_environment(self, environment_id: str) -> str:
+        with self.sessions.with_meta_session() as session:
+            env = (
+                session.query(RunTimeEnvironment)
+                .filter(RunTimeEnvironment.id == environment_id)
+                .one_or_none()
+            )
+            if env is None:
+                raise ValueError("environment not found")
+            return env.schema

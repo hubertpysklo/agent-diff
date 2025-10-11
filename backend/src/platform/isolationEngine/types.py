@@ -19,4 +19,3 @@ class InitEnvResult:
     user_id: str
     impersonate_user_id: str | None
     expires_at: datetime | None
-    token: str  # This is a JWT token for the client to access the correct environment state

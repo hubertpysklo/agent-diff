@@ -1,6 +1,6 @@
 from ariadne.asgi import GraphQL
 from backend.src.platform.isolationEngine.core import CoreIsolationEngine
-from backend.src.platform.evalutionEngine.core import CoreEvaluationEngine
+from backend.src.platform.evaluationEngine.core import CoreEvaluationEngine
 
 
 class GraphQLWithSession(GraphQL):
@@ -15,12 +15,15 @@ class GraphQLWithSession(GraphQL):
         self.coreEvaluationEngine = coreEvaluationEngine
 
     async def context_value(self, request):
-        token = request.headers.get("Authorization")
-        session = (
-            self.coreIsolationEngine.get_session_for_token(token) if token else None
-        )
+        path_parts = request.scope.get("path", "").split("/")
+        # expected: /api/env/{env_id}/services/linear/graphql
+        env_id = path_parts[3] if len(path_parts) > 3 else None
+        if not env_id:
+            raise PermissionError("missing environment identifier in path")
+        session = self.coreIsolationEngine.sessions.get_session_for_environment(env_id)
         request.state.db_session = session
-        return {"request": request, "session": session}
+        request.state.environment_id = env_id
+        return {"request": request, "session": session, "environment_id": env_id}
 
     async def handle_request(self, request):
         try:

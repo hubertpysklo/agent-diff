@@ -1,14 +1,16 @@
 from datetime import datetime
 from typing import Iterable
-from sqlalchemy import text, MetaData
+from uuid import UUID
+
+from sqlalchemy import MetaData, text
+
 from backend.src.platform.db.schema import RunTimeEnvironment
-from .auth import TokenHandler
+
 from .session import SessionManager
 
 
 class EnvironmentHandler:
-    def __init__(self, token_handler: TokenHandler, session_manager: SessionManager):
-        self.token_handler = token_handler
+    def __init__(self, session_manager: SessionManager):
         self.session_manager = session_manager
 
     def create_schema(self, schema: str) -> None:
@@ -80,15 +82,45 @@ class EnvironmentHandler:
         schema: str,
         expires_at: datetime | None,
         last_used_at: datetime,
+        *,
+        template_id: str | None = None,
     ) -> None:
+        env_uuid = self._to_uuid(environment_id)
+        template_uuid = self._to_uuid(template_id) if template_id else None
         with self.session_manager.with_meta_session() as s:
-            s.add(
-                RunTimeEnvironment(
-                    id=environment_id,
-                    schema=schema,
-                    status="ready",
-                    expiresAt=expires_at,
-                    lastUsedAt=last_used_at,
-                )
+            rte = RunTimeEnvironment(
+                id=env_uuid,
+                schema=schema,
+                status="ready",
+                expiresAt=expires_at,
+                lastUsedAt=last_used_at,
             )
-            s.commit()
+            if template_uuid:
+                rte.templateId = template_uuid  # type: ignore[attr-defined,assignment]
+            s.add(rte)
+
+    def drop_schema(self, schema: str) -> None:
+        with self.session_manager.base_engine.begin() as conn:
+            conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+
+    def mark_environment_status(self, environment_id: str, status: str) -> None:
+        env_uuid = self._to_uuid(environment_id)
+        with self.session_manager.with_meta_session() as s:
+            env = (
+                s.query(RunTimeEnvironment)
+                .filter(RunTimeEnvironment.id == env_uuid)
+                .one_or_none()
+            )
+            if env is None:
+                raise ValueError("environment not found")
+            env.status = status
+            env.updatedAt = datetime.now()
+
+    @staticmethod
+    def _to_uuid(value: str | None) -> UUID:
+        if value is None:
+            raise ValueError("UUID value cannot be None")
+        try:
+            return UUID(value)
+        except ValueError:
+            return UUID(hex=value)

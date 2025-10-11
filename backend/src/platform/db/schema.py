@@ -176,6 +176,7 @@ class Test(PlatformBase):
         nullable=False,
     )
     expectedOutput: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
+    templateSchema: Mapped[str] = mapped_column(String(255), nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -219,17 +220,26 @@ class TestRun(PlatformBase):
         UUID(as_uuid=True), primary_key=True, default=uuid4
     )
     testId: Mapped[UUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
-    testSuiteId: Mapped[UUID] = mapped_column(
-        ForeignKey("test_suites.id"), nullable=False
+    testSuiteId: Mapped[UUID | None] = mapped_column(
+        ForeignKey("test_suites.id"), nullable=True
     )
     environmentId: Mapped[UUID] = mapped_column(
         ForeignKey("run_time_environments.id"), nullable=False
     )
     status: Mapped[str] = mapped_column(
-        Enum("pending", "running", "completed", "failed", name="test_run_status"),
+        Enum(
+            "pending",
+            "running",
+            "passed",
+            "failed",
+            "error",
+            name="test_run_status",
+        ),
         nullable=False,
         default="pending",
     )
-    result: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
+    result: Mapped[JSONB | None] = mapped_column(JSONB, nullable=True)
+    beforeSnapshotSuffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    afterSnapshotSuffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
