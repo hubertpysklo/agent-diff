@@ -33,14 +33,14 @@ class IsolationMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         try:
-            parts = [p for p in path.split("/") if p]
-            env_index = parts.index("env") if "env" in parts else -1
-            if env_index == -1 or len(parts) <= env_index + 1:
+            path_after_prefix = path[len("/api/env/") :]
+            env_id = path_after_prefix.split("/")[0] if path_after_prefix else ""
+
+            if not env_id:
                 return JSONResponse(
                     {"ok": False, "error": "invalid_environment_path"},
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
-            env_id = parts[env_index + 1]
 
             api_key_hdr = request.headers.get("X-API-Key") or request.headers.get(
                 "Authorization"
@@ -68,12 +68,8 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                     else None
                 )
                 if env is not None:
-                    request.state.impersonate_user_id = getattr(
-                        env, "impersonateUserId", None
-                    )
-                    request.state.impersonate_email = getattr(
-                        env, "impersonateEmail", None
-                    )
+                    request.state.impersonate_user_id = env.impersonate_user_id
+                    request.state.impersonate_email = env.impersonate_email
 
             with self.session_manager.with_session_for_environment(env_id) as session:
                 request.state.db_session = session
