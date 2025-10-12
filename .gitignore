@@ -215,6 +215,4 @@ marimo/_lsp/
 __marimo__/
 
 opencode.json
-ops/docker-compose.yml
-ops/Makefile
 .DS_Store

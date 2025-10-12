@@ -4,27 +4,51 @@ Diff the Universe lets you evaluate AI agents against controllable clones of rea
 
 
 ## Currently supported services:
-- Linear
-- Slack
+- Slack (fully implemented)
+- Linear (in progress)
 
 
 ## Quick start
 
 ```bash
-cp env.example .env        # fill in database URL & secret key
-uv sync                    # install backend dependencies
-docker compose up -d       # start Postgres + fake services
-uv run alembic upgrade head
-uv run backend/src/app.py  # or use make backend-dev
+# Set up environment variables
+cp env.example .env
+# Edit .env to set SECRET_KEY if needed
+
+# Start everything with Docker
+cd ops
+docker-compose up --build
+
+# Backend runs on http://localhost:8000
+# PostgreSQL runs on localhost:5432
 ```
 
-Then hit the REST API with an API key (seed one manually for now).
+The backend automatically runs migrations on startup. Test the health endpoint:
+
+```bash
+curl http://localhost:8000/api/platform/health
+# Returns: {"status":"healthy","service":"diff-the-universe"}
+```
+
+## Using the Platform
+
+**Note:** The platform requires initial setup (API keys, template data) which is currently done manually. Seeding tools are coming soon.
+
+Once set up, here's how agents interact with the platform:
+
+1. Create an isolated test environment
+2. Agent performs actions (posts Slack messages, creates Linear issues, etc.)
+3. Platform captures what changed and validates against expected outcomes
+
+All agent requests go to `/api/env/{environmentId}/services/slack/...` and are automatically isolated to that environment's database.
+
+Full API documentation: [`docs/api-reference.md`](docs/api-reference.md)
 
 ## How it works
 
 1. `POST /api/platform/initEnv` clones a template schema into a dedicated environment.
 2. `POST /api/platform/startRun` snapshots the environment before the agent acts.
-3. The agent talks to fake service endpoints under `/api/env/{envId}/services/...`.
+3. The agent talks to fake service endpoints under `/api/env/{envId}/services/slack/...`.
 4. `POST /api/platform/endRun` snapshots again, computes the diff, runs assertions, and stores the result.
 5. `GET /api/platform/results/{runId}` returns pass/fail, score, diff, and failure messages.
 
