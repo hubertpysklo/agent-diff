@@ -34,7 +34,6 @@ class IsolationMiddleware(BaseHTTPMiddleware):
 
         try:
             parts = [p for p in path.split("/") if p]
-            # parts example: ['api', 'env', '{env_id}', 'services', 'slack', ...]
             env_index = parts.index("env") if "env" in parts else -1
             if env_index == -1 or len(parts) <= env_index + 1:
                 return JSONResponse(
@@ -76,17 +75,25 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                         env, "impersonateEmail", None
                     )
 
-            session = self.session_manager.get_session_for_environment(env_id)
-            request.state.db_session = session
-            request.state.environment_id = env_id
+            with self.session_manager.with_session_for_environment(env_id) as session:
+                request.state.db_session = session
+                request.state.environment_id = env_id
 
-            response = await call_next(request)
+                try:
+                    response = await call_next(request)
 
-            if 200 <= response.status_code < 400:
-                session.commit()
-            else:
-                session.rollback()
-            return response
+                    if not (200 <= response.status_code < 400):
+                        session.rollback()
+
+                    return response
+                finally:
+                    request.state.db_session = None
+                    request.state.environment_id = None
+                    if hasattr(request.state, "impersonate_user_id"):
+                        request.state.impersonate_user_id = None
+                    if hasattr(request.state, "impersonate_email"):
+                        request.state.impersonate_email = None
+
         except PermissionError as exc:
             return JSONResponse(
                 {"ok": False, "error": str(exc)},
@@ -97,13 +104,3 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                 {"ok": False, "error": "internal_error"},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        finally:
-            session = getattr(request.state, "db_session", None)
-            if session is not None:
-                session.close()
-                request.state.db_session = None
-                request.state.environment_id = None
-            if hasattr(request.state, "impersonate_user_id"):
-                request.state.impersonate_user_id = None
-            if hasattr(request.state, "impersonate_email"):
-                request.state.impersonate_email = None

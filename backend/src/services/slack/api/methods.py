@@ -535,7 +535,6 @@ def _serialize_user(user) -> dict[str, Any]:
             "real_name": user.real_name,
             "email": user.email,
             "title": user.title,
-            "image_72": user.avatar_url,
         },
         "tz": user.timezone,
         "is_bot": False,

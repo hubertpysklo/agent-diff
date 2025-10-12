@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from typing import Any
 from typing_extensions import Literal
-from platform.evaluationEngine.compiler import DSLCompiler
-from platform.evaluationEngine.differ import Differ
-from platform.evaluationEngine.assertion import AssertionEngine
-from platform.isolationEngine.session import SessionManager
+from backend.src.platform.evaluationEngine.compiler import DSLCompiler
+from backend.src.platform.evaluationEngine.differ import Differ
+from backend.src.platform.evaluationEngine.assertion import AssertionEngine
+from backend.src.platform.isolationEngine.session import SessionManager
 from uuid import uuid4
-from platform.evaluationEngine.testmanager import TestManager, TestSpec
+from backend.src.platform.evaluationEngine.testmanager import TestManager, TestSpec
 
 
 """

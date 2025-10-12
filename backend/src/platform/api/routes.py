@@ -44,13 +44,14 @@ def _principal_from_request(request: Request) -> dict[str, Any]:
 
 async def list_test_suites(request: Request) -> JSONResponse:
     session = request.state.db_session
+    principal = _principal_from_request(request)
     suites = (
         session.query(TestSuite)
         .order_by(TestSuite.createdAt.desc())
         .filter(
             or_(
                 TestSuite.visibility == "public",
-                TestSuite.owner == request.state.principal.user_id,
+                TestSuite.owner == principal["user_id"],
             )
         )
         .all()

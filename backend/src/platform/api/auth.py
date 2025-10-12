@@ -105,13 +105,16 @@ def validate_api_key(header: Optional[str], session: Session) -> Dict[str, objec
     if not verify_secret(secret, key.keyHash, key.keySalt):
         raise PermissionError("invalid api key")
 
-    key.lastUsedAt = datetime.now()
     user: Optional[User] = (
         session.query(User).filter(User.id == key.userId).one_or_none()
     )
-    is_platform_admin = bool(user.isPlatformAdmin) if user else False
-    is_organization_admin = bool(user.isOrganizationAdmin) if user else False
-    org_ids: List[int] = [
+    if not user:
+        raise PermissionError("api key references non-existent user")
+
+    key.lastUsedAt = datetime.now()
+    is_platform_admin = bool(user.isPlatformAdmin)
+    is_organization_admin = bool(user.isOrganizationAdmin)
+    org_ids: List[str] = [
         m.organizationId
         for m in session.query(OrganizationMembership).filter_by(userId=key.userId)
     ]
