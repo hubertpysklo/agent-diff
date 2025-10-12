@@ -206,21 +206,6 @@ def send_message(
     return message
 
 
-def reply_to_message(
-    session: Session, message_id: int, message_text: str, user_id: int
-):
-    message = session.get(Message, message_id)
-    if message is None:
-        raise ValueError("Message not found")
-    return send_message(
-        session=session,
-        channel_id=message.channel_id,
-        user_id=user_id,
-        message_text=message_text,
-        parent_id=message.message_id,
-    )
-
-
 def send_direct_message(
     session: Session,
     user_id: int,

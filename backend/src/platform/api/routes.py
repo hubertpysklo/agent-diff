@@ -37,9 +37,9 @@ from backend.src.platform.isolationEngine.core import CoreIsolationEngine
 
 def _principal_from_request(request: Request) -> dict[str, Any]:
     principal = getattr(request.state, "principal", None)
-    if principal:
-        return principal
-    raise PermissionError("missing principal context")
+    if not principal:
+        raise PermissionError("missing principal context")
+    return principal
 
 
 async def list_test_suites(request: Request) -> JSONResponse:

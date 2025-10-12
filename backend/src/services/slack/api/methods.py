@@ -35,13 +35,6 @@ def _session(request: Request):
     return session
 
 
-def _principal(request: Request) -> dict[str, Any]:
-    principal = getattr(request.state, "principal", None)
-    if not principal:
-        raise SlackAPIError("missing principal context", status.HTTP_401_UNAUTHORIZED)
-    return principal
-
-
 def _principal_user_id(request: Request) -> int:
     session = _session(request)
     impersonate_user_id = getattr(request.state, "impersonate_user_id", None)
