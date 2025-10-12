@@ -41,3 +41,6 @@ def create_app():
     app.mount("/api/env/{env_id}/services/slack", slack_router)
 
     return app
+
+
+app = create_app()
