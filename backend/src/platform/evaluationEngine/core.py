@@ -10,7 +10,7 @@ from backend.src.platform.evaluationEngine.testmanager import TestManager, TestS
 
 
 """
-To do refractor TestManager from EvaluationEnvinge to services.
+To do refractor TestManager from EvaluationEngine to services.
 """
 
 
@@ -48,14 +48,14 @@ class CoreEvaluationEngine:
         prefix: Literal["before", "after"],
         suffix: str | None = None,
     ) -> SnapshotResult:
-        sfx = suffix or self.generate_suffix(prefix)
+        suffix = suffix or self.generate_suffix(prefix)
         differ = Differ(
             schema=schema,
             environment_id=environment_id,
             session_manager=self.sessions,
         )
-        differ.create_snapshot(sfx)
-        return SnapshotResult(suffix=sfx, schema=schema, environment_id=environment_id)
+        differ.create_snapshot(suffix)
+        return SnapshotResult(suffix=suffix, schema=schema, environment_id=environment_id)
 
     def take_before(
         self, *, schema: str, environment_id: str, suffix: str | None = None
@@ -95,8 +95,8 @@ class CoreEvaluationEngine:
         differ = Differ(
             schema=schema, environment_id=environment_id, session_manager=self.sessions
         )
-        for sfx in suffixes:
-            differ.archive_snapshots(sfx)
+        for suffix in suffixes:
+            differ.archive_snapshots(suffix)
 
     def evaluate(
         self,

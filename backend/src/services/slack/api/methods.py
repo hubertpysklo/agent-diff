@@ -516,15 +516,6 @@ async def users_list(request: Request) -> JSONResponse:
     )
 
 
-async def users_set_presence(request: Request) -> JSONResponse:
-    payload = await request.json()
-    presence = payload.get("presence")
-    if presence not in {"active", "away"}:
-        raise SlackAPIError("presence must be 'active' or 'away'")
-    # Presence is accepted and echoed; not persisted in DB for MVP
-    return _json_response({"ok": True, "presence": presence})
-
-
 def _serialize_user(user) -> dict[str, Any]:
     return {
         "id": _format_user_id(user.user_id),
@@ -614,7 +605,6 @@ SLACK_HANDLERS: dict[str, Callable[[Request], Awaitable[JSONResponse]]] = {
     "users.info": users_info,
     "users.list": users_list,
     "users.conversations": users_conversations,
-    "users.setPresence": users_set_presence,
 }
 
 
