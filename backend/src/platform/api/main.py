@@ -1,14 +1,14 @@
 from sqlalchemy import create_engine
-from backend.src.platform.isolationEngine.session import SessionManager
+from src.platform.isolationEngine.session import SessionManager
 from starlette.applications import Starlette
 from os import environ
-from backend.src.platform.isolationEngine.core import CoreIsolationEngine
-from backend.src.platform.evaluationEngine.core import CoreEvaluationEngine
-from backend.src.platform.isolationEngine.environment import EnvironmentHandler
+from src.platform.isolationEngine.core import CoreIsolationEngine
+from src.platform.evaluationEngine.core import CoreEvaluationEngine
+from src.platform.isolationEngine.environment import EnvironmentHandler
 from starlette.routing import Router
-from backend.src.platform.api.routes import routes as platform_routes
-from backend.src.platform.api.middleware import IsolationMiddleware
-from backend.src.services.slack.api.methods import routes as slack_routes
+from src.platform.api.routes import routes as platform_routes
+from src.platform.api.middleware import IsolationMiddleware
+from src.services.slack.api.methods import routes as slack_routes
 
 
 def create_app():

@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from backend.src.platform.isolationEngine.session import SessionManager
-from backend.src.platform.db.schema import ApiKey, OrganizationMembership, User
+from src.platform.isolationEngine.session import SessionManager
+from src.platform.db.schema import ApiKey, OrganizationMembership, User
 
 
 def _pbkdf2_hash(secret: str, *, salt_bytes: bytes) -> bytes:

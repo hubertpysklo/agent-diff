@@ -1,6 +1,6 @@
 from ariadne.asgi import GraphQL
-from backend.src.platform.isolationEngine.core import CoreIsolationEngine
-from backend.src.platform.evaluationEngine.core import CoreEvaluationEngine
+from src.platform.isolationEngine.core import CoreIsolationEngine
+from src.platform.evaluationEngine.core import CoreEvaluationEngine
 
 
 class GraphQLWithSession(GraphQL):

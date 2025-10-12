@@ -7,10 +7,10 @@ from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from starlette import status
 
-from backend.src.platform.isolationEngine.session import SessionManager
-from backend.src.platform.isolationEngine.core import CoreIsolationEngine
-from backend.src.platform.api.auth import validate_api_key
-from backend.src.platform.db.schema import RunTimeEnvironment
+from src.platform.isolationEngine.session import SessionManager
+from src.platform.isolationEngine.core import CoreIsolationEngine
+from src.platform.api.auth import validate_api_key
+from src.platform.db.schema import RunTimeEnvironment
 
 
 class IsolationMiddleware(BaseHTTPMiddleware):

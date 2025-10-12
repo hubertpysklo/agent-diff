@@ -4,7 +4,7 @@ from uuid import UUID
 
 from sqlalchemy import MetaData, text
 
-from backend.src.platform.db.schema import RunTimeEnvironment
+from src.platform.db.schema import RunTimeEnvironment
 
 from .session import SessionManager
 

@@ -9,8 +9,8 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette import status
 
-from backend.src.services.slack.database import operations as ops
-from backend.src.services.slack.database.schema import (
+from src.services.slack.database import operations as ops
+from src.services.slack.database.schema import (
     User,
     Channel,
     ChannelMember,

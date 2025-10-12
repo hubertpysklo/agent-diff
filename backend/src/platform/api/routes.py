@@ -9,7 +9,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from backend.src.platform.api.models import (
+from src.platform.api.models import (
     InitEnvRequestBody,
     InitEnvResponse,
     StartRunRequest,
@@ -23,16 +23,16 @@ from backend.src.platform.api.models import (
     TestSummary,
     APIError,
 )
-from backend.src.platform.db.schema import (
+from src.platform.db.schema import (
     TestSuite,
     Test,
     TestMembership,
     TestRun,
     RunTimeEnvironment,
 )
-from backend.src.platform.evaluationEngine.core import CoreEvaluationEngine
-from backend.src.platform.evaluationEngine.differ import Differ
-from backend.src.platform.isolationEngine.core import CoreIsolationEngine
+from src.platform.evaluationEngine.core import CoreEvaluationEngine
+from src.platform.evaluationEngine.differ import Differ
+from src.platform.isolationEngine.core import CoreIsolationEngine
 
 
 def _principal_from_request(request: Request) -> dict[str, Any]:

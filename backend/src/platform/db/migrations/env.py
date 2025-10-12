@@ -4,14 +4,12 @@ import os
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-from backend.src.platform.db.schema import PlatformBase
-from backend.src.services.slack.database.base import Base as SlackBase
-from backend.src.services.linear.db.db_schema import LinearBase
+from src.platform.db.schema import PlatformBase
+from src.services.slack.database.base import Base as SlackBase
 
 
 config = context.config
 
-# Override sqlalchemy.url with DATABASE_URL from environment
 if os.environ.get("DATABASE_URL"):
     config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
@@ -21,7 +19,6 @@ if config.config_file_name is not None:
 target_metadata = [
     PlatformBase.metadata,
     SlackBase.metadata,
-    LinearBase.metadata,
 ]
 
 

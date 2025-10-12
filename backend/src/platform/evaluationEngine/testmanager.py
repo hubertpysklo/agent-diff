@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 from typing_extensions import Literal
-from backend.src.platform.evaluationEngine.compiler import DSLCompiler
-from backend.src.platform.isolationEngine.session import SessionManager
+from src.platform.evaluationEngine.compiler import DSLCompiler
+from src.platform.isolationEngine.session import SessionManager
 import json
-from backend.src.platform.db.schema import Test
+from src.platform.db.schema import Test
 
 
 @dataclass(frozen=True)

@@ -1,8 +1,8 @@
 from sqlalchemy import text
-from backend.src.platform.isolationEngine.session import SessionManager
+from src.platform.isolationEngine.session import SessionManager
 from sqlalchemy import inspect
 from datetime import datetime
-from backend.src.platform.db.schema import Diff
+from src.platform.db.schema import Diff
 from typing import Any
 
 

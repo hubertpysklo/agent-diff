@@ -1,6 +1,6 @@
 import ariadne.asgi
-from backend.src.platform.isolationEngine.session import SessionManager
-from backend.src.platform.api.auth import validate_api_key
+from src.platform.isolationEngine.session import SessionManager
+from src.platform.api.auth import validate_api_key
 
 
 class PlatformGraphQL(ariadne.asgi.GraphQL):

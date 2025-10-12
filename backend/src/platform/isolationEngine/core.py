@@ -2,7 +2,7 @@ from .session import SessionManager
 from .environment import EnvironmentHandler
 from uuid import uuid4
 from datetime import datetime, timedelta
-from backend.src.platform.db.schema import RunTimeEnvironment
+from src.platform.db.schema import RunTimeEnvironment
 
 
 class CoreIsolationEngine:
