@@ -84,6 +84,8 @@ class EnvironmentHandler:
         last_used_at: datetime,
         *,
         template_id: str | None = None,
+        impersonate_user_id: str | None = None,
+        impersonate_email: str | None = None,
     ) -> None:
         env_uuid = self._to_uuid(environment_id)
         template_uuid = self._to_uuid(template_id) if template_id else None
@@ -96,7 +98,11 @@ class EnvironmentHandler:
                 lastUsedAt=last_used_at,
             )
             if template_uuid:
-                rte.templateId = template_uuid  # type: ignore[attr-defined,assignment]
+                rte.templateId = template_uuid  # type: ignore
+            if impersonate_user_id is not None:
+                rte.impersonateUserId = impersonate_user_id
+            if impersonate_email is not None:
+                rte.impersonateEmail = impersonate_email
             s.add(rte)
 
     def drop_schema(self, schema: str) -> None:

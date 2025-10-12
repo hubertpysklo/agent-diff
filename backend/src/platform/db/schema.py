@@ -112,7 +112,7 @@ class RunTimeEnvironment(PlatformBase):
     environmentId: Mapped[UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    templateId: Mapped[UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    templateId: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
     schema: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(
         Enum("initializing", "ready", "expired", "deleted", name="test_state_status"),
@@ -129,6 +129,8 @@ class RunTimeEnvironment(PlatformBase):
     updatedAt: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
+    impersonateUserId: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    impersonateEmail: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class ApiKey(PlatformBase):

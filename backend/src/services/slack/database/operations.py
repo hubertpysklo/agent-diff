@@ -12,23 +12,29 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, exists, and_
-
-"""
-# I choosed the ones that are most likely to be used by agents. Slack OpenAPI speck has over 150 actions, unable to cover by one person - feel free to add more.
-
-"""
-
-
 # Create Team
 
 
 def create_team(
-    session: Session, team_name: str, created_at: Optional[datetime] = None
+    session: Session,
+    team_name: str,
+    created_at: Optional[datetime] = None,
+    default_channel_name: str | None = None,
 ):
     team = Team(team_name=team_name)
     if created_at is not None:
         team.created_at = created_at
     session.add(team)
+    session.flush()
+    if default_channel_name:
+        channel = Channel(
+            channel_name=default_channel_name,
+            team_id=team.team_id,
+            is_private=False,
+            is_dm=False,
+            is_gc=False,
+        )
+        session.add(channel)
     return team
 
 
@@ -36,9 +42,23 @@ def create_team(
 
 
 def create_user(
-    session: Session, username: str, email: str, created_at: Optional[datetime] = None
+    session: Session,
+    username: str,
+    email: str,
+    created_at: Optional[datetime] = None,
+    real_name: str | None = None,
+    display_name: str | None = None,
+    timezone: str | None = None,
+    title: str | None = None,
 ):
-    user = User(username=username, email=email)
+    user = User(
+        username=username,
+        email=email,
+        real_name=real_name,
+        display_name=display_name,
+        timezone=timezone,
+        title=title,
+    )
     if created_at is not None:
         user.created_at = created_at
     session.add(user)
@@ -58,7 +78,13 @@ def create_channel(
     if team is None:
         raise ValueError("Team not found")
 
-    channel = Channel(channel_name=channel_name, team_id=team_id)
+    channel = Channel(
+        channel_name=channel_name,
+        team_id=team_id,
+        is_private=False,
+        is_dm=False,
+        is_gc=False,
+    )
     if created_at is not None:
         channel.created_at = created_at
     session.add(channel)
@@ -202,6 +228,7 @@ def send_direct_message(
     sender_id: int,
     recipient_id: int,
     team_id: int | None = None,
+    created_at: Optional[datetime] = None,
 ):
     sender = session.get(User, sender_id)
     recipient = session.get(User, recipient_id)
@@ -217,7 +244,10 @@ def send_direct_message(
         team_id=team_id if team_id is not None else 0,
     )
     message = Message(
-        channel_id=dm_channel.channel_id, user_id=sender_id, message_text=message_text
+        channel_id=dm_channel.channel_id,
+        user_id=sender_id,
+        message_text=message_text,
+        **({"created_at": created_at} if created_at is not None else {}),
     )
     session.add(message)
     return message
@@ -239,6 +269,14 @@ def add_emoji_reaction(
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
+    existing = session.execute(
+        select(MessageReaction)
+        .where(MessageReaction.message_id == message_id)
+        .where(MessageReaction.user_id == user_id)
+        .where(MessageReaction.reaction_type == reaction_type)
+    ).scalar_one_or_none()
+    if existing:
+        return existing
     reaction = MessageReaction(
         message_id=message_id,
         user_id=user_id,
@@ -299,6 +337,26 @@ def get_user(session: Session, user_id: int) -> User:
     if user is None:
         raise ValueError("User not found")
     return user
+
+
+def get_user_by_email(session: Session, email: str) -> User:
+    user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user is None:
+        raise ValueError("User not found")
+    return user
+
+
+def list_users(session: Session, team_id: int | None = None) -> list[User]:
+    query = select(User)
+    if team_id is not None:
+        query = (
+            query.join(UserTeam)
+            .where(UserTeam.team_id == team_id)
+            .order_by(User.username.asc())
+        )
+    else:
+        query = query.order_by(User.username.asc())
+    return list(session.execute(query).scalars().all())
 
 
 def join_channel(

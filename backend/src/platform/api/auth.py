@@ -115,7 +115,6 @@ def validate_api_key(header: Optional[str], session: Session) -> Dict[str, objec
         m.organizationId
         for m in session.query(OrganizationMembership).filter_by(userId=key.userId)
     ]
-    session.commit()
     return {
         "user_id": key.userId,
         "org_ids": org_ids,
