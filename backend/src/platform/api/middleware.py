@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request

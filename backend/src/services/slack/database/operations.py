@@ -186,10 +186,9 @@ def send_message(
     parent_id: Optional[int] = None,
     created_at: Optional[datetime] = None,
 ):
-    channel = session.get(Channel, channel_id)
     user = session.get(User, user_id)
-    if channel is None or user is None:
-        raise ValueError("Channel or user not found")
+    if user is None:
+        raise ValueError("User not found")
     # If replying, validate parent exists and is same channel
     if parent_id is not None:
         parent = session.get(Message, parent_id)
@@ -331,7 +330,13 @@ def get_user_by_email(session: Session, email: str) -> User:
     return user
 
 
-def list_users(session: Session, team_id: int | None = None) -> list[User]:
+def list_users(
+    session: Session,
+    team_id: int | None = None,
+    offset: int | None = None,
+    limit: int | None = None,
+) -> list[User]:
+    """List users with optional team filter and pagination."""
     query = select(User)
     if team_id is not None:
         query = (
@@ -341,6 +346,12 @@ def list_users(session: Session, team_id: int | None = None) -> list[User]:
         )
     else:
         query = query.order_by(User.username.asc())
+
+    if offset is not None:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+
     return list(session.execute(query).scalars().all())
 
 
@@ -420,7 +431,25 @@ def find_or_create_dm_channel(
 # list-channels
 
 
-def list_user_channels(session: Session, user_id: int, team_id: int):
+def list_user_channels(
+    session: Session,
+    user_id: int,
+    team_id: int,
+    offset: int | None = None,
+    limit: int | None = None,
+):
+    """List user channels with optional pagination.
+
+    Args:
+        session: Database session
+        user_id: User ID
+        team_id: Team ID
+        offset: Number of rows to skip (for pagination)
+        limit: Maximum number of rows to return (for pagination)
+
+    Returns:
+        List of channels the user is a member of
+    """
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
@@ -431,17 +460,21 @@ def list_user_channels(session: Session, user_id: int, team_id: int):
     if team_member is None:
         raise ValueError("User is not a member of the team")
 
-    channels = (
-        session.execute(
-            select(Channel)
-            .where(Channel.team_id == team_id)
-            .join(ChannelMember)
-            .where(ChannelMember.user_id == user_id)
-        )
-        .scalars()
-        .all()
+    query = (
+        select(Channel)
+        .where(Channel.team_id == team_id)
+        .join(ChannelMember)
+        .where(ChannelMember.user_id == user_id)
     )
-    return channels
+
+    # Apply pagination if requested
+    if offset is not None:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+
+    channels = session.execute(query).scalars().all()
+    return list(channels)
 
 
 def list_public_channels(session: Session, team_id: int):
@@ -482,19 +515,40 @@ def list_direct_messages(session: Session, user_id: int, team_id: int):
 # list-members-in-channel
 
 
-def list_members_in_channel(session: Session, channel_id: int, team_id: int):
+def list_members_in_channel(
+    session: Session,
+    channel_id: int,
+    team_id: int,
+    offset: int | None = None,
+    limit: int | None = None,
+):
+    """List members in a channel with optional pagination.
+
+    Args:
+        session: Database session
+        channel_id: Channel ID
+        team_id: Team ID (for validation)
+        offset: Number of rows to skip (for pagination)
+        limit: Maximum number of rows to return (for pagination)
+
+    Returns:
+        List of ChannelMember objects
+    """
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
     if channel.team_id != team_id:
         raise ValueError("Channel not in team")
-    members = (
-        session.execute(
-            select(ChannelMember).where(ChannelMember.channel_id == channel_id)
-        )
-        .scalars()
-        .all()
-    )
+
+    query = select(ChannelMember).where(ChannelMember.channel_id == channel_id)
+
+    # Apply pagination if requested
+    if offset is not None:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+
+    members = session.execute(query).scalars().all()
     return members
 
 
@@ -529,7 +583,23 @@ def list_channel_history(
     team_id: int,
     limit: int,
     offset: int,
+    oldest: datetime | None = None,
+    latest: datetime | None = None,
+    inclusive: bool = False,
 ):
+    """List channel message history with optional timestamp filtering.
+
+    Args:
+        session: Database session
+        channel_id: Channel ID
+        user_id: User ID (for validation)
+        team_id: Team ID (for validation)
+        limit: Maximum number of messages to return
+        offset: Number of messages to skip
+        oldest: Only include messages after this timestamp
+        latest: Only include messages before this timestamp
+        inclusive: If True, include messages with exact oldest/latest timestamps
+    """
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
@@ -539,15 +609,23 @@ def list_channel_history(
     team_member = session.get(UserTeam, (user_id, team_id))
     if team_member is None:
         raise ValueError("User is not a member of the team")
-    history = (
-        session.execute(
-            select(Message)
-            .where(Message.channel_id == channel_id)
-            .order_by(Message.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        .scalars()
-        .all()
-    )
+
+    query = select(Message).where(Message.channel_id == channel_id)
+
+    # Apply timestamp filters
+    if oldest is not None:
+        if inclusive:
+            query = query.where(Message.created_at >= oldest)
+        else:
+            query = query.where(Message.created_at > oldest)
+
+    if latest is not None:
+        if inclusive:
+            query = query.where(Message.created_at <= latest)
+        else:
+            query = query.where(Message.created_at < latest)
+
+    query = query.order_by(Message.created_at.desc()).limit(limit).offset(offset)
+
+    history = session.execute(query).scalars().all()
     return history
