@@ -145,11 +145,11 @@ class Differ:
     ) -> None:
         with self.session_manager.with_meta_session() as session:
             diff_object = Diff(
-                environmentId=self.environment_id,
-                beforeSuffix=before_suffix,
-                afterSuffix=after_suffix,
+                environment_id=self.environment_id,
+                before_suffix=before_suffix,
+                after_suffix=after_suffix,
                 diff=diff,
-                createdAt=datetime.now(),
-                updatedAt=datetime.now(),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
             )
             session.add(diff_object)

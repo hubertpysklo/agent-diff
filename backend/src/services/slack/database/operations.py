@@ -12,23 +12,29 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, exists, and_
-
-"""
-# I choosed the ones that are most likely to be used by agents. Slack OpenAPI speck has over 150 actions, unable to cover by one person - feel free to add more.
-
-"""
-
-
 # Create Team
 
 
 def create_team(
-    session: Session, team_name: str, created_at: Optional[datetime] = None
+    session: Session,
+    team_name: str,
+    created_at: Optional[datetime] = None,
+    default_channel_name: str | None = None,
 ):
     team = Team(team_name=team_name)
     if created_at is not None:
         team.created_at = created_at
     session.add(team)
+    session.flush()
+    if default_channel_name:
+        channel = Channel(
+            channel_name=default_channel_name,
+            team_id=team.team_id,
+            is_private=False,
+            is_dm=False,
+            is_gc=False,
+        )
+        session.add(channel)
     return team
 
 
@@ -36,9 +42,23 @@ def create_team(
 
 
 def create_user(
-    session: Session, username: str, email: str, created_at: Optional[datetime] = None
+    session: Session,
+    username: str,
+    email: str,
+    created_at: Optional[datetime] = None,
+    real_name: str | None = None,
+    display_name: str | None = None,
+    timezone: str | None = None,
+    title: str | None = None,
 ):
-    user = User(username=username, email=email)
+    user = User(
+        username=username,
+        email=email,
+        real_name=real_name,
+        display_name=display_name,
+        timezone=timezone,
+        title=title,
+    )
     if created_at is not None:
         user.created_at = created_at
     session.add(user)
@@ -58,7 +78,13 @@ def create_channel(
     if team is None:
         raise ValueError("Team not found")
 
-    channel = Channel(channel_name=channel_name, team_id=team_id)
+    channel = Channel(
+        channel_name=channel_name,
+        team_id=team_id,
+        is_private=False,
+        is_dm=False,
+        is_gc=False,
+    )
     if created_at is not None:
         channel.created_at = created_at
     session.add(channel)
@@ -160,10 +186,9 @@ def send_message(
     parent_id: Optional[int] = None,
     created_at: Optional[datetime] = None,
 ):
-    channel = session.get(Channel, channel_id)
     user = session.get(User, user_id)
-    if channel is None or user is None:
-        raise ValueError("Channel or user not found")
+    if user is None:
+        raise ValueError("User not found")
     # If replying, validate parent exists and is same channel
     if parent_id is not None:
         parent = session.get(Message, parent_id)
@@ -180,21 +205,6 @@ def send_message(
     return message
 
 
-def reply_to_message(
-    session: Session, message_id: int, message_text: str, user_id: int
-):
-    message = session.get(Message, message_id)
-    if message is None:
-        raise ValueError("Message not found")
-    return send_message(
-        session=session,
-        channel_id=message.channel_id,
-        user_id=user_id,
-        message_text=message_text,
-        parent_id=message.message_id,
-    )
-
-
 def send_direct_message(
     session: Session,
     user_id: int,
@@ -202,6 +212,7 @@ def send_direct_message(
     sender_id: int,
     recipient_id: int,
     team_id: int | None = None,
+    created_at: Optional[datetime] = None,
 ):
     sender = session.get(User, sender_id)
     recipient = session.get(User, recipient_id)
@@ -217,7 +228,10 @@ def send_direct_message(
         team_id=team_id if team_id is not None else 0,
     )
     message = Message(
-        channel_id=dm_channel.channel_id, user_id=sender_id, message_text=message_text
+        channel_id=dm_channel.channel_id,
+        user_id=sender_id,
+        message_text=message_text,
+        **({"created_at": created_at} if created_at is not None else {}),
     )
     session.add(message)
     return message
@@ -239,6 +253,14 @@ def add_emoji_reaction(
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
+    existing = session.execute(
+        select(MessageReaction)
+        .where(MessageReaction.message_id == message_id)
+        .where(MessageReaction.user_id == user_id)
+        .where(MessageReaction.reaction_type == reaction_type)
+    ).scalar_one_or_none()
+    if existing:
+        return existing
     reaction = MessageReaction(
         message_id=message_id,
         user_id=user_id,
@@ -299,6 +321,38 @@ def get_user(session: Session, user_id: int) -> User:
     if user is None:
         raise ValueError("User not found")
     return user
+
+
+def get_user_by_email(session: Session, email: str) -> User:
+    user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if user is None:
+        raise ValueError("User not found")
+    return user
+
+
+def list_users(
+    session: Session,
+    team_id: int | None = None,
+    offset: int | None = None,
+    limit: int | None = None,
+) -> list[User]:
+    """List users with optional team filter and pagination."""
+    query = select(User)
+    if team_id is not None:
+        query = (
+            query.join(UserTeam)
+            .where(UserTeam.team_id == team_id)
+            .order_by(User.username.asc())
+        )
+    else:
+        query = query.order_by(User.username.asc())
+
+    if offset is not None:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+
+    return list(session.execute(query).scalars().all())
 
 
 def join_channel(
@@ -377,7 +431,25 @@ def find_or_create_dm_channel(
 # list-channels
 
 
-def list_user_channels(session: Session, user_id: int, team_id: int):
+def list_user_channels(
+    session: Session,
+    user_id: int,
+    team_id: int,
+    offset: int | None = None,
+    limit: int | None = None,
+):
+    """List user channels with optional pagination.
+
+    Args:
+        session: Database session
+        user_id: User ID
+        team_id: Team ID
+        offset: Number of rows to skip (for pagination)
+        limit: Maximum number of rows to return (for pagination)
+
+    Returns:
+        List of channels the user is a member of
+    """
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
@@ -388,17 +460,21 @@ def list_user_channels(session: Session, user_id: int, team_id: int):
     if team_member is None:
         raise ValueError("User is not a member of the team")
 
-    channels = (
-        session.execute(
-            select(Channel)
-            .where(Channel.team_id == team_id)
-            .join(ChannelMember)
-            .where(ChannelMember.user_id == user_id)
-        )
-        .scalars()
-        .all()
+    query = (
+        select(Channel)
+        .where(Channel.team_id == team_id)
+        .join(ChannelMember)
+        .where(ChannelMember.user_id == user_id)
     )
-    return channels
+
+    # Apply pagination if requested
+    if offset is not None:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+
+    channels = session.execute(query).scalars().all()
+    return list(channels)
 
 
 def list_public_channels(session: Session, team_id: int):
@@ -439,19 +515,40 @@ def list_direct_messages(session: Session, user_id: int, team_id: int):
 # list-members-in-channel
 
 
-def list_members_in_channel(session: Session, channel_id: int, team_id: int):
+def list_members_in_channel(
+    session: Session,
+    channel_id: int,
+    team_id: int,
+    offset: int | None = None,
+    limit: int | None = None,
+):
+    """List members in a channel with optional pagination.
+
+    Args:
+        session: Database session
+        channel_id: Channel ID
+        team_id: Team ID (for validation)
+        offset: Number of rows to skip (for pagination)
+        limit: Maximum number of rows to return (for pagination)
+
+    Returns:
+        List of ChannelMember objects
+    """
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
     if channel.team_id != team_id:
         raise ValueError("Channel not in team")
-    members = (
-        session.execute(
-            select(ChannelMember).where(ChannelMember.channel_id == channel_id)
-        )
-        .scalars()
-        .all()
-    )
+
+    query = select(ChannelMember).where(ChannelMember.channel_id == channel_id)
+
+    # Apply pagination if requested
+    if offset is not None:
+        query = query.offset(offset)
+    if limit is not None:
+        query = query.limit(limit)
+
+    members = session.execute(query).scalars().all()
     return members
 
 
@@ -486,7 +583,23 @@ def list_channel_history(
     team_id: int,
     limit: int,
     offset: int,
+    oldest: datetime | None = None,
+    latest: datetime | None = None,
+    inclusive: bool = False,
 ):
+    """List channel message history with optional timestamp filtering.
+
+    Args:
+        session: Database session
+        channel_id: Channel ID
+        user_id: User ID (for validation)
+        team_id: Team ID (for validation)
+        limit: Maximum number of messages to return
+        offset: Number of messages to skip
+        oldest: Only include messages after this timestamp
+        latest: Only include messages before this timestamp
+        inclusive: If True, include messages with exact oldest/latest timestamps
+    """
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
@@ -496,15 +609,23 @@ def list_channel_history(
     team_member = session.get(UserTeam, (user_id, team_id))
     if team_member is None:
         raise ValueError("User is not a member of the team")
-    history = (
-        session.execute(
-            select(Message)
-            .where(Message.channel_id == channel_id)
-            .order_by(Message.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-        .scalars()
-        .all()
-    )
+
+    query = select(Message).where(Message.channel_id == channel_id)
+
+    # Apply timestamp filters
+    if oldest is not None:
+        if inclusive:
+            query = query.where(Message.created_at >= oldest)
+        else:
+            query = query.where(Message.created_at > oldest)
+
+    if latest is not None:
+        if inclusive:
+            query = query.where(Message.created_at <= latest)
+        else:
+            query = query.where(Message.created_at < latest)
+
+    query = query.order_by(Message.created_at.desc()).limit(limit).offset(offset)
+
+    history = session.execute(query).scalars().all()
     return history

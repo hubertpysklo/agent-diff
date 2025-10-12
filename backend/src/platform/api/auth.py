@@ -54,11 +54,11 @@ class KeyHandler:
             session.add(
                 ApiKey(
                     id=key_uuid,
-                    keyHash=key_hash_b64,
-                    keySalt=key_salt_b64,
-                    expiresAt=expires_at,
-                    userId=user_id,
-                    lastUsedAt=None,
+                    key_hash=key_hash_b64,
+                    key_salt=key_salt_b64,
+                    expires_at=expires_at,
+                    user_id=user_id,
+                    last_used_at=None,
                 )
             )
 
@@ -99,25 +99,31 @@ def validate_api_key(header: Optional[str], session: Session) -> Dict[str, objec
     key: Optional[ApiKey] = (
         session.query(ApiKey).filter(ApiKey.id == key_uuid).one_or_none()
     )
-    if not key or key.revokedAt or (key.expiresAt and key.expiresAt <= datetime.now()):
+    if (
+        not key
+        or key.revoked_at
+        or (key.expires_at and key.expires_at <= datetime.now())
+    ):
         raise PermissionError("invalid or expired api key")
 
-    if not verify_secret(secret, key.keyHash, key.keySalt):
+    if not verify_secret(secret, key.key_hash, key.key_salt):
         raise PermissionError("invalid api key")
 
-    key.lastUsedAt = datetime.now()
     user: Optional[User] = (
-        session.query(User).filter(User.id == key.userId).one_or_none()
+        session.query(User).filter(User.id == key.user_id).one_or_none()
     )
-    is_platform_admin = bool(user.isPlatformAdmin) if user else False
-    is_organization_admin = bool(user.isOrganizationAdmin) if user else False
-    org_ids: List[int] = [
-        m.organizationId
-        for m in session.query(OrganizationMembership).filter_by(userId=key.userId)
+    if not user:
+        raise PermissionError("api key references non-existent user")
+
+    key.last_used_at = datetime.now()
+    is_platform_admin = bool(user.is_platform_admin)
+    is_organization_admin = bool(user.is_organization_admin)
+    org_ids: List[str] = [
+        m.organization_id
+        for m in session.query(OrganizationMembership).filter_by(user_id=key.user_id)
     ]
-    session.commit()
     return {
-        "user_id": key.userId,
+        "user_id": key.user_id,
         "org_ids": org_ids,
         "is_platform_admin": is_platform_admin,
         "is_organization_admin": is_organization_admin,

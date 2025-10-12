@@ -36,6 +36,8 @@ class CoreIsolationEngine:
             schema=environment_schema,
             expires_at=expires_at,
             last_used_at=datetime.now(),
+            impersonate_user_id=impersonate_user_id,
+            impersonate_email=impersonate_email,
         )
         return {
             "environment_id": environment_id,
