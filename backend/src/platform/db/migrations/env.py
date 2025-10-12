@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+import os
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -9,6 +10,10 @@ from backend.src.services.linear.db.db_schema import LinearBase
 
 
 config = context.config
+
+# Override sqlalchemy.url with DATABASE_URL from environment
+if os.environ.get("DATABASE_URL"):
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

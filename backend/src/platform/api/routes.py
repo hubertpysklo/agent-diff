@@ -279,7 +279,12 @@ async def delete_environment(request: Request) -> JSONResponse:
     return JSONResponse(response.model_dump())
 
 
+async def health_check(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "healthy", "service": "diff-the-universe"})
+
+
 routes = [
+    Route("/health", health_check, methods=["GET"]),
     Route("/testSuites", list_test_suites, methods=["GET"]),
     Route("/testSuites/{suite_id}", get_test_suite, methods=["GET"]),
     Route("/initEnv", init_environment, methods=["POST"]),
