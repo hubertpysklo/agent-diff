@@ -98,7 +98,7 @@ class EnvironmentHandler:
                 last_used_at=last_used_at,
             )
             if template_uuid:
-                rte.template_id = template_uuid  # type: ignore
+                rte.template_id = template_uuid
             if impersonate_user_id is not None:
                 rte.impersonate_user_id = impersonate_user_id
             if impersonate_email is not None:

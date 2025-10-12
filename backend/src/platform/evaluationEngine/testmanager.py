@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 from typing_extensions import Literal
-from platform.evaluationEngine.compiler import DSLCompiler
-from platform.isolationEngine.session import SessionManager
+from backend.src.platform.evaluationEngine.compiler import DSLCompiler
+from backend.src.platform.isolationEngine.session import SessionManager
 import json
 from backend.src.platform.db.schema import Test
 

@@ -54,7 +54,6 @@ class OrganizationMembership(PlatformBase):
 
 class TemplateEnvironment(PlatformBase):
     __tablename__ = "environments"
-    __table_args__ = ({"schema": "public"},)
     __table_args__ = (
         UniqueConstraint(
             "service",
@@ -108,9 +107,6 @@ class RunTimeEnvironment(PlatformBase):
 
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
-    environment_id: Mapped[PyUUID | None] = mapped_column(
-        PgUUID(as_uuid=True), nullable=True
     )
     template_id: Mapped[PyUUID | None] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
@@ -243,7 +239,11 @@ class TestRun(PlatformBase):
         default="pending",
     )
     result: Mapped[JSONB | None] = mapped_column(JSONB, nullable=True)
-    before_snapshot_suffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    after_snapshot_suffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    before_snapshot_suffix: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
+    after_snapshot_suffix: Mapped[str | None] = mapped_column(
+        String(255), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
