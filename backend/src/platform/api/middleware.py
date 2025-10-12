@@ -54,22 +54,19 @@ class IsolationMiddleware(BaseHTTPMiddleware):
             with self.session_manager.with_meta_session() as meta_session:
                 principal: dict[str, Any] = validate_api_key(api_key_hdr, meta_session)
                 request.state.principal = principal
+
                 try:
-                    env_uuid = UUID(env_id) if "-" in env_id else UUID(hex=env_id)
-                except Exception:
-                    env_uuid = None
-                env = (
-                    (
+                    env_uuid = self.session_manager._to_uuid(env_id)
+                    env = (
                         meta_session.query(RunTimeEnvironment)
                         .filter(RunTimeEnvironment.id == env_uuid)
                         .one_or_none()
                     )
-                    if env_uuid is not None
-                    else None
-                )
-                if env is not None:
-                    request.state.impersonate_user_id = env.impersonate_user_id
-                    request.state.impersonate_email = env.impersonate_email
+                    if env is not None:
+                        request.state.impersonate_user_id = env.impersonate_user_id
+                        request.state.impersonate_email = env.impersonate_email
+                except (ValueError, TypeError):
+                    pass
 
             with self.session_manager.with_session_for_environment(env_id) as session:
                 request.state.db_session = session
@@ -85,10 +82,8 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                 finally:
                     request.state.db_session = None
                     request.state.environment_id = None
-                    if hasattr(request.state, "impersonate_user_id"):
-                        request.state.impersonate_user_id = None
-                    if hasattr(request.state, "impersonate_email"):
-                        request.state.impersonate_email = None
+                    request.state.impersonate_user_id = None
+                    request.state.impersonate_email = None
 
         except PermissionError as exc:
             return JSONResponse(
