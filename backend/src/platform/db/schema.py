@@ -15,10 +15,10 @@ class Organization(PlatformBase):
     __table_args__ = ({"schema": "public"},)
     id: Mapped[str] = mapped_column(String(255), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    createdAt: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
-    updatedAt: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
 
@@ -31,12 +31,12 @@ class User(PlatformBase):
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    isPlatformAdmin: Mapped[bool] = mapped_column(Boolean, default=False)
-    isOrganizationAdmin: Mapped[bool] = mapped_column(Boolean, default=False)
-    createdAt: Mapped[datetime] = mapped_column(
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_organization_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
-    updatedAt: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
 
@@ -44,12 +44,12 @@ class User(PlatformBase):
 class OrganizationMembership(PlatformBase):
     __tablename__ = "organization_memberships"
     __table_args__ = ({"schema": "public"},)
-    userId: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    organizationId: Mapped[str] = mapped_column(
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    organization_id: Mapped[str] = mapped_column(
         ForeignKey("organizations.id"), primary_key=True
     )
-    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class TemplateEnvironment(PlatformBase):
@@ -58,9 +58,9 @@ class TemplateEnvironment(PlatformBase):
     __table_args__ = (
         UniqueConstraint(
             "service",
-            "ownerScope",
-            "ownerOrgId",
-            "ownerUserId",
+            "owner_scope",
+            "owner_org_id",
+            "owner_user_id",
             "name",
             "version",
             name="uq_environments_identity",
@@ -76,13 +76,13 @@ class TemplateEnvironment(PlatformBase):
     )  # 'linear', 'slack', …
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
-    ownerScope: Mapped[str] = mapped_column(
+    owner_scope: Mapped[str] = mapped_column(
         Enum("global", "org", "user", name="owner_scope"),
         nullable=False,
         default="global",
     )
-    ownerOrgId: Mapped[str | None] = mapped_column(nullable=True)
-    ownerUserId: Mapped[str | None] = mapped_column(nullable=True)
+    owner_org_id: Mapped[str | None] = mapped_column(nullable=True)
+    owner_user_id: Mapped[str | None] = mapped_column(nullable=True)
     kind: Mapped[str] = mapped_column(
         Enum("schema", "artifact", "jsonb", name="template_kind"),
         nullable=False,
@@ -91,10 +91,10 @@ class TemplateEnvironment(PlatformBase):
     location: Mapped[str] = mapped_column(
         String(512), nullable=False
     )  # schema_name or s3://… URI
-    createdAt: Mapped[datetime] = mapped_column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
-    updatedAt: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
 
@@ -109,10 +109,10 @@ class RunTimeEnvironment(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    environmentId: Mapped[PyUUID | None] = mapped_column(
+    environment_id: Mapped[PyUUID | None] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
     )
-    templateId: Mapped[PyUUID | None] = mapped_column(
+    template_id: Mapped[PyUUID | None] = mapped_column(
         PgUUID(as_uuid=True), nullable=True
     )
     schema: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -122,17 +122,17 @@ class RunTimeEnvironment(PlatformBase):
         default="initializing",
     )
     permanent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    expiresAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    maxIdleSeconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    lastUsedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    createdAt: Mapped[datetime] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    max_idle_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
-    updatedAt: Mapped[datetime] = mapped_column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
-    impersonateUserId: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    impersonateEmail: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    impersonate_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    impersonate_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class ApiKey(PlatformBase):
@@ -141,14 +141,14 @@ class ApiKey(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    keyHash: Mapped[str] = mapped_column(String(255), nullable=False)
-    keySalt: Mapped[str] = mapped_column(String(255), nullable=False)
-    expiresAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    revokedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    userId: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    lastUsedAt: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    key_salt: Mapped[str] = mapped_column(String(255), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class Diff(PlatformBase):
@@ -157,14 +157,14 @@ class Diff(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    environmentId: Mapped[PyUUID] = mapped_column(
+    environment_id: Mapped[PyUUID] = mapped_column(
         ForeignKey("run_time_environments.id"), nullable=False
     )
-    beforeSuffix: Mapped[str] = mapped_column(String(255), nullable=False)
-    afterSuffix: Mapped[str] = mapped_column(String(255), nullable=False)
+    before_suffix: Mapped[str] = mapped_column(String(255), nullable=False)
+    after_suffix: Mapped[str] = mapped_column(String(255), nullable=False)
     diff: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
-    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class Test(PlatformBase):
@@ -179,10 +179,10 @@ class Test(PlatformBase):
         Enum("actionEval", "retriEval", "compositeEval", name="test_type"),
         nullable=False,
     )
-    expectedOutput: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
-    templateSchema: Mapped[str] = mapped_column(String(255), nullable=False)
-    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    expected_output: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
+    template_schema: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class TestSuite(PlatformBase):
@@ -199,8 +199,8 @@ class TestSuite(PlatformBase):
         nullable=False,
         default="private",
     )
-    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class TestMembership(PlatformBase):
@@ -209,12 +209,12 @@ class TestMembership(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    testId: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
-    testSuiteId: Mapped[PyUUID] = mapped_column(
+    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    test_suite_id: Mapped[PyUUID] = mapped_column(
         ForeignKey("test_suites.id"), nullable=False
     )
-    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class TestRun(PlatformBase):
@@ -223,11 +223,11 @@ class TestRun(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    testId: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
-    testSuiteId: Mapped[PyUUID | None] = mapped_column(
+    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    test_suite_id: Mapped[PyUUID | None] = mapped_column(
         ForeignKey("test_suites.id"), nullable=True
     )
-    environmentId: Mapped[PyUUID] = mapped_column(
+    environment_id: Mapped[PyUUID] = mapped_column(
         ForeignKey("run_time_environments.id"), nullable=False
     )
     status: Mapped[str] = mapped_column(
@@ -243,7 +243,7 @@ class TestRun(PlatformBase):
         default="pending",
     )
     result: Mapped[JSONB | None] = mapped_column(JSONB, nullable=True)
-    beforeSnapshotSuffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    afterSnapshotSuffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updatedAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    before_snapshot_suffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    after_snapshot_suffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

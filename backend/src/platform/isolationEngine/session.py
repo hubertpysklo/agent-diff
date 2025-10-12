@@ -47,9 +47,9 @@ class SessionManager:
             )
             if env is None or env.status != "ready":
                 raise PermissionError("environment not available")
-            env.lastUsedAt = datetime.now()
+            env.last_used_at = datetime.now()
             s.commit()
-            return env.schema, env.lastUsedAt
+            return env.schema, env.last_used_at
 
     def get_session_for_schema(self, schema: str):
         """

@@ -94,15 +94,15 @@ class EnvironmentHandler:
                 id=env_uuid,
                 schema=schema,
                 status="ready",
-                expiresAt=expires_at,
-                lastUsedAt=last_used_at,
+                expires_at=expires_at,
+                last_used_at=last_used_at,
             )
             if template_uuid:
-                rte.templateId = template_uuid  # type: ignore
+                rte.template_id = template_uuid  # type: ignore
             if impersonate_user_id is not None:
-                rte.impersonateUserId = impersonate_user_id
+                rte.impersonate_user_id = impersonate_user_id
             if impersonate_email is not None:
-                rte.impersonateEmail = impersonate_email
+                rte.impersonate_email = impersonate_email
             s.add(rte)
 
     def drop_schema(self, schema: str) -> None:
@@ -120,7 +120,7 @@ class EnvironmentHandler:
             if env is None:
                 raise ValueError("environment not found")
             env.status = status
-            env.updatedAt = datetime.now()
+            env.updated_at = datetime.now()
         # TODO: once we have a background worker, enforce TTL-based cleanup so
         # expired environments are dropped automatically instead of relying on
         # manual DELETE calls.

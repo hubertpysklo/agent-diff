@@ -37,7 +37,7 @@ class TestManager:
                 name=test.name,
                 prompt=test.prompt,
                 type=test.type,
-                expectedOutput=compiled,
+                expected_output=compiled,
             )
             session.add(compiledTest)
 

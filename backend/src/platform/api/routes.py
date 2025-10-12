@@ -47,7 +47,7 @@ async def list_test_suites(request: Request) -> JSONResponse:
     principal = _principal_from_request(request)
     suites = (
         session.query(TestSuite)
-        .order_by(TestSuite.createdAt.desc())
+        .order_by(TestSuite.created_at.desc())
         .filter(
             or_(
                 TestSuite.visibility == "public",
@@ -78,8 +78,8 @@ async def get_test_suite(request: Request) -> JSONResponse:
         )
     tests = (
         session.query(Test)
-        .join(TestMembership, TestMembership.testId == Test.id)
-        .filter(TestMembership.testSuiteId == suite_id)
+        .join(TestMembership, TestMembership.test_id == Test.id)
+        .filter(TestMembership.test_suite_id == suite_id)
         .all()
     )
     payload = TestSuiteDetail(
@@ -105,7 +105,7 @@ async def init_environment(request: Request) -> JSONResponse:
             status_code=status.HTTP_404_NOT_FOUND,
         )
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
-    schema = body.templateSchema or test.templateSchema
+    schema = body.templateSchema or test.template_schema
 
     result = core.create_environment(
         template_schema=schema,
@@ -146,14 +146,14 @@ async def start_run(request: Request) -> JSONResponse:
     )
 
     run = TestRun(
-        testId=body.testId,
-        testSuiteId=body.testSuiteId,
-        environmentId=body.envId,
+        test_id=body.testId,
+        test_suite_id=body.testSuiteId,
+        environment_id=body.envId,
         status="running",
         result=None,
-        beforeSnapshotSuffix=before_result.suffix,
-        createdAt=datetime.now(),
-        updatedAt=datetime.now(),
+        before_snapshot_suffix=before_result.suffix,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
     )
     session.add(run)
     session.flush()
@@ -180,35 +180,35 @@ async def end_run(request: Request) -> JSONResponse:
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
     rte = (
         session.query(RunTimeEnvironment)
-        .filter(RunTimeEnvironment.id == run.environmentId)
+        .filter(RunTimeEnvironment.id == run.environment_id)
         .one()
     )
 
     after = core_eval.take_after(
-        schema=rte.schema, environment_id=str(run.environmentId)
+        schema=rte.schema, environment_id=str(run.environment_id)
     )
     evaluation: dict[str, Any]
     diff_payload: dict[str, Any] | None = None
     try:
         diff_payload = core_eval.compute_diff(
             schema=rte.schema,
-            environment_id=str(run.environmentId),
-            before_suffix=run.beforeSnapshotSuffix,
+            environment_id=str(run.environment_id),
+            before_suffix=run.before_snapshot_suffix,
             after_suffix=after.suffix,
         )
         differ = Differ(
             schema=rte.schema,
-            environment_id=str(run.environmentId),
+            environment_id=str(run.environment_id),
             session_manager=request.app.state.sessions,
         )
         differ.store_diff(
             diff_payload,
-            before_suffix=run.beforeSnapshotSuffix,
+            before_suffix=run.before_snapshot_suffix,
             after_suffix=after.suffix,
         )
-        spec = session.query(Test).filter(Test.id == run.testId).one()
+        spec = session.query(Test).filter(Test.id == run.test_id).one()
         evaluation = core_eval.evaluate(
-            compiled_spec=spec.expectedOutput,
+            compiled_spec=spec.expected_output,
             diff=diff_payload,
         )
         run.status = "passed" if evaluation.get("passed") else "failed"
@@ -224,8 +224,8 @@ async def end_run(request: Request) -> JSONResponse:
     if diff_payload is not None:
         evaluation.setdefault("diff", diff_payload)
     run.result = evaluation
-    run.afterSnapshotSuffix = after.suffix
-    run.updatedAt = datetime.now()
+    run.after_snapshot_suffix = after.suffix
+    run.updated_at = datetime.now()
 
     response = EndRunResponse(
         runId=str(run.id),
@@ -252,7 +252,7 @@ async def get_run_result(request: Request) -> JSONResponse:
         score=run.result.get("score") if run.result else None,
         failures=run.result.get("failures") if run.result else [],
         diff=run.result.get("diff") if run.result else None,
-        createdAt=run.createdAt,
+        createdAt=run.created_at,
     )
     return JSONResponse(payload.model_dump())
 
