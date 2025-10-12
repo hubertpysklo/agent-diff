@@ -1083,7 +1083,6 @@ async def conversations_archive(request: Request) -> JSONResponse:
         _slack_error("channel_not_found")
 
     session = _session(request)
-    actor_id = _principal_user_id(request)
 
     # Validate and resolve channel
     try:
@@ -1119,7 +1118,6 @@ async def conversations_unarchive(request: Request) -> JSONResponse:
         _slack_error("channel_not_found")
 
     session = _session(request)
-    actor_id = _principal_user_id(request)
 
     # Validate and resolve channel
     try:
@@ -1160,7 +1158,6 @@ async def conversations_rename(request: Request) -> JSONResponse:
         _slack_error("invalid_name_specials")
 
     session = _session(request)
-    actor_id = _principal_user_id(request)
 
     # Validate and resolve channel
     try:
