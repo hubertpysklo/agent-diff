@@ -63,9 +63,7 @@ async def list_test_suites(request: Request) -> JSONResponse:
         )
         for s in suites
     ]
-    return JSONResponse(
-        {"testSuites": [suite.dict(by_alias=True) for suite in payload]}
-    )
+    return JSONResponse({"testSuites": [suite.model_dump() for suite in payload]})
 
 
 async def get_test_suite(request: Request) -> JSONResponse:
@@ -74,7 +72,7 @@ async def get_test_suite(request: Request) -> JSONResponse:
     suite = session.query(TestSuite).filter(TestSuite.id == suite_id).one_or_none()
     if suite is None:
         return JSONResponse(
-            APIError(detail="test suite not found").dict(),
+            APIError(detail="test suite not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
     tests = (
@@ -92,7 +90,7 @@ async def get_test_suite(request: Request) -> JSONResponse:
             for t in tests
         ],  # Possibly add the expected state in response later for local diff runner
     )
-    return JSONResponse(payload.dict(by_alias=True))
+    return JSONResponse(payload.model_dump())
 
 
 async def init_environment(request: Request) -> JSONResponse:

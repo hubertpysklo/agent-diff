@@ -1,9 +1,9 @@
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import String, DateTime, Enum, UniqueConstraint, Integer, Boolean
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID as PgUUID, JSONB
 from sqlalchemy import ForeignKey, Text
 from datetime import datetime
-from uuid import uuid4
+from uuid import uuid4, UUID as PyUUID
 
 
 class PlatformBase(DeclarativeBase):
@@ -68,8 +68,8 @@ class TemplateEnvironment(PlatformBase):
         {"schema": "public"},
     )
 
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     service: Mapped[str] = mapped_column(
         String(32), nullable=False
@@ -106,13 +106,15 @@ class RunTimeEnvironment(PlatformBase):
         {"schema": "public"},
     )
 
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    environmentId: Mapped[UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True
+    environmentId: Mapped[PyUUID | None] = mapped_column(
+        PgUUID(as_uuid=True), nullable=True
     )
-    templateId: Mapped[UUID] = mapped_column(UUID(as_uuid=True), nullable=True)
+    templateId: Mapped[PyUUID | None] = mapped_column(
+        PgUUID(as_uuid=True), nullable=True
+    )
     schema: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(
         Enum("initializing", "ready", "expired", "deleted", name="test_state_status"),
@@ -136,8 +138,8 @@ class RunTimeEnvironment(PlatformBase):
 class ApiKey(PlatformBase):
     __tablename__ = "api_keys"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     keyHash: Mapped[str] = mapped_column(String(255), nullable=False)
     keySalt: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -152,10 +154,10 @@ class ApiKey(PlatformBase):
 class Diff(PlatformBase):
     __tablename__ = "diffs"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    environmentId: Mapped[UUID] = mapped_column(
+    environmentId: Mapped[PyUUID] = mapped_column(
         ForeignKey("run_time_environments.id"), nullable=False
     )
     beforeSuffix: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -168,8 +170,8 @@ class Diff(PlatformBase):
 class Test(PlatformBase):
     __tablename__ = "tests"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
@@ -186,8 +188,8 @@ class Test(PlatformBase):
 class TestSuite(PlatformBase):
     __tablename__ = "test_suites"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -204,11 +206,11 @@ class TestSuite(PlatformBase):
 class TestMembership(PlatformBase):
     __tablename__ = "test_memberships"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    testId: Mapped[UUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
-    testSuiteId: Mapped[UUID] = mapped_column(
+    testId: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    testSuiteId: Mapped[PyUUID] = mapped_column(
         ForeignKey("test_suites.id"), nullable=False
     )
     createdAt: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -218,14 +220,14 @@ class TestMembership(PlatformBase):
 class TestRun(PlatformBase):
     __tablename__ = "test_runs"
     __table_args__ = ({"schema": "public"},)
-    id: Mapped[UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid4
+    id: Mapped[PyUUID] = mapped_column(
+        PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    testId: Mapped[UUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
-    testSuiteId: Mapped[UUID | None] = mapped_column(
+    testId: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    testSuiteId: Mapped[PyUUID | None] = mapped_column(
         ForeignKey("test_suites.id"), nullable=True
     )
-    environmentId: Mapped[UUID] = mapped_column(
+    environmentId: Mapped[PyUUID] = mapped_column(
         ForeignKey("run_time_environments.id"), nullable=False
     )
     status: Mapped[str] = mapped_column(
