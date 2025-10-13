@@ -1,0 +1,116 @@
+{
+  "teams": [
+    {
+      "team_id": "T01WORKSPACE",
+      "team_name": "Test Workspace"
+    }
+  ],
+  "users": [
+    {
+      "user_id": "U01AGENBOT9",
+      "username": "agent1",
+      "display_name": "Agent",
+      "real_name": "AI Agent",
+      "email": "agent@example.com"
+    },
+    {
+      "user_id": "U02JOHNDOE1",
+      "username": "johndoe",
+      "display_name": "John",
+      "real_name": "John Doe",
+      "email": "john@example.com"
+    },
+    {
+      "user_id": "U03ROBERT23",
+      "username": "robertsmith",
+      "display_name": "Robert",
+      "real_name": "Robert Smith",
+      "email": "robert@example.com"
+    }
+  ],
+  "channels": [
+    {
+      "channel_id": "C01ABCD1234",
+      "channel_name": "general",
+      "team_id": "T01WORKSPACE",
+      "is_private": false,
+      "is_dm": false,
+      "is_gc": false,
+      "topic_text": "Company-wide announcements and work-based matters",
+      "purpose_text": "This channel is for team-wide communication and announcements."
+    },
+    {
+      "channel_id": "C02EFGH5678",
+      "channel_name": "random",
+      "team_id": "T01WORKSPACE",
+      "is_private": false,
+      "is_dm": false,
+      "is_gc": false,
+      "topic_text": "Non-work banter and water cooler conversation",
+      "purpose_text": "A place for non-work-related chat and random things."
+    }
+  ],
+  "user_teams": [
+    {
+      "user_id": "U01AGENBOT9",
+      "team_id": "T01WORKSPACE",
+      "role": "member"
+    },
+    {
+      "user_id": "U02JOHNDOE1",
+      "team_id": "T01WORKSPACE",
+      "role": "member"
+    },
+    {
+      "user_id": "U03ROBERT23",
+      "team_id": "T01WORKSPACE",
+      "role": "admin"
+    }
+  ],
+  "channel_members": [
+    {
+      "channel_id": "C01ABCD1234",
+      "user_id": "U01AGENBOT9"
+    },
+    {
+      "channel_id": "C01ABCD1234",
+      "user_id": "U02JOHNDOE1"
+    },
+    {
+      "channel_id": "C01ABCD1234",
+      "user_id": "U03ROBERT23"
+    },
+    {
+      "channel_id": "C02EFGH5678",
+      "user_id": "U01AGENBOT9"
+    },
+    {
+      "channel_id": "C02EFGH5678",
+      "user_id": "U02JOHNDOE1"
+    },
+    {
+      "channel_id": "C02EFGH5678",
+      "user_id": "U03ROBERT23"
+    }
+  ],
+  "messages": [
+    {
+      "message_id": "1699564800.000123",
+      "channel_id": "C01ABCD1234",
+      "user_id": "U01AGENBOT9",
+      "message_text": "Hey team, we just shipped the new feature!"
+    },
+    {
+      "message_id": "1699568400.000456",
+      "channel_id": "C01ABCD1234",
+      "user_id": "U03ROBERT23",
+      "message_text": "Does anyone know when the deployment will be done?"
+    },
+    {
+      "message_id": "1699572000.000789",
+      "channel_id": "C02EFGH5678",
+      "user_id": "U02JOHNDOE1",
+      "message_text": "Anyone up for lunch?"
+    }
+  ]
+}

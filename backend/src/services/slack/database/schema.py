@@ -142,12 +142,11 @@ class MessageReaction(Base):
             "message_id", "user_id", "reaction_type", name="uq_message_reaction"
         ),
     )
-    reaction_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    reaction_type: Mapped[str] = mapped_column(String(50), primary_key=True)
     message_id: Mapped[str] = mapped_column(
         ForeignKey("messages.message_id"), nullable=False
     )
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), nullable=False)
-    reaction_type: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.now)
 
     message: Mapped["Message"] = relationship(back_populates="reactions")

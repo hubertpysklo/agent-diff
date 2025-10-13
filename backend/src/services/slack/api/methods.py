@@ -20,6 +20,61 @@ from src.services.slack.database.schema import (
 )
 
 
+# Common Slack reactions for MVP
+COMMON_REACTIONS = {
+    # Basic standard emojis
+    "raised_hands",  # thank you
+    "bow",           # thank you
+    "thumbsup",      # agree / got it
+    "clap",          # well done
+    "tada",          # congrats / celebration
+    "dart",          # bullseye / nailed it
+    "joy",           # crying-laughing
+    "+1",            # agree / like
+    "-1",            # disagree
+    "eyes",          # watching / reviewing
+    "heart",         # love it
+    "fire",          # hot / amazing
+    "rocket",        # ship it / launch
+    "check",         # done / confirmed
+    "x",             # no / wrong
+    "wave",          # hello / goodbye
+    "pray",          # hoping / please
+    "thinking",      # considering
+    "shrug",         # I don't know
+    "facepalm",      # oops / mistake
+    "grimacing",     # awkward
+    "sweat_smile",   # nervous laugh
+    "zzz",           # sleeping / boring
+    "coffee",        # need caffeine
+    "pizza",         # food / break
+
+    # Popular Slack custom emojis
+    "finish_flag",         # done / finished
+    "blob_smiley",         # happy
+    "alert",               # warning
+    "mic-drop",            # nailed it
+    "cool-doge",           # cool
+    "thankyou",            # thanks
+    "party_blob",          # celebration
+    "partyparrot",         # party
+    "this_is_fine",        # chaos
+    "extreme-teamwork",    # collaboration
+    "done",                # completed
+    "loading",             # in progress
+    "huh",                 # confused
+    "dumpster-fire",       # disaster
+    "blob-yes",            # yes
+    "blob-no",             # no
+    "blob_help",           # need help
+    "chefs-kiss",          # perfect
+    "troll",               # joking
+    "1000",                # 100% perfect
+    "catjam",              # vibing
+    "keanu-thanks",        # thanks
+}
+
+
 class SlackAPIError(Exception):
     def __init__(self, detail: str, status_code: int = status.HTTP_400_BAD_REQUEST):
         super().__init__(detail)
@@ -1366,6 +1421,11 @@ async def reactions_add(request: Request) -> JSONResponse:
     if not channel or not ts:
         _slack_error("no_item_specified")
 
+    # Validate reaction type - remove colons if present (e.g., ":thumbsup:" -> "thumbsup")
+    clean_name = name.strip(":")
+    if clean_name not in COMMON_REACTIONS:
+        _slack_error("invalid_name")  # Slack returns this error for invalid reactions
+
     session = _session(request)
     actor = _principal_user_id(request)
 
@@ -1563,12 +1623,14 @@ def _serialize_user(user) -> dict[str, Any]:
     display_name = user.display_name or user.username
 
     # Generate placeholder avatar URLs (Slack format)
-    avatar_hash = f"g{user.user_id:010d}"
+    import hashlib
+
+    avatar_hash = hashlib.md5(user.user_id.encode()).hexdigest()[:10]
     base_avatar_url = f"https://secure.gravatar.com/avatar/{avatar_hash}"
 
     return {
         "id": user_id_str,
-        "team_id": "T00000000",  # Placeholder team ID
+        "team_id": "T01WORKSPACE",  # Default workspace team ID
         "name": user.username,
         "deleted": not user.is_active if user.is_active is not None else False,
         "color": "9f69e7",  # Default purple color
@@ -1594,7 +1656,7 @@ def _serialize_user(user) -> dict[str, Any]:
             "image_72": f"{base_avatar_url}?s=72",
             "image_192": f"{base_avatar_url}?s=192",
             "image_512": f"{base_avatar_url}?s=512",
-            "team": "T00000000",
+            "team": "T01WORKSPACE",
         },
         "is_admin": False,
         "is_owner": False,

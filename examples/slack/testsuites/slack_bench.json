@@ -1,0 +1,296 @@
+{
+  "id": "slack-bench",
+  "name": "Slack Bench",
+  "description": "Benchmark tests for Slack MCP operations",
+  "service": "slack",
+  "tests": [
+    {
+      "id": "test_1",
+      "name": "Send message to general channel",
+      "prompt": "Send a 'hello' message to the general channel",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            },
+            "message_text": {
+              "contains": "hello"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_2",
+      "name": "Create a new channel",
+      "prompt": "Create a new channel called 'project-alpha'",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "channels",
+          "where": {
+            "channel_name": {
+              "eq": "project-alpha"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_3",
+      "name": "Reply in a thread",
+      "prompt": "Reply 'Next monday.' to the most recent message in #general",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "parent_id": {
+              "eq": "1699568400.000456"
+            },
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            },
+            "message_text": {
+              "contains": "Next monday"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_4",
+      "name": "Add emoji reaction",
+      "prompt": "React with :thumbsup: to the newest message in #general",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "message_reactions",
+          "where": {
+            "message_id": {
+              "eq": "1699568400.000456"
+            },
+            "user_id": {
+              "eq": "U01AGENBOT9"
+            },
+            "reaction_type": {
+              "eq": "thumbsup"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_5",
+      "name": "Update channel topic",
+      "prompt": "Change the #general channel topic to 'Weekly standup discussions'",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "changed",
+          "entity": "channels",
+          "where": {
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            }
+          },
+          "expected_changes": {
+            "topic_text": {
+              "to": {
+                "contains": "Weekly standup"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "test_6",
+      "name": "Edit existing message",
+      "prompt": "Find the message that says 'Hey team' and edit it to say 'Hello everyone'",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U02JOHNDOE1",
+      "assertions": [
+        {
+          "diff_type": "changed",
+          "entity": "messages",
+          "where": {
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            },
+            "message_id": {
+              "eq": "1699564800.000123"
+            }
+          },
+          "expected_changes": {
+            "message_text": {
+              "to": {
+                "contains": "Hello everyone"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "test_7",
+      "name": "Send direct message",
+      "prompt": "Send a DM to John saying 'Can we sync later?'",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "user_id": {
+              "eq": "U01AGENBOT9"
+            },
+            "message_text": {
+              "contains": "sync later"
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "channels",
+          "where": {
+            "is_dm": {
+              "eq": true
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_8",
+      "name": "Mention user in message",
+      "prompt": "Post to #general mentioning John with text 'Please review the pull request'",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            },
+            "message_text": {
+              "contains": "@johndoe"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_9",
+      "name": "Multi-channel send",
+      "prompt": "Send 'System maintenance tonight at 10pm' to both #general and #random",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "message_text": {
+              "contains": "maintenance"
+            },
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "message_text": {
+              "contains": "maintenance"
+            },
+            "channel_id": {
+              "eq": "C02EFGH5678"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_10",
+      "name": "Delete old message",
+      "prompt": "Delete the message about deployment from #general",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "deleted",
+          "entity": "messages",
+          "where": {
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            },
+            "message_text": {
+              "contains": "deployment"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_11",
+      "name": "Forward message to another channel",
+      "prompt": "Copy the question from #random and also post it to #general",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            },
+            "message_text": {
+              "contains": "Anyone up for lunch?"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    }
+  ]
+}

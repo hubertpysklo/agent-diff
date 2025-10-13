@@ -8,6 +8,9 @@ from src.services.slack.database.schema import (
     UserTeam,
 )
 
+import secrets
+import string
+import time
 from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -18,16 +21,26 @@ from sqlalchemy import select, exists, and_
 def create_team(
     session: Session,
     team_name: str,
+    team_id: Optional[str] = None,
     created_at: Optional[datetime] = None,
     default_channel_name: str | None = None,
 ):
-    team = Team(team_name=team_name)
+    # Generate team_id if not provided
+    if team_id is None:
+        # Generate Slack-style team ID: T + 10 alphanumeric chars
+        chars = string.ascii_uppercase + string.digits
+        team_id = "T" + "".join(secrets.choice(chars) for _ in range(10))
+
+    team = Team(team_id=team_id, team_name=team_name)
     if created_at is not None:
         team.created_at = created_at
     session.add(team)
     session.flush()
     if default_channel_name:
+        # Generate channel_id for default channel
+        channel_id = "C" + "".join(secrets.choice(chars) for _ in range(10))
         channel = Channel(
+            channel_id=channel_id,
             channel_name=default_channel_name,
             team_id=team.team_id,
             is_private=False,
@@ -45,13 +58,21 @@ def create_user(
     session: Session,
     username: str,
     email: str,
+    user_id: Optional[str] = None,
     created_at: Optional[datetime] = None,
     real_name: str | None = None,
     display_name: str | None = None,
     timezone: str | None = None,
     title: str | None = None,
 ):
+    # Generate user_id if not provided
+    if user_id is None:
+        # Generate Slack-style user ID: U + 10 alphanumeric chars
+        chars = string.ascii_uppercase + string.digits
+        user_id = "U" + "".join(secrets.choice(chars) for _ in range(10))
+
     user = User(
+        user_id=user_id,
         username=username,
         email=email,
         real_name=real_name,
@@ -72,13 +93,21 @@ def create_channel(
     session: Session,
     channel_name: str,
     team_id: str,
+    channel_id: Optional[str] = None,
     created_at: Optional[datetime] = None,
 ) -> Channel:
     team = session.get(Team, team_id)
     if team is None:
         raise ValueError("Team not found")
 
+    # Generate channel_id if not provided
+    if channel_id is None:
+        # Generate Slack-style channel ID: C + 10 alphanumeric chars
+        chars = string.ascii_uppercase + string.digits
+        channel_id = "C" + "".join(secrets.choice(chars) for _ in range(10))
+
     channel = Channel(
+        channel_id=channel_id,
         channel_name=channel_name,
         team_id=team_id,
         is_private=False,
@@ -196,7 +225,6 @@ def send_message(
             raise ValueError("Parent message not found in this channel")
 
     # Generate Slack-style timestamp ID
-    import time
     timestamp = time.time()
     message_id = f"{int(timestamp)}.{int((timestamp % 1) * 1_000_000):06d}"
 
