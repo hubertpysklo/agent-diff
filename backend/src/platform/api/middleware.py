@@ -19,7 +19,7 @@ class PlatformMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next) -> Response:
         path = request.scope.get("path", "")
-        if path == "/health":
+        if path == "/api/platform/health":
             return await call_next(request)
 
         api_key_hdr = request.headers.get("X-API-Key") or request.headers.get(
