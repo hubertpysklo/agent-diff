@@ -4,7 +4,7 @@ import sys
 import json
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -18,7 +18,7 @@ def main():
         sys.exit(1)
 
     test_file = (
-        Path(__file__).parent.parent.parent
+        Path(__file__).resolve().parent.parent.parent
         / "examples"
         / "slack"
         / "testsuites"
@@ -31,7 +31,7 @@ def main():
     engine = create_engine(db_url)
 
     with Session(engine) as session:
-        if not session.query(Test).exists():
+        if session.query(Test).count() == 0:
             for test_data in data["tests"]:
                 test = Test(
                     name=test_data["name"],

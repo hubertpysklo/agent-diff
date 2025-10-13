@@ -30,6 +30,7 @@ services:
         condition: service_healthy
     volumes:
       - ../backend:/app
+      - ../examples:/examples
     command: >
       sh -c "
         alembic upgrade head &&

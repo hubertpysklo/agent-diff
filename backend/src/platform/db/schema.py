@@ -31,8 +31,8 @@ class User(PlatformBase):
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_organization_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_organization_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
@@ -117,7 +117,7 @@ class RunTimeEnvironment(PlatformBase):
         nullable=False,
         default="initializing",
     )
-    permanent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    permanent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     max_idle_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

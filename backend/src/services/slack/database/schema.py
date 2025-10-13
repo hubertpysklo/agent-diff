@@ -45,7 +45,9 @@ class User(Base):
     title: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.now)
     last_login: Mapped[datetime | None] = mapped_column(DateTime, default=None)
-    is_active: Mapped[bool | None] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool | None] = mapped_column(
+        Boolean, default=True, server_default="true"
+    )
 
     messages: Mapped[list["Message"]] = relationship(
         back_populates="user", cascade="all,delete-orphan"
@@ -76,11 +78,19 @@ class Channel(Base):
     team_id: Mapped[str | None] = mapped_column(ForeignKey("teams.team_id"))
     topic_text: Mapped[str | None] = mapped_column(Text)
     purpose_text: Mapped[str | None] = mapped_column(Text)
-    is_private: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_dm: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    is_gc: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_private: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    is_dm: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
+    is_gc: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     created_at: Mapped[datetime | None] = mapped_column(DateTime, default=datetime.now)
-    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_archived: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     team: Mapped[Team | None] = relationship(back_populates="channels")
     messages: Mapped[list["Message"]] = relationship(
