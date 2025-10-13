@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Any
-
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from starlette import status
 
+from src.platform.api.models import Principal
 from src.platform.isolationEngine.session import SessionManager
 from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.api.auth import validate_api_key
@@ -34,7 +33,7 @@ class PlatformMiddleware(BaseHTTPMiddleware):
 
         try:
             with self.session_manager.with_meta_session() as meta_session:
-                principal: dict[str, Any] = validate_api_key(api_key_hdr, meta_session)
+                principal: Principal = validate_api_key(api_key_hdr, meta_session)
                 request.state.principal = principal
                 request.state.db_session = meta_session
 
@@ -97,7 +96,7 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                 )
 
             with self.session_manager.with_meta_session() as meta_session:
-                principal: dict[str, Any] = validate_api_key(api_key_hdr, meta_session)
+                principal: Principal = validate_api_key(api_key_hdr, meta_session)
                 request.state.principal = principal
 
                 try:

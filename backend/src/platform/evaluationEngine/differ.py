@@ -4,6 +4,7 @@ from sqlalchemy import inspect
 from datetime import datetime
 from src.platform.db.schema import Diff
 from typing import Any
+from .models import DiffResult
 
 
 class Differ:
@@ -122,11 +123,11 @@ class Differ:
 
     def get_diff(
         self, before_suffix: str, after_suffix: str
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> DiffResult:
         inserts = self.get_inserts(before_suffix, after_suffix)
         updates = self.get_updates(before_suffix, after_suffix)
         deletes = self.get_deletes(before_suffix, after_suffix)
-        return {"inserts": inserts, "updates": updates, "deletes": deletes}
+        return DiffResult(inserts=inserts, updates=updates, deletes=deletes)
 
     def archive_snapshots(self, suffix: str) -> None:
         with self.engine.begin() as conn:
@@ -139,7 +140,7 @@ class Differ:
 
     def store_diff(
         self,
-        diff: dict[str, list[dict[str, Any]]],
+        diff: DiffResult,
         before_suffix: str,
         after_suffix: str,
     ) -> None:
@@ -148,7 +149,7 @@ class Differ:
                 environment_id=self.environment_id,
                 before_suffix=before_suffix,
                 after_suffix=after_suffix,
-                diff=diff,
+                diff=diff.model_dump(),
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
             )

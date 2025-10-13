@@ -1,5 +1,6 @@
 from .session import SessionManager
 from .environment import EnvironmentHandler
+from .models import EnvironmentResponse
 from uuid import uuid4
 from datetime import datetime, timedelta
 from src.platform.db.schema import RunTimeEnvironment
@@ -19,9 +20,10 @@ class CoreIsolationEngine:
         *,
         template_schema: str,
         ttl_seconds: int,
+        created_by: str,
         impersonate_user_id: str | None = None,
         impersonate_email: str | None = None,
-    ) -> dict[str, str | datetime | None]:
+    ) -> EnvironmentResponse:
         evn_uuid = uuid4()
         environment_id = evn_uuid.hex
         environment_schema = f"state_{environment_id}"
@@ -36,16 +38,17 @@ class CoreIsolationEngine:
             schema=environment_schema,
             expires_at=expires_at,
             last_used_at=datetime.now(),
+            created_by=created_by,
             impersonate_user_id=impersonate_user_id,
             impersonate_email=impersonate_email,
         )
-        return {
-            "environment_id": environment_id,
-            "schema": environment_schema,
-            "expires_at": expires_at,
-            "impersonate_user_id": impersonate_user_id,
-            "impersonate_email": impersonate_email,
-        }
+        return EnvironmentResponse(
+            environment_id=environment_id,
+            schema_name=environment_schema,
+            expires_at=expires_at,
+            impersonate_user_id=impersonate_user_id,
+            impersonate_email=impersonate_email,
+        )
 
     def get_schema_for_environment(self, environment_id: str) -> str:
         with self.sessions.with_meta_session() as session:

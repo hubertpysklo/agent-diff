@@ -23,7 +23,14 @@ docker-compose up --build
 # PostgreSQL runs on localhost:5432
 ```
 
-The backend automatically runs migrations on startup. Test the health endpoint:
+The backend automatically runs migrations and seeds a development user on startup. Check the logs for your API key:
+
+```bash
+docker-compose logs backend | grep "Dev API Key"
+# Dev API Key: ak_xxxxx...
+```
+
+Test the health endpoint:
 
 ```bash
 curl http://localhost:8000/api/platform/health
@@ -32,9 +39,17 @@ curl http://localhost:8000/api/platform/health
 
 ## Using the Platform
 
-**Note:** The platform requires initial setup (API keys, template data) which is currently done manually. Seeding tools are coming soon.
+All API requests require authentication via API key:
 
-Once set up, here's how agents interact with the platform:
+```bash
+# Using X-API-Key header
+curl -H "X-API-Key: ak_xxxxx..." http://localhost:8000/api/platform/...
+
+# Or using Authorization header
+curl -H "Authorization: ak_xxxxx..." http://localhost:8000/api/platform/...
+```
+
+Here's how agents interact with the platform:
 
 1. Create an isolated test environment
 2. Agent performs actions (posts Slack messages, creates Linear issues, etc.)

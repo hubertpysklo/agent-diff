@@ -4,6 +4,7 @@ from typing_extensions import Literal
 from src.platform.evaluationEngine.compiler import DSLCompiler
 from src.platform.evaluationEngine.differ import Differ
 from src.platform.evaluationEngine.assertion import AssertionEngine
+from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.session import SessionManager
 from uuid import uuid4
 from src.platform.evaluationEngine.testmanager import TestManager, TestSpec
@@ -84,7 +85,7 @@ class CoreEvaluationEngine:
         environment_id: str,
         before_suffix: str,
         after_suffix: str,
-    ) -> dict[str, list[dict[str, Any]]]:
+    ) -> DiffResult:
         differ = Differ(
             schema=schema, environment_id=environment_id, session_manager=self.sessions
         )
@@ -102,6 +103,6 @@ class CoreEvaluationEngine:
         self,
         *,
         compiled_spec: dict[str, Any],
-        diff: dict[str, list[dict[str, Any]]],
+        diff: DiffResult,
     ) -> dict:
-        return AssertionEngine(compiled_spec).evaluate(diff)
+        return AssertionEngine(compiled_spec).evaluate(diff.model_dump())

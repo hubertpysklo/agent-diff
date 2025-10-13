@@ -82,6 +82,7 @@ class EnvironmentHandler:
         schema: str,
         expires_at: datetime | None,
         last_used_at: datetime,
+        created_by: str,
         *,
         template_id: str | None = None,
         impersonate_user_id: str | None = None,
@@ -96,6 +97,7 @@ class EnvironmentHandler:
                 status="ready",
                 expires_at=expires_at,
                 last_used_at=last_used_at,
+                created_by=created_by,
             )
             if template_uuid:
                 rte.template_id = template_uuid

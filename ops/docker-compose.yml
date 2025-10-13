@@ -24,6 +24,7 @@ services:
     environment:
       DATABASE_URL: "postgresql+psycopg2://postgres:postgres@postgres:5432/diff_the_universe"
       SECRET_KEY: "${SECRET_KEY:-change-in-production}"
+      ENV: "development"
     depends_on:
       postgres:
         condition: service_healthy
@@ -32,6 +33,7 @@ services:
     command: >
       sh -c "
         alembic upgrade head &&
+        python utils/seed_dev.py &&
         uvicorn src.platform.api.main:app --host 0.0.0.0 --port 8000 --reload
       "
 

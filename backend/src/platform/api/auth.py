@@ -6,11 +6,12 @@ import hmac
 import os
 import secrets
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from src.platform.api.models import Principal, ApiKeyResponse
 from src.platform.isolationEngine.session import SessionManager
 from src.platform.db.schema import ApiKey, OrganizationMembership, User
 
@@ -41,7 +42,7 @@ class KeyHandler:
         days_valid: int = 90,
         is_platform_admin: bool = False,
         is_organization_admin: bool = False,
-    ) -> Dict[str, object]:
+    ) -> ApiKeyResponse:
         key_uuid = uuid4()
         key_id = key_uuid.hex
         secret = secrets.token_urlsafe(32)
@@ -62,14 +63,14 @@ class KeyHandler:
                 )
             )
 
-        return {
-            "token": token,
-            "key_id": key_id,
-            "expires_at": expires_at,
-            "user_id": user_id,
-            "is_platform_admin": is_platform_admin,
-            "is_organization_admin": is_organization_admin,
-        }
+        return ApiKeyResponse(
+            token=token,
+            key_id=key_id,
+            expires_at=expires_at,
+            user_id=user_id,
+            is_platform_admin=is_platform_admin,
+            is_organization_admin=is_organization_admin,
+        )
 
 
 def parse_api_key(header: Optional[str]) -> Optional[Tuple[str, str]]:
@@ -89,7 +90,7 @@ def parse_api_key(header: Optional[str]) -> Optional[Tuple[str, str]]:
         return None
 
 
-def validate_api_key(header: Optional[str], session: Session) -> Dict[str, object]:
+def validate_api_key(header: Optional[str], session: Session) -> Principal:
     parsed = parse_api_key(header)
     if not parsed:
         raise PermissionError("invalid api key format")
@@ -122,9 +123,39 @@ def validate_api_key(header: Optional[str], session: Session) -> Dict[str, objec
         m.organization_id
         for m in session.query(OrganizationMembership).filter_by(user_id=key.user_id)
     ]
-    return {
-        "user_id": key.user_id,
-        "org_ids": org_ids,
-        "is_platform_admin": is_platform_admin,
-        "is_organization_admin": is_organization_admin,
-    }
+    return Principal(
+        user_id=key.user_id,
+        org_ids=org_ids,
+        is_platform_admin=is_platform_admin,
+        is_organization_admin=is_organization_admin,
+    )
+
+
+def check_resource_access(principal: Principal, owner_id: str) -> bool:
+    if principal.is_platform_admin:
+        return True
+    if principal.user_id == owner_id:
+        return True
+    return False
+
+
+def require_resource_access(principal: Principal, owner_id: str) -> None:
+    if not check_resource_access(principal, owner_id):
+        raise PermissionError("unauthorized")
+
+
+def check_resource_access_with_org(principal: Principal, creator_id: str, creator_org_ids: List[str]) -> bool:
+    if principal.is_platform_admin:
+        return True
+    if principal.user_id == creator_id:
+        return True
+    user_org_ids = set(principal.org_ids)
+    creator_orgs = set(creator_org_ids)
+    if user_org_ids & creator_orgs:
+        return True
+    return False
+
+
+def require_resource_access_with_org(principal: Principal, creator_id: str, creator_org_ids: List[str]) -> None:
+    if not check_resource_access_with_org(principal, creator_id, creator_org_ids):
+        raise PermissionError("unauthorized")

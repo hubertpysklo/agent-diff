@@ -7,6 +7,22 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class Principal(BaseModel):
+    user_id: str
+    org_ids: List[str]
+    is_platform_admin: bool
+    is_organization_admin: bool
+
+
+class ApiKeyResponse(BaseModel):
+    token: str
+    key_id: str
+    expires_at: datetime
+    user_id: int
+    is_platform_admin: bool
+    is_organization_admin: bool
+
+
 class APIError(BaseModel):
     detail: str
 
@@ -82,10 +98,3 @@ class TestResultResponse(BaseModel):
 class DeleteEnvResponse(BaseModel):
     environmentId: str
     status: str
-
-
-class Principal(BaseModel):
-    user_id: int
-    org_ids: List[int]
-    is_platform_admin: bool
-    is_organization_admin: bool

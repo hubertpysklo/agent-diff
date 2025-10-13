@@ -24,20 +24,24 @@ from src.platform.api.models import (
     TestSuiteDetail,
     TestSummary,
     APIError,
+    Principal,
 )
+from src.platform.api.auth import require_resource_access, require_resource_access_with_org
 from src.platform.db.schema import (
     TestSuite,
     Test,
     TestMembership,
     TestRun,
     RunTimeEnvironment,
+    OrganizationMembership,
 )
 from src.platform.evaluationEngine.core import CoreEvaluationEngine
 from src.platform.evaluationEngine.differ import Differ
+from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
 
 
-def _principal_from_request(request: Request) -> dict[str, Any]:
+def _principal_from_request(request: Request) -> Principal:
     principal = getattr(request.state, "principal", None)
     if not principal:
         raise PermissionError("missing principal context")
@@ -53,7 +57,7 @@ async def list_test_suites(request: Request) -> JSONResponse:
         .filter(
             or_(
                 TestSuite.visibility == "public",
-                TestSuite.owner == principal["user_id"],
+                TestSuite.owner == principal.user_id,
             )
         )
         .all()
@@ -72,12 +76,24 @@ async def list_test_suites(request: Request) -> JSONResponse:
 async def get_test_suite(request: Request) -> JSONResponse:
     suite_id = request.path_params["suite_id"]
     session = request.state.db_session
+    principal = _principal_from_request(request)
+
     suite = session.query(TestSuite).filter(TestSuite.id == suite_id).one_or_none()
     if suite is None:
         return JSONResponse(
             APIError(detail="test suite not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+    if suite.visibility == "private":
+        try:
+            require_resource_access(principal, suite.owner)
+        except PermissionError:
+            return JSONResponse(
+                APIError(detail="unauthorized").model_dump(),
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
     tests = (
         session.query(Test)
         .join(TestMembership, TestMembership.test_id == Test.id)
@@ -91,7 +107,7 @@ async def get_test_suite(request: Request) -> JSONResponse:
         tests=[
             TestSummary(id=t.id, name=t.name, prompt=t.prompt, type=t.type)
             for t in tests
-        ],  # Possibly add the expected state in response later for local diff runner
+        ],
     )
     return JSONResponse(payload.model_dump())
 
@@ -114,29 +130,47 @@ async def init_environment(request: Request) -> JSONResponse:
         )
 
     session = request.state.db_session
+    principal = _principal_from_request(request)
+
     test = session.query(Test).filter(Test.id == body.testId).one_or_none()
     if test is None:
         return JSONResponse(
             APIError(detail="test not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+    test_suite = (
+        session.query(TestSuite)
+        .join(TestMembership, TestMembership.test_suite_id == TestSuite.id)
+        .filter(TestMembership.test_id == body.testId)
+        .first()
+    )
+    if test_suite and test_suite.visibility == "private":
+        try:
+            require_resource_access(principal, test_suite.owner)
+        except PermissionError:
+            return JSONResponse(
+                APIError(detail="unauthorized").model_dump(),
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
     schema = body.templateSchema or test.template_schema
 
     result = core.create_environment(
         template_schema=schema,
         ttl_seconds=body.ttlSeconds or 1800,
+        created_by=principal.user_id,
         impersonate_user_id=body.impersonateUserId,
         impersonate_email=body.impersonateEmail,
     )
 
-    env_url = f"/api/env/{result['environment_id']}"
-    expires_at = result.get("expires_at")
+    env_url = f"/api/env/{result.environment_id}"
     response = InitEnvResponse(
-        environmentId=str(result["environment_id"]),
+        environmentId=result.environment_id,
         environmentUrl=env_url,
-        expiresAt=expires_at if isinstance(expires_at, datetime) else None,
-        schemaName=str(result["schema"]),
+        expiresAt=result.expires_at,
+        schemaName=result.schema_name,
     )
     return JSONResponse(response.model_dump(), status_code=status.HTTP_201_CREATED)
 
@@ -159,12 +193,29 @@ async def start_run(request: Request) -> JSONResponse:
         )
 
     session = request.state.db_session
+    principal = _principal_from_request(request)
+
     test = session.query(Test).filter(Test.id == body.testId).one_or_none()
     if test is None:
         return JSONResponse(
             APIError(detail="test not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+    test_suite = (
+        session.query(TestSuite)
+        .join(TestMembership, TestMembership.test_suite_id == TestSuite.id)
+        .filter(TestMembership.test_id == body.testId)
+        .first()
+    )
+    if test_suite and test_suite.visibility == "private":
+        try:
+            require_resource_access(principal, test_suite.owner)
+        except PermissionError:
+            return JSONResponse(
+                APIError(detail="unauthorized").model_dump(),
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
 
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
     schema = request.app.state.coreIsolationEngine.get_schema_for_environment(
@@ -182,6 +233,7 @@ async def start_run(request: Request) -> JSONResponse:
         status="running",
         result=None,
         before_snapshot_suffix=before_result.suffix,
+        created_by=principal.user_id,
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -214,11 +266,25 @@ async def end_run(request: Request) -> JSONResponse:
         )
 
     session = request.state.db_session
+    principal = _principal_from_request(request)
+
     run = session.query(TestRun).filter(TestRun.id == body.runId).one_or_none()
     if run is None:
         return JSONResponse(
             APIError(detail="run not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    creator_org_ids = [
+        m.organization_id
+        for m in session.query(OrganizationMembership).filter_by(user_id=run.created_by)
+    ]
+    try:
+        require_resource_access_with_org(principal, run.created_by, creator_org_ids)
+    except PermissionError:
+        return JSONResponse(
+            APIError(detail="unauthorized").model_dump(),
+            status_code=status.HTTP_403_FORBIDDEN,
         )
 
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
@@ -232,7 +298,7 @@ async def end_run(request: Request) -> JSONResponse:
         schema=rte.schema, environment_id=str(run.environment_id)
     )
     evaluation: dict[str, Any]
-    diff_payload: dict[str, Any] | None = None
+    diff_payload: DiffResult | None = None
     try:
         diff_payload = core_eval.compute_diff(
             schema=rte.schema,
@@ -283,12 +349,27 @@ async def end_run(request: Request) -> JSONResponse:
 async def get_run_result(request: Request) -> JSONResponse:
     run_id = request.path_params["run_id"]
     session = request.state.db_session
+    principal = _principal_from_request(request)
+
     run = session.query(TestRun).filter(TestRun.id == run_id).one_or_none()
     if run is None:
         return JSONResponse(
             APIError(detail="run not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
+
+    creator_org_ids = [
+        m.organization_id
+        for m in session.query(OrganizationMembership).filter_by(user_id=run.created_by)
+    ]
+    try:
+        require_resource_access_with_org(principal, run.created_by, creator_org_ids)
+    except PermissionError:
+        return JSONResponse(
+            APIError(detail="unauthorized").model_dump(),
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
     payload = TestResultResponse(
         runId=str(run.id),
         status=run.status,
@@ -304,6 +385,8 @@ async def get_run_result(request: Request) -> JSONResponse:
 async def delete_environment(request: Request) -> JSONResponse:
     env_id = request.path_params["env_id"]
     session = request.state.db_session
+    principal = _principal_from_request(request)
+
     env = (
         session.query(RunTimeEnvironment)
         .filter(RunTimeEnvironment.id == env_id)
@@ -313,6 +396,18 @@ async def delete_environment(request: Request) -> JSONResponse:
         return JSONResponse(
             APIError(detail="environment not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    creator_org_ids = [
+        m.organization_id
+        for m in session.query(OrganizationMembership).filter_by(user_id=env.created_by)
+    ]
+    try:
+        require_resource_access_with_org(principal, env.created_by, creator_org_ids)
+    except PermissionError:
+        return JSONResponse(
+            APIError(detail="unauthorized").model_dump(),
+            status_code=status.HTTP_403_FORBIDDEN,
         )
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
