@@ -112,7 +112,7 @@ async def get_test_suite(request: Request) -> JSONResponse:
             for t in tests
         ],
     )
-    return JSONResponse(payload.model_dump())
+    return JSONResponse(payload.model_dump(mode='json'))
 
 
 async def init_environment(request: Request) -> JSONResponse:
@@ -161,29 +161,39 @@ async def init_environment(request: Request) -> JSONResponse:
     else:
         if not body.templateSchema:
             return JSONResponse(
-                APIError(detail="either testId or templateSchema must be provided").model_dump(),
+                APIError(
+                    detail="either testId or templateSchema must be provided"
+                ).model_dump(),
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         schema = body.templateSchema
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
 
-    result = core.create_environment(
-        template_schema=schema,
-        ttl_seconds=body.ttlSeconds or 1800,
-        created_by=principal.user_id,
-        impersonate_user_id=body.impersonateUserId,
-        impersonate_email=body.impersonateEmail,
-    )
+    try:
+        result = core.create_environment(
+            template_schema=schema,
+            ttl_seconds=body.ttlSeconds or 1800,
+            created_by=principal.user_id,
+            impersonate_user_id=body.impersonateUserId,
+            impersonate_email=body.impersonateEmail,
+        )
+    except ValueError as e:
+        return JSONResponse(
+            APIError(detail=str(e)).model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
+    service = schema.replace("_template", "")
     env_url = f"/api/env/{result.environment_id}"
     response = InitEnvResponse(
         environmentId=result.environment_id,
         environmentUrl=env_url,
         expiresAt=result.expires_at,
         schemaName=result.schema_name,
+        service=service,
     )
-    return JSONResponse(response.model_dump(), status_code=status.HTTP_201_CREATED)
+    return JSONResponse(response.model_dump(mode='json'), status_code=status.HTTP_201_CREATED)
 
 
 async def start_run(request: Request) -> JSONResponse:
@@ -256,7 +266,7 @@ async def start_run(request: Request) -> JSONResponse:
         status=run.status,
         beforeSnapshot=before_result.suffix,
     )
-    return JSONResponse(response.model_dump(), status_code=status.HTTP_201_CREATED)
+    return JSONResponse(response.model_dump(mode='json'), status_code=status.HTTP_201_CREATED)
 
 
 async def end_run(request: Request) -> JSONResponse:
@@ -354,7 +364,7 @@ async def end_run(request: Request) -> JSONResponse:
         passed=bool(evaluation.get("passed")),
         score=evaluation.get("score"),
     )
-    return JSONResponse(response.model_dump())
+    return JSONResponse(response.model_dump(mode='json'))
 
 
 async def get_run_result(request: Request) -> JSONResponse:
@@ -390,7 +400,7 @@ async def get_run_result(request: Request) -> JSONResponse:
         diff=run.result.get("diff") if run.result else None,
         createdAt=run.created_at,
     )
-    return JSONResponse(payload.model_dump())
+    return JSONResponse(payload.model_dump(mode='json'))
 
 
 async def delete_environment(request: Request) -> JSONResponse:
@@ -426,7 +436,7 @@ async def delete_environment(request: Request) -> JSONResponse:
     core.environment_handler.mark_environment_status(env_id, "deleted")
 
     response = DeleteEnvResponse(environmentId=str(env_id), status="deleted")
-    return JSONResponse(response.model_dump())
+    return JSONResponse(response.model_dump(mode='json'))
 
 
 async def health_check(request: Request) -> JSONResponse:

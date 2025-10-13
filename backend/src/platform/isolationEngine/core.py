@@ -24,6 +24,9 @@ class CoreIsolationEngine:
         impersonate_user_id: str | None = None,
         impersonate_email: str | None = None,
     ) -> EnvironmentResponse:
+        if not self.environment_handler.schema_exists(template_schema):
+            raise ValueError(f"template schema '{template_schema}' does not exist")
+
         evn_uuid = uuid4()
         environment_id = evn_uuid.hex
         environment_schema = f"state_{environment_id}"

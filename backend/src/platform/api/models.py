@@ -55,6 +55,7 @@ class InitEnvRequestBody(BaseModel):
 class InitEnvResponse(BaseModel):
     environmentId: str
     schemaName: str
+    service: str
     environmentUrl: str
     expiresAt: Optional[datetime]
 

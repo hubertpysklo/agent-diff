@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import traceback
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
@@ -49,6 +51,7 @@ class PlatformMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception:
+            traceback.print_exc()
             return JSONResponse(
                 {"detail": "internal server error"},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -126,6 +129,7 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception:
+            traceback.print_exc()
             return JSONResponse(
                 {"ok": False, "error": "internal_error"},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

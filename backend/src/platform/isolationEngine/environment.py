@@ -13,6 +13,16 @@ class EnvironmentHandler:
     def __init__(self, session_manager: SessionManager):
         self.session_manager = session_manager
 
+    def schema_exists(self, schema: str) -> bool:
+        with self.session_manager.base_engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = :schema)"
+                ),
+                {"schema": schema},
+            ).scalar()
+            return bool(result)
+
     def create_schema(self, schema: str) -> None:
         with self.session_manager.base_engine.begin() as conn:
             conn.execute(text(f'CREATE SCHEMA "{schema}"'))
