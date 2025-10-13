@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Callable, Awaitable, NoReturn
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -1703,6 +1704,11 @@ async def slack_endpoint(request: Request) -> JSONResponse:
     try:
         response = await handler(request)
         return response
+    except json.JSONDecodeError:
+        return JSONResponse(
+            {"ok": False, "error": "invalid_json"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
     except SlackAPIError as exc:
         return JSONResponse(
             {"ok": False, "error": exc.detail}, status_code=exc.status_code

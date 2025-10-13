@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import or_
 from starlette import status
 from starlette.requests import Request
@@ -95,8 +97,22 @@ async def get_test_suite(request: Request) -> JSONResponse:
 
 
 async def init_environment(request: Request) -> JSONResponse:
-    data = await request.json()
-    body = InitEnvRequestBody(**data)
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse(
+            APIError(detail="invalid JSON in request body").model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        body = InitEnvRequestBody(**data)
+    except ValidationError as e:
+        return JSONResponse(
+            APIError(detail=str(e)).model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     session = request.state.db_session
     test = session.query(Test).filter(Test.id == body.testId).one_or_none()
     if test is None:
@@ -126,8 +142,22 @@ async def init_environment(request: Request) -> JSONResponse:
 
 
 async def start_run(request: Request) -> JSONResponse:
-    data = await request.json()
-    body = StartRunRequest(**data)
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse(
+            APIError(detail="invalid JSON in request body").model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        body = StartRunRequest(**data)
+    except ValidationError as e:
+        return JSONResponse(
+            APIError(detail=str(e)).model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     session = request.state.db_session
     test = session.query(Test).filter(Test.id == body.testId).one_or_none()
     if test is None:
@@ -167,8 +197,22 @@ async def start_run(request: Request) -> JSONResponse:
 
 
 async def end_run(request: Request) -> JSONResponse:
-    data = await request.json()
-    body = EndRunRequest(**data)
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return JSONResponse(
+            APIError(detail="invalid JSON in request body").model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        body = EndRunRequest(**data)
+    except ValidationError as e:
+        return JSONResponse(
+            APIError(detail=str(e)).model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     session = request.state.db_session
     run = session.query(TestRun).filter(TestRun.id == body.runId).one_or_none()
     if run is None:
