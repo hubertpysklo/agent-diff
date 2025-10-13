@@ -71,7 +71,7 @@ def create_user(
 def create_channel(
     session: Session,
     channel_name: str,
-    team_id: int,
+    team_id: str,
     created_at: Optional[datetime] = None,
 ) -> Channel:
     team = session.get(Team, team_id)
@@ -94,7 +94,7 @@ def create_channel(
 # archive-channel
 
 
-def archive_channel(session: Session, channel_id: int):
+def archive_channel(session: Session, channel_id: str):
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
@@ -105,7 +105,7 @@ def archive_channel(session: Session, channel_id: int):
 # unarchive-channel
 
 
-def unarchive_channel(session: Session, channel_id: int):
+def unarchive_channel(session: Session, channel_id: str):
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
@@ -116,7 +116,7 @@ def unarchive_channel(session: Session, channel_id: int):
 # rename-channel
 
 
-def rename_channel(session: Session, channel_id: int, new_name: str) -> Channel:
+def rename_channel(session: Session, channel_id: str, new_name: str) -> Channel:
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
@@ -127,7 +127,7 @@ def rename_channel(session: Session, channel_id: int, new_name: str) -> Channel:
 # set-channel-topic
 
 
-def set_channel_topic(session: Session, channel_id: int, topic: str) -> Channel:
+def set_channel_topic(session: Session, channel_id: str, topic: str) -> Channel:
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
@@ -140,8 +140,8 @@ def set_channel_topic(session: Session, channel_id: int, topic: str) -> Channel:
 
 def invite_user_to_channel(
     session: Session,
-    channel_id: int,
-    user_id: int,
+    channel_id: str,
+    user_id: str,
     joined_at: Optional[datetime] = None,
 ) -> ChannelMember:
     channel = session.get(Channel, channel_id)
@@ -163,7 +163,7 @@ def invite_user_to_channel(
 # kick-user-from-channel
 
 
-def kick_user_from_channel(session: Session, channel_id: int, user_id: int):
+def kick_user_from_channel(session: Session, channel_id: str, user_id: str):
     channel = session.get(Channel, channel_id)
     user = session.get(User, user_id)
     if channel is None or user is None:
@@ -180,10 +180,10 @@ def kick_user_from_channel(session: Session, channel_id: int, user_id: int):
 
 def send_message(
     session: Session,
-    channel_id: int,
-    user_id: int,
+    channel_id: str,
+    user_id: str,
     message_text: str,
-    parent_id: Optional[int] = None,
+    parent_id: Optional[str] = None,
     created_at: Optional[datetime] = None,
 ):
     user = session.get(User, user_id)
@@ -194,7 +194,14 @@ def send_message(
         parent = session.get(Message, parent_id)
         if parent is None or parent.channel_id != channel_id:
             raise ValueError("Parent message not found in this channel")
+
+    # Generate Slack-style timestamp ID
+    import time
+    timestamp = time.time()
+    message_id = f"{int(timestamp)}.{int((timestamp % 1) * 1_000_000):06d}"
+
     message = Message(
+        message_id=message_id,
         channel_id=channel_id,
         user_id=user_id,
         message_text=message_text,
@@ -207,11 +214,10 @@ def send_message(
 
 def send_direct_message(
     session: Session,
-    user_id: int,
     message_text: str,
-    sender_id: int,
-    recipient_id: int,
-    team_id: int | None = None,
+    sender_id: str,
+    recipient_id: str,
+    team_id: str | None = None,
     created_at: Optional[datetime] = None,
 ):
     sender = session.get(User, sender_id)
@@ -225,7 +231,7 @@ def send_direct_message(
         session=session,
         user1_id=sender_id,
         user2_id=recipient_id,
-        team_id=team_id if team_id is not None else 0,
+        team_id=team_id if team_id is not None else "",
     )
     message = Message(
         channel_id=dm_channel.channel_id,
@@ -242,8 +248,8 @@ def send_direct_message(
 
 def add_emoji_reaction(
     session: Session,
-    message_id: int,
-    user_id: int,
+    message_id: str,
+    user_id: str,
     reaction_type: str,
     created_at: Optional[datetime] = None,
 ) -> MessageReaction:
@@ -274,7 +280,7 @@ def add_emoji_reaction(
 # remove-emoji-reaction
 
 
-def remove_emoji_reaction(session: Session, user_id: int, reaction_id: int):
+def remove_emoji_reaction(session: Session, user_id: str, reaction_id: str):
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
@@ -287,7 +293,7 @@ def remove_emoji_reaction(session: Session, user_id: int, reaction_id: int):
     return reaction
 
 
-def update_message(session: Session, message_id: int, text: str) -> Message:
+def update_message(session: Session, message_id: str, text: str) -> Message:
     message = session.get(Message, message_id)
     if message is None:
         raise ValueError("Message not found")
@@ -295,14 +301,14 @@ def update_message(session: Session, message_id: int, text: str) -> Message:
     return message
 
 
-def delete_message(session: Session, message_id: int) -> None:
+def delete_message(session: Session, message_id: str) -> None:
     message = session.get(Message, message_id)
     if message is None:
         raise ValueError("Message not found")
     session.delete(message)
 
 
-def get_reactions(session: Session, message_id: int) -> list[MessageReaction]:
+def get_reactions(session: Session, message_id: str) -> list[MessageReaction]:
     msg = session.get(Message, message_id)
     if msg is None:
         raise ValueError("Message not found")
@@ -316,7 +322,7 @@ def get_reactions(session: Session, message_id: int) -> list[MessageReaction]:
     return list(reactions)
 
 
-def get_user(session: Session, user_id: int) -> User:
+def get_user(session: Session, user_id: str) -> User:
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
@@ -332,7 +338,7 @@ def get_user_by_email(session: Session, email: str) -> User:
 
 def list_users(
     session: Session,
-    team_id: int | None = None,
+    team_id: str | None = None,
     offset: int | None = None,
     limit: int | None = None,
 ) -> list[User]:
@@ -357,8 +363,8 @@ def list_users(
 
 def join_channel(
     session: Session,
-    channel_id: int,
-    user_id: int,
+    channel_id: str,
+    user_id: str,
     joined_at: Optional[datetime] = None,
 ) -> ChannelMember:
     channel = session.get(Channel, channel_id)
@@ -377,7 +383,7 @@ def join_channel(
     return member
 
 
-def leave_channel(session: Session, channel_id: int, user_id: int) -> None:
+def leave_channel(session: Session, channel_id: str, user_id: str) -> None:
     member = session.get(ChannelMember, (channel_id, user_id))
     if member is None:
         raise ValueError("Not a channel member")
@@ -385,7 +391,7 @@ def leave_channel(session: Session, channel_id: int, user_id: int) -> None:
 
 
 def find_or_create_dm_channel(
-    session: Session, user1_id: int, user2_id: int, team_id: int
+    session: Session, user1_id: str, user2_id: str, team_id: str
 ) -> Channel:
     a, b = (user1_id, user2_id) if user1_id <= user2_id else (user2_id, user1_id)
     dm = (
@@ -433,8 +439,8 @@ def find_or_create_dm_channel(
 
 def list_user_channels(
     session: Session,
-    user_id: int,
-    team_id: int,
+    user_id: str,
+    team_id: str,
     offset: int | None = None,
     limit: int | None = None,
 ):
@@ -477,7 +483,7 @@ def list_user_channels(
     return list(channels)
 
 
-def list_public_channels(session: Session, team_id: int):
+def list_public_channels(session: Session, team_id: str):
     team = session.get(Team, team_id)
     if team is None:
         raise ValueError("Team not found")
@@ -489,7 +495,7 @@ def list_public_channels(session: Session, team_id: int):
     return channels
 
 
-def list_direct_messages(session: Session, user_id: int, team_id: int):
+def list_direct_messages(session: Session, user_id: str, team_id: str):
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
@@ -517,8 +523,8 @@ def list_direct_messages(session: Session, user_id: int, team_id: int):
 
 def list_members_in_channel(
     session: Session,
-    channel_id: int,
-    team_id: int,
+    channel_id: str,
+    team_id: str,
     offset: int | None = None,
     limit: int | None = None,
 ):
@@ -555,7 +561,7 @@ def list_members_in_channel(
 # list-users-in-team
 
 
-def list_users_in_team(session: Session, team_id: int, user_id: int):
+def list_users_in_team(session: Session, team_id: str, user_id: str):
     user = session.get(User, user_id)
     if user is None:
         raise ValueError("User not found")
@@ -578,9 +584,9 @@ def list_users_in_team(session: Session, team_id: int, user_id: int):
 
 def list_channel_history(
     session: Session,
-    channel_id: int,
-    user_id: int,
-    team_id: int,
+    channel_id: str,
+    user_id: str,
+    team_id: str,
     limit: int,
     offset: int,
     oldest: datetime | None = None,

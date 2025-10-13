@@ -36,13 +36,13 @@ def _session(request: Request):
     return session
 
 
-def _principal_user_id(request: Request) -> int:
+def _principal_user_id(request: Request) -> str:
     session = _session(request)
     impersonate_user_id = getattr(request.state, "impersonate_user_id", None)
     impersonate_email = getattr(request.state, "impersonate_email", None)
     if impersonate_user_id is not None and str(impersonate_user_id).strip() != "":
         try:
-            return int(impersonate_user_id)
+            return impersonate_user_id
         except Exception:
             _slack_error("user_not_found")
     if impersonate_email:
@@ -52,7 +52,7 @@ def _principal_user_id(request: Request) -> int:
             .first()
         )
         if row is not None:
-            return int(row.user_id)
+            return row.user_id
         _slack_error("user_not_found")
     _slack_error("user_not_found")
 
@@ -69,50 +69,30 @@ def _slack_error(
     raise SlackAPIError(code, status_code)
 
 
-def _parse_ts(ts: str) -> int:
-    if ts is None:
-        raise SlackAPIError("timestamp required")
-    try:
-        # Slack TS format: "12345.6789" -> store as integer microseconds
-        if "." in ts:
-            major, minor = ts.split(".", 1)
-            return int(major) * 1_000_000 + int(minor)
-        return int(ts)
-    except ValueError as exc:  # pragma: no cover - validation guard
-        raise SlackAPIError("invalid timestamp format") from exc
+def _resolve_channel_id(channel: str) -> str:
+    """Return channel ID as-is (already in string format)"""
+    return channel
 
 
-def _format_ts(message_id: int | None) -> str | None:
-    if message_id is None:
-        return None
-    # store as integer microseconds
-    seconds, micros = divmod(int(message_id), 1_000_000)
-    return f"{seconds}.{micros:06d}"
+def _format_user_id(user_id: str) -> str:
+    """Return user ID as-is (already in string format)"""
+    return user_id
 
 
-def _format_channel_id(channel_id: int) -> str:
-    return f"C{channel_id:08d}"
-
-
-def _format_user_id(user_id: int) -> str:
-    return f"U{user_id:08d}"
-
-
-def _resolve_channel_id(channel: str) -> int:
-    if channel.startswith("C"):
-        return int(channel[1:])
-    return int(channel)
+def _format_channel_id(channel_id: str) -> str:
+    """Return channel ID as-is (already in string format)"""
+    return channel_id
 
 
 def _get_env_team_id(
-    request: Request, *, channel_id: int | None, actor_user_id: int
-) -> int:
+    request: Request, *, channel_id: str | None, actor_user_id: str
+) -> str:
     session = _session(request)
     if channel_id is not None:
         ch = session.get(Channel, channel_id)
         if ch is None:
             _slack_error("channel_not_found")
-        return int(ch.team_id or 0)
+        return ch.team_id or ""
     membership = (
         session.execute(select(UserTeam).where(UserTeam.user_id == actor_user_id))
         .scalars()
@@ -120,7 +100,7 @@ def _get_env_team_id(
     )
     if membership is None:
         _slack_error("user_not_found")
-    return int(membership.team_id)
+    return membership.team_id
 
 
 async def chat_post_message(request: Request) -> JSONResponse:
@@ -145,15 +125,15 @@ async def chat_post_message(request: Request) -> JSONResponse:
         _slack_error("channel_not_found")
     if getattr(ch, "is_archived", False):
         _slack_error("is_archived")
-    if session.get(ChannelMember, (channel_id, int(user_id))) is None:
+    if session.get(ChannelMember, (channel_id, user_id)) is None:
         _slack_error("not_in_channel")
 
     message = ops.send_message(
         session=session,
         channel_id=channel_id,
-        user_id=int(user_id),
+        user_id=user_id,
         message_text=text,
-        parent_id=_parse_ts(thread_ts) if thread_ts else None,
+        parent_id=thread_ts,
     )
     session.flush()
 
@@ -161,16 +141,16 @@ async def chat_post_message(request: Request) -> JSONResponse:
         "type": "message",
         "user": _format_user_id(message.user_id),
         "text": message.message_text,
-        "ts": _format_ts(message.message_id),
+        "ts": message.message_id,
     }
     if message.parent_id:
-        message_obj["thread_ts"] = _format_ts(message.parent_id)
+        message_obj["thread_ts"] = message.parent_id
 
     return _json_response(
         {
             "ok": True,
             "channel": channel,
-            "ts": _format_ts(message.message_id),
+            "ts": message.message_id,
             "message": message_obj,
         }
     )
@@ -204,7 +184,7 @@ async def chat_update(request: Request) -> JSONResponse:
         _slack_error("is_inactive")
 
     # Validate and get message
-    msg = session.get(Message, _parse_ts(ts))
+    msg = session.get(Message, ts)
     if msg is None or msg.channel_id != channel_id:
         _slack_error("message_not_found")
 
@@ -213,20 +193,20 @@ async def chat_update(request: Request) -> JSONResponse:
         _slack_error("cant_update_message")
 
     # Update the message
-    message = ops.update_message(session=session, message_id=_parse_ts(ts), text=text)
+    message = ops.update_message(session=session, message_id=ts, text=text)
     session.flush()
 
     return _json_response(
         {
             "ok": True,
             "channel": channel,
-            "ts": _format_ts(message.message_id),
+            "ts": message.message_id,
             "text": message.message_text,
             "message": {
                 "type": "message",
                 "user": _format_user_id(message.user_id),
                 "text": message.message_text,
-                "ts": _format_ts(message.message_id),
+                "ts": message.message_id,
             },
         }
     )
@@ -253,7 +233,7 @@ async def chat_delete(request: Request) -> JSONResponse:
         _slack_error("channel_not_found")
 
     # Validate and get message
-    msg = session.get(Message, _parse_ts(ts))
+    msg = session.get(Message, ts)
     if msg is None or msg.channel_id != channel_id:
         _slack_error("message_not_found")
 
@@ -261,7 +241,7 @@ async def chat_delete(request: Request) -> JSONResponse:
     if msg.user_id != actor_id:
         _slack_error("cant_delete_message")
 
-    ops.delete_message(session=session, message_id=_parse_ts(ts))
+    ops.delete_message(session=session, message_id=ts)
     session.flush()
     return _json_response({"ok": True, "channel": channel, "ts": ts})
 
@@ -285,7 +265,7 @@ async def conversations_create(request: Request) -> JSONResponse:
 
     try:
         channel_obj = ops.create_channel(
-            session=session, channel_name=name, team_id=int(team_id)
+            session=session, channel_name=name, team_id=team_id
         )
         if is_private:
             channel_obj.is_private = True
@@ -352,8 +332,8 @@ async def conversations_list(request: Request) -> JSONResponse:
     # Note: list_user_channels returns channels the user is a member of
     channels = ops.list_user_channels(
         session=session,
-        user_id=int(user_id),
-        team_id=int(team_id),
+        user_id=user_id,
+        team_id=team_id,
         offset=cursor,
         limit=limit + 1,  # Fetch extra for pagination check
     )
@@ -391,7 +371,7 @@ async def conversations_list(request: Request) -> JSONResponse:
 
         # Get member count
         members = ops.list_members_in_channel(
-            session=session, channel_id=ch.channel_id, team_id=int(team_id)
+            session=session, channel_id=ch.channel_id, team_id=team_id
         )
 
         channel_obj = {
@@ -477,7 +457,7 @@ async def conversations_history(request: Request) -> JSONResponse:
         session=session,
         channel_id=channel_id,
         user_id=actor_id,
-        team_id=int(team_id),
+        team_id=team_id,
         limit=limit + 1,
         offset=cursor,
         oldest=oldest_dt,
@@ -496,10 +476,10 @@ async def conversations_history(request: Request) -> JSONResponse:
             "type": "message",
             "user": _format_user_id(msg.user_id),
             "text": msg.message_text,
-            "ts": _format_ts(msg.message_id),
+            "ts": msg.message_id,
         }
         if msg.parent_id:
-            msg_obj["thread_ts"] = _format_ts(msg.parent_id)
+            msg_obj["thread_ts"] = msg.parent_id
         message_list.append(msg_obj)
 
     response = {
@@ -507,9 +487,7 @@ async def conversations_history(request: Request) -> JSONResponse:
         "messages": message_list,
         "has_more": has_more,
         "pin_count": 0,
-        "response_metadata": {
-            "next_cursor": str(cursor + limit) if has_more else ""
-        },
+        "response_metadata": {"next_cursor": str(cursor + limit) if has_more else ""},
     }
 
     # Include latest in response if it was provided
@@ -614,22 +592,28 @@ async def conversations_invite(request: Request) -> JSONResponse:
 
     for user_id_str in users:
         try:
-            user_id = int(user_id_str)
+            user_id = user_id_str
 
             # Check if user is trying to invite themselves
             if user_id == actor_id:
-                errors.append({"user": user_id_str, "ok": False, "error": "cant_invite_self"})
+                errors.append(
+                    {"user": user_id_str, "ok": False, "error": "cant_invite_self"}
+                )
                 continue
 
             # Check if user exists
             user = session.get(User, user_id)
             if user is None:
-                errors.append({"user": user_id_str, "ok": False, "error": "user_not_found"})
+                errors.append(
+                    {"user": user_id_str, "ok": False, "error": "user_not_found"}
+                )
                 continue
 
             # Check if already a member
             if session.get(ChannelMember, (channel_id, user_id)) is not None:
-                errors.append({"user": user_id_str, "ok": False, "error": "already_in_channel"})
+                errors.append(
+                    {"user": user_id_str, "ok": False, "error": "already_in_channel"}
+                )
                 continue
 
             # Invite the user
@@ -762,13 +746,8 @@ async def conversations_open(request: Request) -> JSONResponse:
     if len(user_ids_str) > 8:
         _slack_error("too_many_users")
 
-    # Parse user IDs
-    try:
-        user_ids = [int(uid) for uid in user_ids_str]
-    except (ValueError, TypeError):
-        _slack_error("user_not_found")
-
     # Validate all users exist
+    user_ids = user_ids_str
     for uid in user_ids:
         user = session.get(User, uid)
         if user is None:
@@ -783,7 +762,7 @@ async def conversations_open(request: Request) -> JSONResponse:
             session=session,
             user1_id=actor_id,
             user2_id=other_user_id,
-            team_id=int(team_id),
+            team_id=team_id,
         )
 
         # If prevent_creation is True and it's a new channel, don't commit
@@ -822,7 +801,10 @@ async def conversations_open(request: Request) -> JSONResponse:
             )
         else:
             return _json_response(
-                {"ok": True, "channel": {"id": _format_channel_id(dm_channel.channel_id)}}
+                {
+                    "ok": True,
+                    "channel": {"id": _format_channel_id(dm_channel.channel_id)},
+                }
             )
 
     # If 2+ users: create/find MPIM
@@ -842,7 +824,7 @@ async def conversations_open(request: Request) -> JSONResponse:
 
     for ch in mpdm_channels:
         members = ops.list_members_in_channel(
-            session=session, channel_id=ch.channel_id, team_id=int(team_id)
+            session=session, channel_id=ch.channel_id, team_id=team_id
         )
         member_ids = sorted([m.user_id for m in members])
         if member_ids == all_member_ids:
@@ -892,7 +874,7 @@ async def conversations_open(request: Request) -> JSONResponse:
     mpim_name = f"mpdm-{'-'.join(str(uid) for uid in all_member_ids)}"
     mpim_channel = Channel(
         channel_name=mpim_name,
-        team_id=int(team_id),
+        team_id=team_id,
         is_private=True,
         is_dm=False,
         is_gc=True,
@@ -902,7 +884,9 @@ async def conversations_open(request: Request) -> JSONResponse:
 
     # Add all members
     for uid in all_member_ids:
-        ops.join_channel(session=session, channel_id=mpim_channel.channel_id, user_id=uid)
+        ops.join_channel(
+            session=session, channel_id=mpim_channel.channel_id, user_id=uid
+        )
 
     session.flush()
 
@@ -974,7 +958,7 @@ async def conversations_info(request: Request) -> JSONResponse:
     if ch.is_dm:
         # Get the other user in the DM
         members = ops.list_members_in_channel(
-            session=session, channel_id=ch.channel_id, team_id=int(team_id)
+            session=session, channel_id=ch.channel_id, team_id=team_id
         )
         other_user_id = next(
             (m.user_id for m in members if m.user_id != actor_id), None
@@ -1068,7 +1052,7 @@ async def conversations_info(request: Request) -> JSONResponse:
     # Add num_members if requested
     if include_num_members:
         members = ops.list_members_in_channel(
-            session=session, channel_id=ch.channel_id, team_id=int(team_id)
+            session=session, channel_id=ch.channel_id, team_id=team_id
         )
         channel_obj["num_members"] = len(members)
 
@@ -1265,13 +1249,8 @@ async def conversations_kick(request: Request) -> JSONResponse:
     if ch is None:
         _slack_error("channel_not_found")
 
-    # Parse user ID
-    try:
-        user_id = int(user)
-    except (ValueError, TypeError):
-        _slack_error("user_not_found")
-
     # Check if trying to kick self
+    user_id = user
     if user_id == actor_id:
         _slack_error("cant_kick_self")
 
@@ -1284,9 +1263,7 @@ async def conversations_kick(request: Request) -> JSONResponse:
     if session.get(ChannelMember, (channel_id, user_id)) is None:
         _slack_error("user_not_in_channel")
 
-    ops.kick_user_from_channel(
-        session=session, channel_id=channel_id, user_id=user_id
-    )
+    ops.kick_user_from_channel(session=session, channel_id=channel_id, user_id=user_id)
     session.flush()
     return _json_response({"ok": True, "errors": {}})
 
@@ -1351,7 +1328,7 @@ async def conversations_members(request: Request) -> JSONResponse:
         members = ops.list_members_in_channel(
             session=session,
             channel_id=channel_id,
-            team_id=int(team_id),
+            team_id=team_id,
             offset=cursor,
             limit=limit + 1,
         )
@@ -1405,12 +1382,7 @@ async def reactions_add(request: Request) -> JSONResponse:
         _slack_error("is_archived")
 
     # Validate timestamp and get message
-    try:
-        msg_id = _parse_ts(ts)
-    except (ValueError, SlackAPIError):
-        _slack_error("bad_timestamp")
-
-    msg = session.get(Message, msg_id)
+    msg = session.get(Message, ts)
     if msg is None:
         _slack_error("message_not_found")
     if msg.channel_id != ch_id:
@@ -1455,13 +1427,7 @@ async def reactions_remove(request: Request) -> JSONResponse:
 
     session = _session(request)
 
-    # Validate timestamp
-    try:
-        msg_id = _parse_ts(ts)
-    except (ValueError, SlackAPIError):
-        _slack_error("bad_timestamp")
-
-    reactions = ops.get_reactions(session=session, message_id=msg_id)
+    reactions = ops.get_reactions(session=session, message_id=ts)
     found = next(
         (
             r
@@ -1493,12 +1459,6 @@ async def reactions_get(request: Request) -> JSONResponse:
 
     session = _session(request)
 
-    # Validate timestamp
-    try:
-        msg_id = _parse_ts(timestamp)
-    except (ValueError, SlackAPIError):
-        _slack_error("bad_timestamp")
-
     # Validate channel exists
     try:
         channel_id = _resolve_channel_id(channel)
@@ -1510,19 +1470,19 @@ async def reactions_get(request: Request) -> JSONResponse:
         _slack_error("channel_not_found")
 
     # Get message
-    msg = session.get(Message, msg_id)
+    msg = session.get(Message, timestamp)
     if msg is None or msg.channel_id != channel_id:
         _slack_error("message_not_found")
 
     # Get reactions
-    reactions = ops.get_reactions(session=session, message_id=msg_id)
+    reactions = ops.get_reactions(session=session, message_id=timestamp)
 
     # Build message object with reactions
     message_obj = {
         "type": "message",
         "text": msg.message_text,
         "user": _format_user_id(msg.user_id),
-        "ts": _format_ts(msg.message_id),
+        "ts": msg.message_id,
         "team": "T00000000",  # Placeholder team ID
     }
 
@@ -1555,11 +1515,8 @@ async def users_info(request: Request) -> JSONResponse:
     session = _session(request)
 
     try:
-        user_id = int(user)
-        user_row = ops.get_user(session=session, user_id=user_id)
+        user_row = ops.get_user(session=session, user_id=user)
         return _json_response({"ok": True, "user": _serialize_user(user_row)})
-    except (ValueError, TypeError):
-        _slack_error("user_not_found")
     except Exception:
         _slack_error("user_not_found")
 
@@ -1574,7 +1531,7 @@ async def users_list(request: Request) -> JSONResponse:
 
     # Fetch one extra to check if more pages exist
     users = ops.list_users(
-        session=session, team_id=int(team_id), offset=cursor, limit=limit + 1
+        session=session, team_id=team_id, offset=cursor, limit=limit + 1
     )
 
     has_more = len(users) > limit
@@ -1658,7 +1615,7 @@ async def users_conversations(request: Request) -> JSONResponse:
     session = _session(request)
     actor = _principal_user_id(request)
     user_param = params.get("user")
-    target_user = int(user_param) if user_param is not None else actor
+    target_user = user_param if user_param is not None else actor
     team_id = _get_env_team_id(request, channel_id=None, actor_user_id=target_user)
 
     # Fetch one extra to check if more pages exist
