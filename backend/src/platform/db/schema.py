@@ -178,6 +178,7 @@ class Test(PlatformBase):
     )
     expected_output: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
     template_schema: Mapped[str] = mapped_column(String(255), nullable=False)
+    impersonate_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 

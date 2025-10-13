@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import create_engine, text
 from src.services.slack.database.base import Base
+from src.services.slack.database import schema as slack_schema
 
 
 def main():
@@ -23,14 +24,18 @@ def main():
         conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {template_schema}"))
         print(f"Created schema: {template_schema}")
 
-    temp_engine = create_engine(
-        db_url.replace(
-            "/diff_the_universe",
-            f"/diff_the_universe?options=-csearch_path%3D{template_schema}",
-        )
-    )
+    with engine.connect() as conn:
+        conn = conn.execution_options(schema_translate_map={None: template_schema})
 
-    Base.metadata.create_all(temp_engine, checkfirst=True)
+        _ = slack_schema
+
+        # print(f"Creating {len(Base.metadata.tables)} tables...")
+        # for table_name in Base.metadata.tables.keys():
+        #    print(f"  - {table_name}")
+
+        Base.metadata.create_all(conn, checkfirst=True)
+        conn.commit()
+
     print(f"Created tables in {template_schema}")
 
 
