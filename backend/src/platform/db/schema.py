@@ -44,9 +44,9 @@ class User(PlatformBase):
 class OrganizationMembership(PlatformBase):
     __tablename__ = "organization_memberships"
     __table_args__ = ({"schema": "public"},)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("public.users.id"), primary_key=True)
     organization_id: Mapped[str] = mapped_column(
-        ForeignKey("organizations.id"), primary_key=True
+        ForeignKey("public.organizations.id"), primary_key=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -121,7 +121,7 @@ class RunTimeEnvironment(PlatformBase):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     max_idle_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
@@ -142,7 +142,7 @@ class ApiKey(PlatformBase):
     key_salt: Mapped[str] = mapped_column(String(255), nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -155,7 +155,7 @@ class Diff(PlatformBase):
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     environment_id: Mapped[PyUUID] = mapped_column(
-        ForeignKey("run_time_environments.id"), nullable=False
+        ForeignKey("public.run_time_environments.id"), nullable=False
     )
     before_suffix: Mapped[str] = mapped_column(String(255), nullable=False)
     after_suffix: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -190,7 +190,7 @@ class TestSuite(PlatformBase):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    owner: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    owner: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
     visibility: Mapped[str] = mapped_column(
         Enum("public", "private", name="test_suite_visibility"),
         nullable=False,
@@ -206,9 +206,9 @@ class TestMembership(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("public.tests.id"), nullable=False)
     test_suite_id: Mapped[PyUUID] = mapped_column(
-        ForeignKey("test_suites.id"), nullable=False
+        ForeignKey("public.test_suites.id"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -220,12 +220,12 @@ class TestRun(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("tests.id"), nullable=False)
+    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("public.tests.id"), nullable=False)
     test_suite_id: Mapped[PyUUID | None] = mapped_column(
-        ForeignKey("test_suites.id"), nullable=True
+        ForeignKey("public.test_suites.id"), nullable=True
     )
     environment_id: Mapped[PyUUID] = mapped_column(
-        ForeignKey("run_time_environments.id"), nullable=False
+        ForeignKey("public.run_time_environments.id"), nullable=False
     )
     status: Mapped[str] = mapped_column(
         Enum(
@@ -246,6 +246,6 @@ class TestRun(PlatformBase):
     after_snapshot_suffix: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
-    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
+    created_by: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)

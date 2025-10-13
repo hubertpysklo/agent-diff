@@ -2,11 +2,13 @@ from logging.config import fileConfig
 import os
 
 from alembic import context
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from src.platform.db.schema import PlatformBase
 from src.services.slack.database.base import Base as SlackBase
 
+load_dotenv()
 
 config = context.config
 
