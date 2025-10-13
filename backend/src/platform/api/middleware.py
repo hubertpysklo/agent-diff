@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import traceback
+import logging
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -12,6 +12,8 @@ from src.platform.isolationEngine.session import SessionManager
 from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.api.auth import validate_api_key
 from src.platform.db.schema import RunTimeEnvironment
+
+logger = logging.getLogger(__name__)
 
 
 class PlatformMiddleware(BaseHTTPMiddleware):
@@ -51,7 +53,7 @@ class PlatformMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception:
-            traceback.print_exc()
+            logger.exception("Unhandled exception in PlatformMiddleware")
             return JSONResponse(
                 {"detail": "internal server error"},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -129,7 +131,7 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception:
-            traceback.print_exc()
+            logger.exception("Unhandled exception in IsolationMiddleware")
             return JSONResponse(
                 {"ok": False, "error": "internal_error"},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

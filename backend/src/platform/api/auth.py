@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 from datetime import datetime, timedelta
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from src.platform.api.models import Principal, ApiKeyResponse
 from src.platform.isolationEngine.session import SessionManager
 from src.platform.db.schema import ApiKey, OrganizationMembership, User
+
+logger = logging.getLogger(__name__)
 
 
 def _pbkdf2_hash(secret: str, *, salt_bytes: bytes) -> bytes:
@@ -112,6 +115,7 @@ def validate_api_key(header: Optional[str], session: Session) -> Principal:
 
     user = session.query(User).filter(User.id == key.user_id).one_or_none()
     if not user:
+        logger.error(f"API key references non-existent user {key.user_id}")
         raise PermissionError("api key references non-existent user")
 
     key.last_used_at = datetime.now()

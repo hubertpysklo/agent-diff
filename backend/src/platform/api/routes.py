@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -42,6 +43,8 @@ from src.platform.evaluationEngine.core import CoreEvaluationEngine
 from src.platform.evaluationEngine.differ import Differ
 from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
+
+logger = logging.getLogger(__name__)
 
 
 def _principal_from_request(request: Request) -> Principal:
@@ -261,6 +264,8 @@ async def start_run(request: Request) -> JSONResponse:
     session.add(run)
     session.flush()
 
+    logger.info(f"Started test run {run.id} for test {body.testId} in environment {body.envId}")
+
     response = StartRunResponse(
         runId=str(run.id),
         status=run.status,
@@ -343,7 +348,9 @@ async def end_run(request: Request) -> JSONResponse:
             diff=diff_payload,
         )
         run.status = "passed" if evaluation.get("passed") else "failed"
+        logger.info(f"Test run {run.id} completed with status {run.status}")
     except Exception as exc:  # snapshot/diff/eval failure
+        logger.error(f"Test run {run.id} failed with error: {exc}")
         run.status = "error"
         evaluation = {
             "passed": False,

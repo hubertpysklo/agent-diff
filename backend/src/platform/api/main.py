@@ -10,6 +10,9 @@ from starlette.routing import Router
 from src.platform.api.routes import routes as platform_routes
 from src.platform.api.middleware import IsolationMiddleware, PlatformMiddleware
 from src.services.slack.api.methods import routes as slack_routes
+from src.platform.logging_config import setup_logging
+
+setup_logging()
 
 
 def create_app():

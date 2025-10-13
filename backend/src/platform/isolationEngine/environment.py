@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Iterable
 from uuid import UUID
@@ -7,6 +8,8 @@ from sqlalchemy import MetaData, text
 from src.platform.db.schema import RunTimeEnvironment
 
 from .session import SessionManager
+
+logger = logging.getLogger(__name__)
 
 
 class EnvironmentHandler:
@@ -24,8 +27,13 @@ class EnvironmentHandler:
             return bool(result)
 
     def create_schema(self, schema: str) -> None:
-        with self.session_manager.base_engine.begin() as conn:
-            conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+        try:
+            with self.session_manager.base_engine.begin() as conn:
+                conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+            logger.debug(f"Created schema {schema}")
+        except Exception as e:
+            logger.error(f"Failed to create schema {schema}: {e}")
+            raise
 
     def migrate_schema(self, template_schema: str, target_schema: str) -> None:
         engine = self.session_manager.base_engine
@@ -118,8 +126,13 @@ class EnvironmentHandler:
             s.add(rte)
 
     def drop_schema(self, schema: str) -> None:
-        with self.session_manager.base_engine.begin() as conn:
-            conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        try:
+            with self.session_manager.base_engine.begin() as conn:
+                conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+            logger.info(f"Dropped schema {schema}")
+        except Exception as e:
+            logger.error(f"Failed to drop schema {schema}: {e}")
+            raise
 
     def mark_environment_status(self, environment_id: str, status: str) -> None:
         env_uuid = self._to_uuid(environment_id)
