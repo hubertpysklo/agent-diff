@@ -7,13 +7,31 @@ requires-python = ">=3.14"
 dependencies = [
     "alembic>=1.16.5",
     "ariadne>=0.26.2",
+    "httpx>=0.28.1",
     "jsonschema>=4.25.1",
     "psycopg2-binary>=2.9.10",
     "pydantic>=2.12.0",
     "pyjwt>=2.10.1",
+    "pytest>=8.4.2",
+    "pytest-asyncio>=1.2.0",
     "python-dotenv>=1.1.1",
     "ruff>=0.14.0",
     "sqlalchemy>=2.0.43",
     "starlette>=0.48.0",
     "uvicorn>=0.37.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "--disable-warnings",
+]
+markers = [
+    "integration: Integration tests that require database",
+    "unit: Unit tests that don't require external dependencies",
 ]
