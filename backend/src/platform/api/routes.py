@@ -171,7 +171,7 @@ async def init_environment(request: Request) -> JSONResponse:
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         schema = body.templateSchema
-        if not body.impersonateUserId or not body.impersonateEmail:
+        if not body.impersonateUserId and not body.impersonateEmail:
             return JSONResponse(
                 APIError(
                     detail="impersonateUserId or impersonateEmail must be provided when using a template schema without a testId"
