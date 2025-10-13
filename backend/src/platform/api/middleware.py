@@ -13,6 +13,52 @@ from src.platform.api.auth import validate_api_key
 from src.platform.db.schema import RunTimeEnvironment
 
 
+class PlatformMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, *, session_manager: SessionManager):
+        super().__init__(app)
+        self.session_manager = session_manager
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        path = request.scope.get("path", "")
+        if path == "/health":
+            return await call_next(request)
+
+        api_key_hdr = request.headers.get("X-API-Key") or request.headers.get(
+            "Authorization"
+        )
+        if not api_key_hdr:
+            return JSONResponse(
+                {"detail": "missing api key"},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        try:
+            with self.session_manager.with_meta_session() as meta_session:
+                principal: dict[str, Any] = validate_api_key(api_key_hdr, meta_session)
+                request.state.principal = principal
+                request.state.db_session = meta_session
+
+                response = await call_next(request)
+
+                if not (200 <= response.status_code < 400):
+                    meta_session.rollback()
+
+                return response
+        except PermissionError as exc:
+            return JSONResponse(
+                {"detail": str(exc)},
+                status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        except Exception:
+            return JSONResponse(
+                {"detail": "internal server error"},
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        finally:
+            request.state.db_session = None
+            request.state.principal = None
+
+
 class IsolationMiddleware(BaseHTTPMiddleware):
     def __init__(
         self,
