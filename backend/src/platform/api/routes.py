@@ -135,30 +135,38 @@ async def init_environment(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
 
-    test = session.query(Test).filter(Test.id == body.testId).one_or_none()
-    if test is None:
-        return JSONResponse(
-            APIError(detail="test not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    test_suite = (
-        session.query(TestSuite)
-        .join(TestMembership, TestMembership.test_suite_id == TestSuite.id)
-        .filter(TestMembership.test_id == body.testId)
-        .first()
-    )
-    if test_suite and test_suite.visibility == "private":
-        try:
-            require_resource_access(principal, test_suite.owner)
-        except PermissionError:
+    if body.testId:
+        test = session.query(Test).filter(Test.id == body.testId).one_or_none()
+        if test is None:
             return JSONResponse(
-                APIError(detail="unauthorized").model_dump(),
-                status_code=status.HTTP_403_FORBIDDEN,
+                APIError(detail="test not found").model_dump(),
+                status_code=status.HTTP_404_NOT_FOUND,
             )
 
+        test_suite = (
+            session.query(TestSuite)
+            .join(TestMembership, TestMembership.test_suite_id == TestSuite.id)
+            .filter(TestMembership.test_id == body.testId)
+            .first()
+        )
+        if test_suite and test_suite.visibility == "private":
+            try:
+                require_resource_access(principal, test_suite.owner)
+            except PermissionError:
+                return JSONResponse(
+                    APIError(detail="unauthorized").model_dump(),
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+        schema = body.templateSchema or test.template_schema
+    else:
+        if not body.templateSchema:
+            return JSONResponse(
+                APIError(detail="either testId or templateSchema must be provided").model_dump(),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        schema = body.templateSchema
+
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
-    schema = body.templateSchema or test.template_schema
 
     result = core.create_environment(
         template_schema=schema,
@@ -421,7 +429,7 @@ async def delete_environment(request: Request) -> JSONResponse:
     return JSONResponse(response.model_dump())
 
 
-async def health_check() -> JSONResponse:
+async def health_check(request: Request) -> JSONResponse:
     return JSONResponse({"status": "healthy", "service": "diff-the-universe"})
 
 

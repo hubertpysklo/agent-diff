@@ -45,7 +45,7 @@ class TestSuiteDetail(TestSuiteSummary):
 
 
 class InitEnvRequestBody(BaseModel):
-    testId: UUID
+    testId: Optional[UUID] = None
     templateSchema: Optional[str] = None
     ttlSeconds: Optional[int] = None
     impersonateUserId: Optional[str] = None
