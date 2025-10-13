@@ -22,16 +22,4 @@ dependencies = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--tb=short",
-    "--disable-warnings",
-]
-markers = [
-    "integration: Integration tests that require database",
-    "unit: Unit tests that don't require external dependencies",
-]
+addopts = ["--tb=short"]
