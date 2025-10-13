@@ -115,7 +115,7 @@ async def get_test_suite(request: Request) -> JSONResponse:
             for t in tests
         ],
     )
-    return JSONResponse(payload.model_dump(mode='json'))
+    return JSONResponse(payload.model_dump(mode="json"))
 
 
 async def init_environment(request: Request) -> JSONResponse:
@@ -161,6 +161,7 @@ async def init_environment(request: Request) -> JSONResponse:
                     status_code=status.HTTP_403_FORBIDDEN,
                 )
         schema = body.templateSchema or test.template_schema
+
     else:
         if not body.templateSchema:
             return JSONResponse(
@@ -170,6 +171,13 @@ async def init_environment(request: Request) -> JSONResponse:
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
         schema = body.templateSchema
+        if not body.impersonateUserId or not body.impersonateEmail:
+            return JSONResponse(
+                APIError(
+                    detail="impersonateUserId or impersonateEmail must be provided when using a template schema without a testId"
+                ).model_dump(),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
 
@@ -196,7 +204,9 @@ async def init_environment(request: Request) -> JSONResponse:
         schemaName=result.schema_name,
         service=service,
     )
-    return JSONResponse(response.model_dump(mode='json'), status_code=status.HTTP_201_CREATED)
+    return JSONResponse(
+        response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
+    )
 
 
 async def start_run(request: Request) -> JSONResponse:
@@ -264,14 +274,18 @@ async def start_run(request: Request) -> JSONResponse:
     session.add(run)
     session.flush()
 
-    logger.info(f"Started test run {run.id} for test {body.testId} in environment {body.envId}")
+    logger.info(
+        f"Started test run {run.id} for test {body.testId} in environment {body.envId}"
+    )
 
     response = StartRunResponse(
         runId=str(run.id),
         status=run.status,
         beforeSnapshot=before_result.suffix,
     )
-    return JSONResponse(response.model_dump(mode='json'), status_code=status.HTTP_201_CREATED)
+    return JSONResponse(
+        response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
+    )
 
 
 async def end_run(request: Request) -> JSONResponse:
@@ -371,7 +385,7 @@ async def end_run(request: Request) -> JSONResponse:
         passed=bool(evaluation.get("passed")),
         score=evaluation.get("score"),
     )
-    return JSONResponse(response.model_dump(mode='json'))
+    return JSONResponse(response.model_dump(mode="json"))
 
 
 async def get_run_result(request: Request) -> JSONResponse:
@@ -407,7 +421,7 @@ async def get_run_result(request: Request) -> JSONResponse:
         diff=run.result.get("diff") if run.result else None,
         createdAt=run.created_at,
     )
-    return JSONResponse(payload.model_dump(mode='json'))
+    return JSONResponse(payload.model_dump(mode="json"))
 
 
 async def delete_environment(request: Request) -> JSONResponse:
@@ -443,7 +457,7 @@ async def delete_environment(request: Request) -> JSONResponse:
     core.environment_handler.mark_environment_status(env_id, "deleted")
 
     response = DeleteEnvResponse(environmentId=str(env_id), status="deleted")
-    return JSONResponse(response.model_dump(mode='json'))
+    return JSONResponse(response.model_dump(mode="json"))
 
 
 async def health_check(request: Request) -> JSONResponse:
