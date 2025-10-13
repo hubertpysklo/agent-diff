@@ -53,9 +53,6 @@ class PlatformMiddleware(BaseHTTPMiddleware):
                 {"detail": "internal server error"},
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        finally:
-            request.state.db_session = None
-            request.state.principal = None
 
 
 class IsolationMiddleware(BaseHTTPMiddleware):
@@ -116,18 +113,12 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                 request.state.db_session = session
                 request.state.environment_id = env_id
 
-                try:
-                    response = await call_next(request)
+                response = await call_next(request)
 
-                    if not (200 <= response.status_code < 400):
-                        session.rollback()
+                if not (200 <= response.status_code < 400):
+                    session.rollback()
 
-                    return response
-                finally:
-                    request.state.db_session = None
-                    request.state.environment_id = None
-                    request.state.impersonate_user_id = None
-                    request.state.impersonate_email = None
+                return response
 
         except PermissionError as exc:
             return JSONResponse(

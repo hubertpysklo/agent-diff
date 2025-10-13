@@ -26,7 +26,10 @@ from src.platform.api.models import (
     APIError,
     Principal,
 )
-from src.platform.api.auth import require_resource_access, require_resource_access_with_org
+from src.platform.api.auth import (
+    require_resource_access,
+    require_resource_access_with_org,
+)
 from src.platform.db.schema import (
     TestSuite,
     Test,
@@ -418,7 +421,7 @@ async def delete_environment(request: Request) -> JSONResponse:
     return JSONResponse(response.model_dump())
 
 
-async def health_check(request: Request) -> JSONResponse:
+async def health_check() -> JSONResponse:
     return JSONResponse({"status": "healthy", "service": "diff-the-universe"})
 
 
