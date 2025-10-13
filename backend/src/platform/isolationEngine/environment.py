@@ -60,20 +60,38 @@ class EnvironmentHandler:
 
     def _reset_sequences(self, conn, schema: str, tables: Iterable[str]) -> None:
         for tbl in tables:
-            seq_name_row = conn.execute(
-                text("SELECT pg_get_serial_sequence(:rel, 'id')"),
-                {"rel": f"{schema}.{tbl}"},
-            ).fetchone()
-            if not seq_name_row or not seq_name_row[0]:
-                continue
-            conn.execute(
+            sequence_columns = conn.execute(
                 text(
-                    "SELECT setval(:seq, COALESCE((SELECT MAX(id) FROM "
-                    f'"{schema}".{tbl}'
-                    "), 0) + 1, false)"
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = :schema
+                      AND table_name = :table
+                      AND column_default LIKE 'nextval(%'
+                    """
                 ),
-                {"seq": seq_name_row[0]},
-            )
+                {"schema": schema, "table": tbl},
+            ).fetchall()
+
+            if not sequence_columns:
+                continue
+
+            for (column_name,) in sequence_columns:
+                seq_name = conn.execute(
+                    text("SELECT pg_get_serial_sequence(:rel, :col)"),
+                    {"rel": f"{schema}.{tbl}", "col": column_name},
+                ).scalar()
+
+                if not seq_name:
+                    continue
+
+                conn.execute(
+                    text(
+                        f'SELECT setval(:seq, COALESCE((SELECT MAX("{column_name}") '
+                        f'FROM "{schema}"."{tbl}"), 0) + 1, false)'
+                    ),
+                    {"seq": seq_name},
+                )
 
     def seed_data_from_template(
         self,

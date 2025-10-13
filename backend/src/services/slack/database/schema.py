@@ -205,6 +205,7 @@ class UserSetting(Base):
             UserSettingsNotificationLevel,
             name="usersettings_notificationlevel_enum",
             native_enum=True,
+            schema="public",
         )
     )
 
@@ -228,7 +229,9 @@ class UserTeam(Base):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id"), primary_key=True)
     team_id: Mapped[str] = mapped_column(ForeignKey("teams.team_id"), primary_key=True)
     role: Mapped[UserTeamsRole | None] = mapped_column(
-        Enum(UserTeamsRole, name="userteams_role_enum", native_enum=True)
+        Enum(
+            UserTeamsRole, name="userteams_role_enum", native_enum=True, schema="public"
+        )
     )
 
     user: Mapped["User"] = relationship()
