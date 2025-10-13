@@ -2,8 +2,6 @@
 import os
 import sys
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
-
 from src.platform.db.schema import User, ApiKey
 from src.platform.api.auth import KeyHandler
 from src.platform.isolationEngine.session import SessionManager
@@ -20,7 +18,9 @@ def main():
     session_manager = SessionManager(engine)
 
     with session_manager.with_meta_session() as session:
-        existing_user = session.query(User).filter(User.email == "dev@localhost").first()
+        existing_user = (
+            session.query(User).filter(User.email == "dev@localhost").first()
+        )
 
         if existing_user:
             user_id = existing_user.id
@@ -50,7 +50,7 @@ def main():
                 is_platform_admin=True,
                 is_organization_admin=True,
             )
-            print(f"\nDev API Key: {result['token']}\n")
+            print(f"\nDev API Key: {result.token}\n")
 
 
 if __name__ == "__main__":
