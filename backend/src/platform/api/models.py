@@ -18,7 +18,7 @@ class ApiKeyResponse(BaseModel):
     token: str
     key_id: str
     expires_at: datetime
-    user_id: int
+    user_id: str
     is_platform_admin: bool
     is_organization_admin: bool
 

@@ -38,7 +38,7 @@ class KeyHandler:
     def create_api_key(
         self,
         *,
-        user_id: int,
+        user_id: str,
         days_valid: int = 90,
         is_platform_admin: bool = False,
         is_organization_admin: bool = False,
@@ -142,7 +142,9 @@ def require_resource_access(principal: Principal, owner_id: str) -> None:
         raise PermissionError("unauthorized")
 
 
-def check_resource_access_with_org(principal: Principal, creator_id: str, creator_org_ids: List[str]) -> bool:
+def check_resource_access_with_org(
+    principal: Principal, creator_id: str, creator_org_ids: List[str]
+) -> bool:
     if principal.is_platform_admin:
         return True
     if principal.user_id == creator_id:
@@ -154,6 +156,8 @@ def check_resource_access_with_org(principal: Principal, creator_id: str, creato
     return False
 
 
-def require_resource_access_with_org(principal: Principal, creator_id: str, creator_org_ids: List[str]) -> None:
+def require_resource_access_with_org(
+    principal: Principal, creator_id: str, creator_org_ids: List[str]
+) -> None:
     if not check_resource_access_with_org(principal, creator_id, creator_org_ids):
         raise PermissionError("unauthorized")

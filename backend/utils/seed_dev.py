@@ -42,14 +42,14 @@ def main():
                 updated_at=datetime.now(),
             )
             session.add(dev_user)
-            session.flush()
+            session.commit()
 
         existing_key = session.query(ApiKey).filter(ApiKey.user_id == user_id).first()
 
         if not existing_key or existing_key.revoked_at:
             key_handler = KeyHandler(session_manager)
             result = key_handler.create_api_key(
-                user_id=int(user_id) if user_id.isdigit() else 1,
+                user_id=user_id,
                 days_valid=365,
                 is_platform_admin=True,
                 is_organization_admin=True,
