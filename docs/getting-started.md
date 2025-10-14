@@ -1,7 +1,5 @@
 # Getting Started 
 
-This guide gets you up and running with Diff the Universe locally.
-
 ## Prerequisites
 
 - Docker & Docker Compose
@@ -25,7 +23,7 @@ cp env.example .env
 Edit `.env` if needed. The defaults work for local development:
 
 ```env
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/matrixes
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/diff_the_universe
 SECRET_KEY=your-secret-key-here  # Auto-generated if not set
 ```
 
@@ -44,6 +42,7 @@ On first run, the backend automatically:
 - Runs database migrations
 - Creates a development user
 - Generates an API key
+- Seeds template tests and schema for slack envioroment
 
 ### 4. Get Your API Key
 
@@ -54,18 +53,6 @@ docker-compose logs backend | grep "Dev API Key"
 
 Save this key - you'll need it for all API requests.
 
-### 5. Verify Installation
-
-Test the health endpoint:
-
-```bash
-curl http://localhost:8000/api/platform/health
-```
-
-Expected response:
-```json
-{"status":"healthy","service":"diff-the-universe"}
-```
 
 ## Your First Test
 
