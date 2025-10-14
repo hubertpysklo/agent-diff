@@ -241,7 +241,34 @@ def create_test_environment(
     )
 
 
-# Make helper function available as a fixture
+@pytest.fixture
+def differ_env(test_user_id, core_isolation_engine, session_manager, environment_handler):
+    """Create isolated environment with Differ instance for testing."""
+    from src.platform.evaluationEngine.differ import Differ
+
+    env = core_isolation_engine.create_environment(
+        template_schema="slack_default",
+        ttl_seconds=3600,
+        created_by=test_user_id,
+    )
+
+    differ = Differ(
+        schema=env.schema_name,
+        environment_id=env.environment_id,
+        session_manager=session_manager,
+    )
+
+    yield {
+        "differ": differ,
+        "schema": env.schema_name,
+        "env_id": env.environment_id,
+        "engine": session_manager.base_engine,
+        "session_manager": session_manager,
+    }
+
+    environment_handler.drop_schema(env.schema_name)
+
+
 @pytest.fixture
 def create_env(core_isolation_engine):
     """Fixture that provides the create_test_environment helper."""
