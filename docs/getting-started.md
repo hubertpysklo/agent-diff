@@ -206,7 +206,6 @@ Response:
 An **environment** is an isolated PostgreSQL schema with its own copy of service data (users, channels, messages, etc.). Each environment:
 
 - Has a unique ID (`env_abc123`)
-- Gets a JWT token for authentication
 - Lives for a configurable TTL (default: 1 hour)
 - Is completely isolated from other environments
 
@@ -254,25 +253,8 @@ Every row includes `__table__` to identify which entity changed.
 
 See [evaluation-dsl.md](evaluation-dsl.md) for full syntax.
 
-## What's Available Out of the Box
 
-### Slack Default Template
-
-- **Users**:
-  - `U01AGENBOT9` (agent1) - The agent user
-  - `U02JOHNDOE1` (johndoe)
-  - `U03JANEDOE2` (janedoe)
-
-- **Channels**:
-  - `C01ABCD1234` (#general) - "Company-wide announcements and work-based matters"
-  - `C02EFGH5678` (#random) - "Non-work banter and water cooler conversation"
-
-- **Messages**:
-  - 3 pre-existing messages across both channels
-
-All IDs are stable and documented in `examples/slack/seeds/slack_default.json`.
-
-## Common Workflows
+##  Workflows
 
 ### Testing Message Sending
 
@@ -326,22 +308,6 @@ All IDs are stable and documented in `examples/slack/seeds/slack_default.json`.
 }
 ```
 
-## Troubleshooting
-
-### "Invalid API key"
-
-Make sure you're using the key from the logs:
-```bash
-docker-compose logs backend | grep "Dev API Key"
-```
-
-### "Environment not found"
-
-Environments expire after their TTL. Create a new one with `initEnv`.
-
-### "Invalid token"
-
-JWT tokens are bound to environments. Make sure you're using the token from the `initEnv` response.
 
 ### Check Logs
 
@@ -352,13 +318,6 @@ docker-compose logs -f backend
 # Database logs
 docker-compose logs -f postgres
 ```
-
-## Next Steps
-
-- **[API Reference](api-reference.md)** - Complete API documentation
-- **[Architecture](architecture.md)** - How the system works internally
-- **[Evaluation DSL](evaluation-dsl.md)** - Advanced assertion patterns
-- **[Platform Flow](platform-rest-flow.md)** - Detailed request sequences
 
 ## Development Commands
 

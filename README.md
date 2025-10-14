@@ -4,9 +4,16 @@
 
  When I interned at a YC comapny last summer, I was running tests on our new agent implementation and it sent an email to a company investor, signed as CEO. **We could not run evals on 3rd party services for production**
 
-## Replicas of real services with assertions
 
-With Diff Universe you can make isolated replicas of real services that agents use that you can seed with your data, snapshot, diff against your deterministic tests, and reset them demand
+## What This Is
+
+**A self-hosted platform for testing AI agents.** You run it locally (or deploy it), your agents call fake APIs, you get deterministic diffs. No external service, no API keys to manage, full control over test data.
+
+Use it for:
+- RL training loops (reset state between episodes)
+- Integration tests (verify agent does what it should)
+- Regression tests (catch when changes break behavior)
+- Training data generation (prompt → actions → diff → outcome)
 
 
 ## Flow
@@ -54,3 +61,13 @@ Sample test scenarios for Slack agents:
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Check DSL docs on how it works.
 
 
+## Contributing
+
+**Want to add a service?**
+1. Copy `backend/src/services/slack/` structure
+2. Implement your service's APIs
+3. Add seed data to `examples/yourservice/seeds/`
+4. Write tests in `backend/tests/integration/`
+
+
+- **[LICENSE](LICENSE)** - AGPL-3.0-only
