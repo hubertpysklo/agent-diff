@@ -189,7 +189,7 @@ class Differ:
                 environment_id=self.environment_id,
                 before_suffix=before_suffix,
                 after_suffix=after_suffix,
-                diff=diff.model_dump(),
+                diff=diff.model_dump(mode='json'),
                 created_at=datetime.now(),
                 updated_at=datetime.now(),
             )

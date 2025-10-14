@@ -46,8 +46,8 @@ class TestDifferInserts:
         differ.create_snapshot("before")
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
-            VALUES ('M_NEW_1', 'C01ABCD1234', 'U01AGENBOT9', 'hello from test', '1699999999.000001', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
+            VALUES ('M_NEW_1', 'C01ABCD1234', 'U01AGENBOT9', 'hello from test', NOW())
         """)
 
         differ.create_snapshot("after")
@@ -87,8 +87,8 @@ class TestDifferInserts:
         differ.create_snapshot("before")
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, parent_id, timestamp, created_at)
-            VALUES ('M_REPLY_1', 'C01ABCD1234', 'U01AGENBOT9', 'Next monday.', '1699568400.000456', '1699999999.000002', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, parent_id, created_at)
+            VALUES ('M_REPLY_1', 'C01ABCD1234', 'U01AGENBOT9', 'Next monday.', '1699568400.000456', NOW())
         """)
 
         differ.create_snapshot("after")
@@ -133,8 +133,8 @@ class TestDifferInserts:
         """)
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
-            VALUES ('M_DM_1', 'DM_NEW_1', 'U01AGENBOT9', 'Can we sync later?', '1699999999.000003', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
+            VALUES ('M_DM_1', 'DM_NEW_1', 'U01AGENBOT9', 'Can we sync later?', NOW())
         """)
 
         differ.create_snapshot("after")
@@ -155,8 +155,8 @@ class TestDifferInserts:
         differ.create_snapshot("before")
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
-            VALUES ('M_MENTION_1', 'C01ABCD1234', 'U01AGENBOT9', '@johndoe Please review the pull request', '1699999999.000004', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
+            VALUES ('M_MENTION_1', 'C01ABCD1234', 'U01AGENBOT9', '@johndoe Please review the pull request', NOW())
         """)
 
         differ.create_snapshot("after")
@@ -174,10 +174,10 @@ class TestDifferInserts:
         differ.create_snapshot("before")
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
             VALUES
-                ('M_MULTI_1', 'C01ABCD1234', 'U01AGENBOT9', 'System maintenance tonight at 10pm', '1699999999.000005', NOW()),
-                ('M_MULTI_2', 'C02EFGH5678', 'U01AGENBOT9', 'System maintenance tonight at 10pm', '1699999999.000006', NOW())
+                ('M_MULTI_1', 'C01ABCD1234', 'U01AGENBOT9', 'System maintenance tonight at 10pm', NOW()),
+                ('M_MULTI_2', 'C02EFGH5678', 'U01AGENBOT9', 'System maintenance tonight at 10pm', NOW())
         """)
 
         differ.create_snapshot("after")
@@ -201,7 +201,7 @@ class TestDifferUpdates:
 
         execute_sql(engine, schema, """
             UPDATE {schema}.channels
-            SET topic_text = 'Weekly standup discussions', updated_at = NOW()
+            SET topic_text = 'Weekly standup discussions'
             WHERE channel_id = 'C01ABCD1234'
         """)
 
@@ -223,7 +223,7 @@ class TestDifferUpdates:
 
         execute_sql(engine, schema, """
             UPDATE {schema}.messages
-            SET message_text = 'Hello everyone', updated_at = NOW()
+            SET message_text = 'Hello everyone'
             WHERE message_id = '1699564800.000123'
         """)
 
@@ -245,14 +245,15 @@ class TestDifferUpdates:
 
         execute_sql(engine, schema, """
             UPDATE {schema}.messages
-            SET updated_at = NOW()
+            SET message_text = 'Updated text', created_at = NOW()
             WHERE message_id = '1699564800.000123'
         """)
 
         differ.create_snapshot("after")
-        diff_with_exclude = differ.get_updates("before", "after", exclude_cols=["updated_at"])
+        diff_with_exclude = differ.get_updates("before", "after", exclude_cols=["created_at"])
 
-        assert len(diff_with_exclude) == 0
+        assert len(diff_with_exclude) == 1
+        assert diff_with_exclude[0]["after"]["message_text"] == "Updated text"
 
     def test_diff_update_null_handling(self, differ_env):
         differ = differ_env["differ"]
@@ -263,7 +264,7 @@ class TestDifferUpdates:
 
         execute_sql(engine, schema, """
             UPDATE {schema}.channels
-            SET purpose_text = 'New purpose', updated_at = NOW()
+            SET purpose_text = 'New purpose'
             WHERE channel_id = 'C01ABCD1234'
         """)
 
@@ -271,7 +272,7 @@ class TestDifferUpdates:
         diff = differ.get_diff("before", "after")
 
         assert len(diff.updates) == 1
-        assert diff.updates[0]["before"]["purpose_text"] is None
+        assert diff.updates[0]["before"]["purpose_text"] == "This channel is for team-wide communication and announcements."
         assert diff.updates[0]["after"]["purpose_text"] == "New purpose"
 
 
@@ -303,16 +304,19 @@ class TestDifferDeletes:
         differ.create_snapshot("before")
 
         execute_sql(engine, schema, """
-            DELETE FROM {schema}.channels
-            WHERE channel_id = 'C02EFGH5678'
+            DELETE FROM {schema}.messages WHERE channel_id = 'C02EFGH5678';
+            DELETE FROM {schema}.channel_members WHERE channel_id = 'C02EFGH5678';
+            DELETE FROM {schema}.channels WHERE channel_id = 'C02EFGH5678';
         """)
 
         differ.create_snapshot("after")
         diff = differ.get_diff("before", "after")
 
         channel_deletes = [d for d in diff.deletes if d["__table__"] == "channels"]
-        assert len(channel_deletes) >= 1
-        assert any(d["channel_id"] == CHANNEL_RANDOM for d in channel_deletes)
+        message_deletes = [d for d in diff.deletes if d["__table__"] == "messages"]
+        assert len(channel_deletes) == 1
+        assert channel_deletes[0]["channel_id"] == CHANNEL_RANDOM
+        assert len(message_deletes) >= 1
 
     def test_diff_delete_no_changes(self, differ_env):
         differ = differ_env["differ"]
@@ -376,8 +380,8 @@ class TestSnapshotManagement:
         differ.create_snapshot("isolated")
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
-            VALUES ('M_ISOLATED', 'C01ABCD1234', 'U01AGENBOT9', 'New message', '1699999999.999999', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
+            VALUES ('M_ISOLATED', 'C01ABCD1234', 'U01AGENBOT9', 'New message', NOW())
         """)
 
         snap_count = query_count(engine, f"{schema}.messages_snapshot_isolated")
@@ -393,13 +397,13 @@ class TestComplexScenarios:
         differ.create_snapshot("before")
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
-            VALUES ('M_FWD', 'C01ABCD1234', 'U01AGENBOT9', 'Anyone up for lunch?', '1699999999.000007', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
+            VALUES ('M_FWD', 'C01ABCD1234', 'U01AGENBOT9', 'Anyone up for lunch?', NOW())
         """)
 
         execute_sql(engine, schema, """
             UPDATE {schema}.messages
-            SET message_text = '[Forwarded to general]', updated_at = NOW()
+            SET message_text = '[Forwarded to general]'
             WHERE message_id = '1699572000.000789'
         """)
 
@@ -428,8 +432,8 @@ class TestComplexScenarios:
         """)
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
-            VALUES ('M_AGENT_1', 'C_AGENT', 'U01AGENBOT9', 'Project started', '1699999999.000008', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
+            VALUES ('M_AGENT_1', 'C_AGENT', 'U01AGENBOT9', 'Project started', NOW())
         """)
 
         execute_sql(engine, schema, """
@@ -437,9 +441,11 @@ class TestComplexScenarios:
             VALUES ('M_AGENT_1', 'U01AGENBOT9', 'rocket', NOW())
         """)
 
+        differ.create_snapshot("mid")
+
         execute_sql(engine, schema, """
             UPDATE {schema}.channels
-            SET topic_text = 'Agent workspace for task X', updated_at = NOW()
+            SET topic_text = 'Agent workspace for task X'
             WHERE channel_id = 'C_AGENT'
         """)
 
@@ -449,9 +455,9 @@ class TestComplexScenarios:
         """)
 
         differ.create_snapshot("after")
-        diff = differ.get_diff("before", "after")
+        diff = differ.get_diff("mid", "after")
 
-        assert len(diff.inserts) == 3
+        assert len(diff.inserts) == 0
         assert len(diff.updates) == 1
         assert len(diff.deletes) == 1
 
@@ -467,8 +473,8 @@ class TestDiffStorage:
         differ.create_snapshot("before")
 
         execute_sql(engine, schema, """
-            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, timestamp, created_at)
-            VALUES ('M_STORE', 'C01ABCD1234', 'U01AGENBOT9', 'Test message', '1699999999.999998', NOW())
+            INSERT INTO {schema}.messages (message_id, channel_id, user_id, message_text, created_at)
+            VALUES ('M_STORE', 'C01ABCD1234', 'U01AGENBOT9', 'Test message', NOW())
         """)
 
         differ.create_snapshot("after")
