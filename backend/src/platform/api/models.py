@@ -54,6 +54,7 @@ class InitEnvRequestBody(BaseModel):
 
 class InitEnvResponse(BaseModel):
     environmentId: str
+    templateSchema: str
     schemaName: str
     service: str
     environmentUrl: str

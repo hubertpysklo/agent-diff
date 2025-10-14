@@ -195,10 +195,11 @@ async def init_environment(request: Request) -> JSONResponse:
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    service = schema.replace("_template", "")
-    env_url = f"/api/env/{result.environment_id}"
+    service = schema.split("_")[0]
+    env_url = f"/api/env/{result.environment_id}/services/{service}/"
     response = InitEnvResponse(
         environmentId=result.environment_id,
+        templateSchema=schema,
         environmentUrl=env_url,
         expiresAt=result.expires_at,
         schemaName=result.schema_name,
