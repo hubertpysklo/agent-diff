@@ -18,6 +18,14 @@ class Differ:
         self.inspector = inspect(self.engine)
         self.tables = self.inspector.get_table_names(schema=self.schema)
         self.q = self.engine.dialect.identifier_preparer.quote
+        self._pk_cache = {}
+
+    def _get_pk_columns(self, table: str) -> list[str]:
+        """Get primary key column(s) for a table."""
+        if table not in self._pk_cache:
+            pk = self.inspector.get_pk_constraint(table, schema=self.schema)
+            self._pk_cache[table] = pk["constrained_columns"]
+        return self._pk_cache[table]
 
     def create_snapshot(self, suffix: str) -> None:
         with self.engine.begin() as conn:
@@ -35,12 +43,24 @@ class Differ:
             for t in self.tables:
                 before_table = f"{t}_snapshot_{before_suffix}"
                 after_table = f"{t}_snapshot_{after_suffix}"
+                pk_cols = self._get_pk_columns(t)
+
+                if not pk_cols:
+                    continue
+
+                join_conditions = " AND ".join(
+                    f"a.{self.q(pk)} = b.{self.q(pk)}" for pk in pk_cols
+                )
+                where_conditions = " AND ".join(
+                    f"b.{self.q(pk)} IS NULL" for pk in pk_cols
+                )
+
                 q_inserts = f"""
                     SELECT a.*
                     FROM {self.q(self.schema)}.{self.q(after_table)} AS a
                     LEFT JOIN {self.q(self.schema)}.{self.q(before_table)} AS b
-                    ON a.id = b.id
-                    WHERE b.id IS NULL
+                    ON {join_conditions}
+                    WHERE {where_conditions}
                 """
                 rows = conn.execute(text(q_inserts)).mappings().all()
                 for r in rows:
@@ -60,6 +80,10 @@ class Differ:
             for t in self.tables:
                 before = f"{t}_snapshot_{before_suffix}"
                 after = f"{t}_snapshot_{after_suffix}"
+                pk_cols = self._get_pk_columns(t)
+
+                if not pk_cols:
+                    continue
 
                 cols = [
                     c["name"] for c in self.inspector.get_columns(t, schema=self.schema)
@@ -71,6 +95,10 @@ class Differ:
 
                 if not compare_cols:
                     continue
+
+                join_conditions = " AND ".join(
+                    f"a.{self.q(pk)} = b.{self.q(pk)}" for pk in pk_cols
+                )
 
                 cmp_expr = " OR ".join(
                     f"a.{self.q(c)} IS DISTINCT FROM b.{self.q(c)}"
@@ -85,7 +113,7 @@ class Differ:
                     SELECT {proj_cols}
                     FROM {self.q(self.schema)}.{self.q(after)} AS a
                     JOIN {self.q(self.schema)}.{self.q(before)} AS b
-                      ON a.id = b.id
+                      ON {join_conditions}
                     WHERE {cmp_expr}
                 """
                 rows = conn.exec_driver_sql(sql).mappings().all()
@@ -107,12 +135,24 @@ class Differ:
             for t in self.tables:
                 before_table = f"{t}_snapshot_{before_suffix}"
                 after_table = f"{t}_snapshot_{after_suffix}"
+                pk_cols = self._get_pk_columns(t)
+
+                if not pk_cols:
+                    continue
+
+                join_conditions = " AND ".join(
+                    f"b.{self.q(pk)} = a.{self.q(pk)}" for pk in pk_cols
+                )
+                where_conditions = " AND ".join(
+                    f"a.{self.q(pk)} IS NULL" for pk in pk_cols
+                )
+
                 q_deletes = f"""
                     SELECT b.*
                     FROM {self.q(self.schema)}.{self.q(before_table)} AS b
                     LEFT JOIN {self.q(self.schema)}.{self.q(after_table)} AS a
-                    ON b.id = a.id
-                    WHERE a.id IS NULL
+                    ON {join_conditions}
+                    WHERE {where_conditions}
                 """
                 rows = conn.execute(text(q_deletes)).mappings().all()
                 for r in rows:
