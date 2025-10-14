@@ -1,4 +1,4 @@
-.PHONY: test test-log test-results
+.PHONY: test test-log
 
 test: ## Run integration tests (output to console)
 	docker exec ops-backend-1 python -m pytest tests/integration/ -v
