@@ -2,15 +2,11 @@
 
 > **AI agents are bad at using APIs and MCPs**
 
- You can't measure what you can't control. When agents interact with real APIs, you hit rate limits, leak secrets, and have no idea what actually changed. You can't run RL because you can't reset the environment. You can't write tests because you can't verify outcomes. 
+ When I interned at a YC comapny last summer, I was running tests on our new agent implementation and it sent an email to a company investor, signed as CEO. **We could not run evals on 3rd party services for production**
 
- When I interned at a YC comapny last summer, I was running tests on our new agent implementation and it sent an email to a company investor, signed as CEO. 
+## Replicas of real services with assertions
 
-**We could not run evals on 3rd party services for production.**
-
-## How to solve this
-
-**Create isolated replicas of real services that agents use that you can seed with your data, snapshot, diff against your deterministic tests, and reset on demand.**
+With Diff Universe you can make isolated replicas of real services that agents use that you can seed with your data, snapshot, diff against your deterministic tests, and reset them demand
 
 
 ## Flow
@@ -23,7 +19,7 @@
 5. Get results                  → GET /api/platform/results/{runId}
 ```
 
-Every environment gets its own PostgreSQL schema. JWT tokens or URLs bind requests to schemas. Snapshots diff exactly what changed in this specfic schema.
+Every environment gets its own PostgreSQL schema. URLs bind requests to schemas. Snapshots diff exactly what changed in this specfic isolated enviroment.
 
 ## Services
 
@@ -56,14 +52,5 @@ Sample test scenarios for Slack agents:
 - **[slack_default.json](examples/slack/seeds/slack_default.json)** - Seed data (3 users, 2 channels, 3 messages)
 
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Check DSL docs on how it works.
-
-
-## Documentation (AI generated)
-
-- **[Getting Started](docs/getting-started.md)** - Local setup, first test, concepts
-- **[API Reference](docs/api-reference.md)** - Complete REST API docs
-- **[Architecture](docs/architecture.md)** - How the system works internally
-- **[Evaluation DSL](docs/evaluation-dsl.md)** - Assertion language reference
-- **[Platform Flow](docs/platform-rest-flow.md)** - Detailed request sequence
 
 

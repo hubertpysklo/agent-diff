@@ -76,5 +76,7 @@ Predicates can be nested with logical combinators:
 
 - JSON schema: `backend/src/platform/evaluationEngine/dsl_schema.json`
 - Engine implementation: `backend/src/platform/evaluationEngine/assertion.py`
-- Example specs: `examples/` (coming soon)
+Sample test scenarios for Slack agents:
+- **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - 11 test cases covering message sending, channel ops, reactions, threading
+- **[slack_default.json](examples/slack/seeds/slack_default.json)** - Seed data (3 users, 2 channels, 3 messages)
 
