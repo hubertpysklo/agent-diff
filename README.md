@@ -7,7 +7,7 @@
 
 ## What This Is
 
-**A self-hosted platform for testing AI agents.** You run it locally (or deploy it), your agents call fake APIs, you get deterministic diffs. No external service, no API keys to manage, full control over test data.
+**A self-hosted platform for testing AI agents & training LLMs against 3rd party services like Linear or Slack.** You run it locally (or deploy it), your agents call fake APIs, you get deterministic diffs. No external service, no API keys to manage, full control over test data.
 
 Use it for:
 - RL training loops (reset state between episodes)
@@ -69,5 +69,8 @@ Sample test scenarios for Slack agents:
 3. Add seed data to `examples/yourservice/seeds/`
 4. Write tests in `backend/tests/integration/`
 
+**Want to add a testsuite?**
+1. Take a look at [Evaluation DSL](docs/evaluation-dsl.md)
+2. Copy examples/slack/testsuites/slack_bench.json and follow the pattern.
 
-- **[LICENSE](LICENSE)** - AGPL-3.0-only
+
