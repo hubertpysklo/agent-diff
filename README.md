@@ -1,107 +1,69 @@
-# Diff the Universe
+# Diff Universe
 
-Diff the Universe lets you evaluate AI agents against controllable clones of real-world services (Linear, Slack, Gmail, …). The platform provisions isolated database schemas for each run, routes agent traffic into service facsimiles, snapshots state before/after the agent acts, and computes deterministic diffs so you can assert the outcome programmatically.
+> **AI agents are bad at using APIs and MCPs**
+
+ You can't measure what you can't control. When agents interact with real APIs, you hit rate limits, leak secrets, and have no idea what actually changed. You can't run RL because you can't reset the environment. You can't write tests because you can't verify outcomes. 
+
+ When I interned at a YC comapny last summer, I was running tests on our new agent implementation and it sent an email to a company investor, signed as CEO. 
+
+**We could not run evals on 3rd party services for production.**
+
+## How to solve this
+
+**Create isolated replicas of real services that agents use that you can seed with your data, snapshot, diff against your deterministic tests, and reset on demand.**
 
 
-## Currently supported services:
-- Slack (fully implemented)
-- Linear (in progress)
+## Flow
 
+```
+1. Create isolated environment  → POST /api/platform/initEnv
+2. Snapshot initial state       → POST /api/platform/startRun
+3. Agent does stuff             → POST /api/env/{envId}/services/slack/chat.postMessage
+4. Snapshot final state + diff  → POST /api/platform/endRun
+5. Get results                  → GET /api/platform/results/{runId}
+```
 
-## Quick start
+Every environment gets its own PostgreSQL schema. JWT tokens or URLs bind requests to schemas. Snapshots diff exactly what changed in this specfic schema.
+
+## Services
+
+- **Slack** (fully implemented - all core APIs)
+- **Linear** (Coming by end of october)
+- Gmail, GitHub, Jira (TBD). 
+
+If you have requests for specfic services + any feedback mail me at hubert@uni.minerva.edu
+
+## Quick Start
 
 ```bash
-# Set up environment variables
+git clone https://github.com/yourusername/diff-the-universe.git
+cd diff-the-universe
 cp env.example .env
-# Edit .env to set SECRET_KEY if needed
-
-# Start everything with Docker
 cd ops
 docker-compose up --build
 
 # Backend runs on http://localhost:8000
-# PostgreSQL runs on localhost:5432
-```
-
-The backend automatically runs migrations and seeds a development user on startup. Check the logs for your API key:
-
-```bash
+# The DEV API key is in logs:
 docker-compose logs backend | grep "Dev API Key"
-# Dev API Key: ak_xxxxx...
 ```
 
-Test the health endpoint:
+See **[docs/getting-started.md](docs/getting-started.md)** for setup.
 
-```bash
-curl http://localhost:8000/api/platform/health
-# Returns: {"status":"healthy","service":"diff-the-universe"}
-```
 
-## Using the Platform
+### Slack-Bench (in DSL)
+Sample test scenarios for Slack agents:
+- **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - 11 test cases covering message sending, channel ops, reactions, threading
+- **[slack_default.json](examples/slack/seeds/slack_default.json)** - Seed data (3 users, 2 channels, 3 messages)
 
-All API requests require authentication via API key:
+- **[Evaluation DSL](docs/evaluation-dsl.md)** - Check DSL docs on how it works.
 
-```bash
-# Using X-API-Key header
-curl -H "X-API-Key: ak_xxxxx..." http://localhost:8000/api/platform/...
 
-# Or using Authorization header
-curl -H "Authorization: ak_xxxxx..." http://localhost:8000/api/platform/...
-```
+## Documentation (AI generated)
 
-Here's how agents interact with the platform:
+- **[Getting Started](docs/getting-started.md)** - Local setup, first test, concepts
+- **[API Reference](docs/api-reference.md)** - Complete REST API docs
+- **[Architecture](docs/architecture.md)** - How the system works internally
+- **[Evaluation DSL](docs/evaluation-dsl.md)** - Assertion language reference
+- **[Platform Flow](docs/platform-rest-flow.md)** - Detailed request sequence
 
-1. Create an isolated test environment
-2. Agent performs actions (posts Slack messages, creates Linear issues, etc.)
-3. Platform captures what changed and validates against expected outcomes
-
-All agent requests go to `/api/env/{environmentId}/services/slack/...` and are automatically isolated to that environment's database.
-
-Full API documentation: [`docs/api-reference.md`](docs/api-reference.md)
-
-## How it works
-
-1. `POST /api/platform/initEnv` clones a template schema into a dedicated environment.
-2. `POST /api/platform/startRun` snapshots the environment before the agent acts.
-3. The agent talks to fake service endpoints under `/api/env/{envId}/services/slack/...`.
-4. `POST /api/platform/endRun` snapshots again, computes the diff, runs assertions, and stores the result.
-5. `GET /api/platform/results/{runId}` returns pass/fail, score, diff, and failure messages.
-
-Detailed sequence: [`docs/platform-rest-flow.md`](docs/platform-rest-flow.md)
-
-### Evaluation DSL example
-
-```json
-{
-  "strict": true,
-  "assertions": [
-    {
-      "diff_type": "added",
-      "entity": "messages",
-      "where": {
-        "channelId": {"eq": 123},
-        "body": {"contains": "hello"}
-      },
-      "expected_count": 1
-    },
-    {
-      "diff_type": "changed",
-      "entity": "issues",
-      "where": {"id": {"eq": 42}},
-      "expected_changes": {
-        "status": {"to": {"eq": "Done"}}
-      }
-    }
-  ]
-}
-```
-
-Full DSL docs: [`docs/evaluation-dsl.md`](docs/evaluation-dsl.md)
-
-## Repository layout
-
-- `docs/` – platform workflows, evaluation DSL, release checklist
-- `scripts/` – local dev helpers (seed DB, reset schema, etc.)
-- `examples/` – sample evaluation suites (coming soon)
-- `backend/` – Starlette app, isolation engine, evaluation engine, service mocks
 
