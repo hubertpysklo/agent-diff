@@ -1,0 +1,26 @@
+# Linear GraphQL API Dependencies
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# GraphQL
+ariadne>=0.22.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9  # For PostgreSQL
+# mysqlclient>=2.2.0  # Uncomment for MySQL
+
+# Authentication
+pyjwt>=2.8.0
+bcrypt>=4.1.0  # For password hashing
+python-multipart>=0.0.6  # For form data
+
+# CORS
+python-dotenv>=1.0.0  # For environment variables
+
+# Development
+black>=23.0.0  # Code formatter
+pytest>=7.4.0  # Testing
+pytest-asyncio>=0.21.0  # Async testing
