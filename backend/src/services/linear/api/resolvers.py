@@ -1,7 +1,15 @@
 from ariadne import QueryType, MutationType
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, select
-from Linear.db_schema import Issue, Attachment, User, Team, Organization, OrganizationInvite, OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone, ProjectMilestoneStatus, Notification, NotificationBatchActionPayload, Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation, InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload, IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload, ProjectRelation, WorkflowState, Template
+from src.services.linear.database.schema import (
+    Issue, Attachment, User, Team, Organization, OrganizationInvite,
+    OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone,
+    ProjectMilestoneStatus, Notification, NotificationBatchActionPayload,
+    Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation,
+    InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload,
+    IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload,
+    ProjectRelation, WorkflowState, Template
+)
 from typing import Optional
 import base64
 import json

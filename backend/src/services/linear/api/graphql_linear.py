@@ -3,7 +3,16 @@ from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.evaluationEngine.core import CoreEvaluationEngine
 
 
-class GraphQLWithSession(GraphQL):
+class LinearGraphQL(GraphQL):
+    """
+    GraphQL handler for Linear service that uses isolated database sessions.
+
+    This class integrates with the platform's IsolationMiddleware which:
+    - Authenticates requests via API key
+    - Extracts environment_id from URL path
+    - Provides scoped database session for the environment
+    """
+
     def __init__(
         self,
         schema,
@@ -15,27 +24,47 @@ class GraphQLWithSession(GraphQL):
         self.coreEvaluationEngine = coreEvaluationEngine
 
     async def context_value(self, request):
-        path_parts = request.scope.get("path", "").split("/")
-        # expected: /api/env/{env_id}/services/linear/graphql
-        env_id = path_parts[3] if len(path_parts) > 3 else None
+        """
+        Extract context from request for GraphQL resolvers.
+
+        IsolationMiddleware has already set:
+        - request.state.db_session: Scoped to environment schema
+        - request.state.environment_id: UUID of the environment
+        - request.state.impersonate_user_id: User ID to impersonate (optional)
+        - request.state.impersonate_email: User email to impersonate (optional)
+        """
+        session = getattr(request.state, "db_session", None)
+        env_id = getattr(request.state, "environment_id", None)
+
+        if not session:
+            raise PermissionError(
+                "missing database session - ensure IsolationMiddleware is active"
+            )
+
         if not env_id:
-            raise PermissionError("missing environment identifier in path")
-        session = self.coreIsolationEngine.sessions.get_session_for_environment(env_id)
-        request.state.db_session = session
-        request.state.environment_id = env_id
-        return {"request": request, "session": session, "environment_id": env_id}
+            raise PermissionError("missing environment identifier")
+
+        return {
+            "request": request,
+            "session": session,
+            "environment_id": env_id,
+            "impersonate_user_id": getattr(request.state, "impersonate_user_id", None),
+            "impersonate_email": getattr(request.state, "impersonate_email", None),
+        }
 
     async def handle_request(self, request):
+        """
+        Handle GraphQL request with automatic commit/rollback.
+
+        Note: Session lifecycle is managed by IsolationMiddleware,
+        but we still commit/rollback based on GraphQL execution success.
+        """
         try:
             resp = await super().handle_request(request)
-            if request.state.db_session:
+            if hasattr(request.state, "db_session") and request.state.db_session:
                 request.state.db_session.commit()
             return resp
         except Exception:
-            if request.state.db_session:
+            if hasattr(request.state, "db_session") and request.state.db_session:
                 request.state.db_session.rollback()
             raise
-        finally:
-            if request.state.db_session:
-                request.state.db_session.close()
-                request.state.db_session = None
