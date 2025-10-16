@@ -1683,11 +1683,6 @@ class Initiative(Base):
         back_populates="initiative",
         foreign_keys="InitiativeUpdate.initiativeId",
     )
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
-    )
     links: Mapped[list["EntityExternalLink"]] = relationship(
         "EntityExternalLink", back_populates="initiative", foreign_keys="EntityExternalLink.initiativeId"
     )
