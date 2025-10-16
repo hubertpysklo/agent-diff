@@ -216,3 +216,24 @@ __marimo__/
 
 opencode.json
 .DS_Store
+
+# Optimization test files and temporary files
+backend/test_autoflush_demo.py
+backend/test_slack_without_flush.py
+backend/test_linear_resolvers_optimization.py
+backend/test_linear_simple.py
+backend/test_middleware_integration.py
+backend/test_autoflush_enabled.py
+backend/optimize_linear_resolvers.py
+
+# Optimization documentation
+backend/SLACK_FLUSH_OPTIMIZATION.md
+backend/LINEAR_RESOLVERS_OPTIMIZATION.md
+backend/RESOLVERS_AUDIT_REPORT.md
+backend/AUTOFLUSH_VERIFICATION.md
+
+# Backup files
+backend/src/services/linear/api/resolvers.py.backup
+
+# Temporary documentation
+backend/FILES_CREATED.md

@@ -190,7 +190,6 @@ async def chat_post_message(request: Request) -> JSONResponse:
         message_text=text,
         parent_id=thread_ts,
     )
-    session.flush()
 
     message_obj = {
         "type": "message",
@@ -249,7 +248,6 @@ async def chat_update(request: Request) -> JSONResponse:
 
     # Update the message
     message = ops.update_message(session=session, message_id=ts, text=text)
-    session.flush()
 
     return _json_response(
         {
@@ -297,7 +295,6 @@ async def chat_delete(request: Request) -> JSONResponse:
         _slack_error("cant_delete_message")
 
     ops.delete_message(session=session, message_id=ts)
-    session.flush()
     return _json_response({"ok": True, "channel": channel, "ts": ts})
 
 
@@ -329,7 +326,6 @@ async def conversations_create(request: Request) -> JSONResponse:
         ops.join_channel(
             session=session, channel_id=channel_obj.channel_id, user_id=actor_id
         )
-        session.flush()
 
         # Build response matching Slack API format
         created_timestamp = (
@@ -571,7 +567,6 @@ async def conversations_join(request: Request) -> JSONResponse:
     already_member = session.get(ChannelMember, (channel_id, actor)) is not None
     if not already_member:
         ops.join_channel(session=session, channel_id=channel_id, user_id=actor)
-        session.flush()
 
     # Build full channel response
     created_timestamp = int(ch.created_at.timestamp()) if ch.created_at else 0
@@ -697,8 +692,6 @@ async def conversations_invite(request: Request) -> JSONResponse:
             {"ok": False, "error": errors[0]["error"], "errors": errors},
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-
-    session.flush()
 
     # Build full channel response
     created_timestamp = int(ch.created_at.timestamp()) if ch.created_at else 0
@@ -827,8 +820,6 @@ async def conversations_open(request: Request) -> JSONResponse:
             session.rollback()
             _slack_error("channel_not_found")
 
-        session.flush()
-
         # Build response
         if return_im:
             created_timestamp = (
@@ -935,15 +926,12 @@ async def conversations_open(request: Request) -> JSONResponse:
         is_gc=True,
     )
     session.add(mpim_channel)
-    session.flush()
 
     # Add all members
     for uid in all_member_ids:
         ops.join_channel(
             session=session, channel_id=mpim_channel.channel_id, user_id=uid
         )
-
-    session.flush()
 
     # Build response
     if return_im:
@@ -1144,7 +1132,6 @@ async def conversations_archive(request: Request) -> JSONResponse:
 
     # Archive the channel
     ops.archive_channel(session=session, channel_id=channel_id)
-    session.flush()
 
     return _json_response({"ok": True})
 
@@ -1175,7 +1162,6 @@ async def conversations_unarchive(request: Request) -> JSONResponse:
 
     # Unarchive the channel
     ops.unarchive_channel(session=session, channel_id=channel_id)
-    session.flush()
 
     return _json_response({"ok": True})
 
@@ -1273,7 +1259,6 @@ async def conversations_set_topic(request: Request) -> JSONResponse:
 
     # Set the topic
     ops.set_channel_topic(session=session, channel_id=channel_id, topic=topic)
-    session.flush()
 
     return _json_response({"ok": True, "topic": topic})
 
@@ -1319,7 +1304,6 @@ async def conversations_kick(request: Request) -> JSONResponse:
         _slack_error("user_not_in_channel")
 
     ops.kick_user_from_channel(session=session, channel_id=channel_id, user_id=user_id)
-    session.flush()
     return _json_response({"ok": True, "errors": {}})
 
 
@@ -1353,7 +1337,6 @@ async def conversations_leave(request: Request) -> JSONResponse:
         return _json_response({"ok": False, "not_in_channel": True})
 
     ops.leave_channel(session=session, channel_id=ch_id, user_id=actor)
-    session.flush()
     return _json_response({"ok": True})
 
 
@@ -1467,7 +1450,6 @@ async def reactions_add(request: Request) -> JSONResponse:
         user_id=actor,
         reaction_type=name,
     )
-    session.flush()
     return _json_response({"ok": True})
 
 
@@ -1502,9 +1484,8 @@ async def reactions_remove(request: Request) -> JSONResponse:
     ops.remove_emoji_reaction(
         session=session,
         user_id=_principal_user_id(request),
-        reaction_id=found.reaction_id,
+        reaction_id=found.reaction_type,
     )
-    session.flush()
     return _json_response({"ok": True})
 
 

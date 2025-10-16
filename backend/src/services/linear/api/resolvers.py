@@ -1,7 +1,7 @@
 from ariadne import QueryType, MutationType
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, select
-from Linear.db_schema import Issue, Attachment, User, Team, Organization, OrganizationInvite, OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone, ProjectMilestoneStatus, Notification, NotificationBatchActionPayload, Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation, InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload, IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload, ProjectRelation, WorkflowState, Template
+from src.services.linear.database.schema import Issue, Attachment, User, Team, Organization, OrganizationInvite, OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone, ProjectMilestoneStatus, Notification, NotificationBatchActionPayload, Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation, InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload, IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload, ProjectRelation, WorkflowState, Template
 from typing import Optional
 import base64
 import json
@@ -2635,14 +2635,12 @@ def resolve_organizationInviteCreate(obj, info, **kwargs):
         session.add(organization_invite)
 
         # Commit the transaction
-        session.commit()
 
         # Return the organization invite entity
         # Ariadne will handle converting this to OrganizationInvitePayload
         return organization_invite
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create organization invite: {str(e)}")
 
 
@@ -2695,13 +2693,11 @@ def resolve_organizationInviteUpdate(obj, info, **kwargs):
         org_invite.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Return the updated organization invite entity
         return org_invite
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update organization invite: {str(e)}")
 
 
@@ -2733,7 +2729,6 @@ def resolve_organizationInviteDelete(obj, info, **kwargs):
         org_invite.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -2743,7 +2738,6 @@ def resolve_organizationInviteDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete organization invite: {str(e)}")
 
 
@@ -5510,17 +5504,13 @@ def resolve_initiativeToProjectCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(initiative_to_project)
-        session.commit()
-        session.refresh(initiative_to_project)
 
         # Return the created entity (Ariadne will handle wrapping in InitiativeToProjectPayload)
         return initiative_to_project
 
     except KeyError as e:
-        session.rollback()
         raise Exception(f"Missing required field: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create initiativeToProject: {str(e)}")
 
 
@@ -5561,14 +5551,11 @@ def resolve_initiativeToProjectUpdate(obj, info, **kwargs):
         entity.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
-        session.refresh(entity)
 
         # Return the updated entity (Ariadne will handle wrapping in InitiativeToProjectPayload)
         return entity
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update initiativeToProject: {str(e)}")
 
 
@@ -5604,7 +5591,6 @@ def resolve_initiativeToProjectDelete(obj, info, **kwargs):
         entity.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -5614,7 +5600,6 @@ def resolve_initiativeToProjectDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete initiativeToProject: {str(e)}")
 
 
@@ -5811,14 +5796,11 @@ def resolve_commentCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(comment)
-        session.commit()
-        session.refresh(comment)
 
         # Return the created comment (Ariadne will handle wrapping in CommentPayload)
         return comment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create comment: {str(e)}")
 
 
@@ -5860,14 +5842,11 @@ def resolve_commentResolve(obj, info, **kwargs):
                 comment.resolvingUserId = resolving_comment.userId
 
         # Commit the changes
-        session.commit()
-        session.refresh(comment)
 
         # Return the resolved comment
         return comment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to resolve comment: {str(e)}")
 
 
@@ -5902,14 +5881,11 @@ def resolve_commentUnresolve(obj, info, **kwargs):
         comment.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
-        session.refresh(comment)
 
         # Return the unresolved comment
         return comment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unresolve comment: {str(e)}")
 
 
@@ -5973,14 +5949,11 @@ def resolve_commentUpdate(obj, info, **kwargs):
         comment.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
-        session.refresh(comment)
 
         # Return the updated comment
         return comment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update comment: {str(e)}")
 
 
@@ -6013,7 +5986,6 @@ def resolve_commentDelete(obj, info, **kwargs):
         comment.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -6023,7 +5995,6 @@ def resolve_commentDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete comment: {str(e)}")
 
 
@@ -6140,14 +6111,12 @@ def resolve_attachmentCreate(obj, info, **kwargs):
             session.add(comment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment entity
         # Ariadne will handle converting this to AttachmentPayload
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create attachment: {str(e)}")
 
 
@@ -6180,7 +6149,6 @@ def resolve_attachmentDelete(obj, info, **kwargs):
         attachment.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -6190,7 +6158,6 @@ def resolve_attachmentDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete attachment: {str(e)}")
 
 
@@ -6310,13 +6277,11 @@ def resolve_attachmentLinkDiscord(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment entity
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link Discord attachment: {str(e)}")
 
 
@@ -6441,13 +6406,11 @@ def resolve_attachmentLinkFront(obj, info, **kwargs):
         session.add(payload)
 
         # Commit the transaction
-        session.commit()
 
         # Return the payload with the attachment relationship loaded
         return payload
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link Front attachment: {str(e)}")
 
 
@@ -6555,7 +6518,6 @@ def resolve_attachmentLinkGitHubIssue(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         # Note: The AttachmentPayload type wraps the attachment,
@@ -6564,7 +6526,6 @@ def resolve_attachmentLinkGitHubIssue(obj, info, **kwargs):
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link GitHub issue attachment: {str(e)}")
 
 
@@ -6689,7 +6650,6 @@ def resolve_attachmentLinkGitHubPR(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         # Note: The AttachmentPayload type wraps the attachment,
@@ -6698,7 +6658,6 @@ def resolve_attachmentLinkGitHubPR(obj, info, **kwargs):
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link GitHub PR attachment: {str(e)}")
 
 
@@ -6824,7 +6783,6 @@ def resolve_attachmentLinkGitLabMR(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         # Note: The AttachmentPayload type wraps the attachment,
@@ -6833,7 +6791,6 @@ def resolve_attachmentLinkGitLabMR(obj, info, **kwargs):
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link GitLab MR attachment: {str(e)}")
 
 
@@ -6958,7 +6915,6 @@ def resolve_attachmentLinkIntercom(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         # Note: The AttachmentPayload type wraps the attachment,
@@ -6967,7 +6923,6 @@ def resolve_attachmentLinkIntercom(obj, info, **kwargs):
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link Intercom attachment: {str(e)}")
 
 
@@ -7094,7 +7049,6 @@ def resolve_attachmentLinkJiraIssue(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         # Note: The AttachmentPayload type wraps the attachment,
@@ -7103,7 +7057,6 @@ def resolve_attachmentLinkJiraIssue(obj, info, **kwargs):
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link Jira issue attachment: {str(e)}")
 
 
@@ -7221,13 +7174,11 @@ def resolve_attachmentLinkSalesforce(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment entity
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link Salesforce attachment: {str(e)}")
 
 
@@ -7360,13 +7311,11 @@ def resolve_attachmentLinkSlack(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment entity
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link Slack attachment: {str(e)}")
 
 
@@ -7476,13 +7425,11 @@ def resolve_attachmentLinkURL(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment entity
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link URL attachment: {str(e)}")
 
 
@@ -7609,7 +7556,6 @@ def resolve_attachmentLinkZendesk(obj, info, **kwargs):
             session.add(attachment)
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         # Note: The AttachmentPayload type wraps the attachment,
@@ -7618,7 +7564,6 @@ def resolve_attachmentLinkZendesk(obj, info, **kwargs):
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to link Zendesk ticket attachment: {str(e)}")
 
 
@@ -7666,13 +7611,11 @@ def resolve_attachmentSyncToSlack(obj, info, **kwargs):
         attachment.updatedAt = datetime.utcnow()
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to sync Slack attachment to thread: {str(e)}")
 
 
@@ -7733,13 +7676,11 @@ def resolve_attachmentUpdate(obj, info, **kwargs):
         attachment.updatedAt = datetime.utcnow()
 
         # Commit the transaction
-        session.commit()
 
         # Return the attachment directly
         return attachment
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update attachment: {str(e)}")
 
 
@@ -7824,13 +7765,11 @@ def resolve_cycleCreate(obj, info, **kwargs):
 
         # Add and commit
         session.add(new_cycle)
-        session.commit()
 
         # Return CyclePayload structure
         return new_cycle
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create cycle: {str(e)}")
 
 
@@ -7863,7 +7802,6 @@ def resolve_cycleArchive(obj, info, **kwargs):
         cycle.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return CycleArchivePayload structure
         return {
@@ -7873,7 +7811,6 @@ def resolve_cycleArchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to archive cycle: {str(e)}")
 
 
@@ -7927,13 +7864,11 @@ def resolve_cycleShiftAll(obj, info, **kwargs):
             cycle.updatedAt = now
 
         # Commit the changes
-        session.commit()
 
         # Return the starting cycle as the result
         return starting_cycle
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to shift cycles: {str(e)}")
 
 
@@ -7989,13 +7924,11 @@ def resolve_cycleStartUpcomingCycleToday(obj, info, **kwargs):
             cycle.updatedAt = now
 
         # Commit the changes
-        session.commit()
 
         # Return the upcoming cycle as the result
         return upcoming_cycle
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to start upcoming cycle today: {str(e)}")
 
 
@@ -8053,13 +7986,11 @@ def resolve_cycleUpdate(obj, info, **kwargs):
         cycle.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the updated cycle
         return cycle
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update cycle: {str(e)}")
 
 
@@ -8139,14 +8070,11 @@ def resolve_documentCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(document)
-        session.commit()
-        session.refresh(document)
 
         # Return the created document
         return document
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create document: {str(e)}")
 
 
@@ -8226,14 +8154,11 @@ def resolve_documentUpdate(obj, info, **kwargs):
         document.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
-        session.refresh(document)
 
         # Return the updated document
         return document
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update document: {str(e)}")
 
 
@@ -8266,7 +8191,6 @@ def resolve_documentDelete(obj, info, **kwargs):
         document.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DocumentArchivePayload structure
         return {
@@ -8276,7 +8200,6 @@ def resolve_documentDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete document: {str(e)}")
 
 
@@ -8309,7 +8232,6 @@ def resolve_documentUnarchive(obj, info, **kwargs):
         document.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DocumentArchivePayload structure
         return {
@@ -8319,7 +8241,6 @@ def resolve_documentUnarchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unarchive document: {str(e)}")
 
 
@@ -8377,7 +8298,6 @@ def resolve_initiativeCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(initiative)
-        session.commit()
 
         # Return InitiativePayload structure
         return {
@@ -8387,7 +8307,6 @@ def resolve_initiativeCreate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create initiative: {str(e)}")
 
 
@@ -8454,7 +8373,6 @@ def resolve_initiativeUpdate(obj, info, **kwargs):
         initiative.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return InitiativePayload structure
         return {
@@ -8464,7 +8382,6 @@ def resolve_initiativeUpdate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update initiative: {str(e)}")
 
 
@@ -8497,7 +8414,6 @@ def resolve_initiativeArchive(obj, info, **kwargs):
         initiative.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return InitiativeArchivePayload structure
         return {
@@ -8507,7 +8423,6 @@ def resolve_initiativeArchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to archive initiative: {str(e)}")
 
 
@@ -8540,7 +8455,6 @@ def resolve_initiativeUnarchive(obj, info, **kwargs):
         initiative.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return InitiativeArchivePayload structure
         return {
@@ -8550,7 +8464,6 @@ def resolve_initiativeUnarchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unarchive initiative: {str(e)}")
 
 
@@ -8584,7 +8497,6 @@ def resolve_initiativeDelete(obj, info, **kwargs):
         initiative.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -8594,7 +8506,6 @@ def resolve_initiativeDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete initiative: {str(e)}")
 
 
@@ -8659,7 +8570,6 @@ def resolve_initiativeRelationCreate(obj, info, **kwargs):
         )
 
         session.add(initiative_relation)
-        session.commit()
 
         # Return InitiativeRelationPayload structure
         return {
@@ -8669,7 +8579,6 @@ def resolve_initiativeRelationCreate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create initiative relation: {str(e)}")
 
 
@@ -8702,7 +8611,6 @@ def resolve_initiativeRelationDelete(obj, info, **kwargs):
         initiative_relation.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -8712,7 +8620,6 @@ def resolve_initiativeRelationDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete initiative relation: {str(e)}")
 
 
@@ -8755,7 +8662,6 @@ def resolve_initiativeRelationUpdate(obj, info, **kwargs):
         initiative_relation.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DeletePayload structure (as specified in the mutation signature)
         return {
@@ -8765,7 +8671,6 @@ def resolve_initiativeRelationUpdate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update initiative relation: {str(e)}")
 
 
@@ -8822,13 +8727,11 @@ def resolve_issueAddLabel(obj, info, **kwargs):
         issue.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the updated issue
         return issue
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to add label to issue: {str(e)}")
 
 
@@ -8885,13 +8788,11 @@ def resolve_issueRemoveLabel(obj, info, **kwargs):
         issue.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the updated issue
         return issue
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to remove label from issue: {str(e)}")
 
 
@@ -8940,7 +8841,6 @@ def resolve_issueArchive(obj, info, **kwargs):
         #     }
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -8950,7 +8850,6 @@ def resolve_issueArchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to archive issue: {str(e)}")
 
 
@@ -8983,7 +8882,6 @@ def resolve_issueUnarchive(obj, info, **kwargs):
         issue.archivedAt = None
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -8993,7 +8891,6 @@ def resolve_issueUnarchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unarchive issue: {str(e)}")
 
 
@@ -9051,7 +8948,6 @@ def resolve_issueUnsubscribe(obj, info, **kwargs):
             issue.subscribers.remove(user)
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -9061,7 +8957,6 @@ def resolve_issueUnsubscribe(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unsubscribe from issue: {str(e)}")
 
 
@@ -9096,7 +8991,6 @@ def resolve_issueDelete(obj, info, **kwargs):
         if permanently_delete:
             # Hard delete: permanently remove from database
             session.delete(issue)
-            session.commit()
 
             # Return success with null entity (as per spec: "Null if entity was deleted")
             return {
@@ -9114,7 +9008,6 @@ def resolve_issueDelete(obj, info, **kwargs):
                 issue.trashed = True
 
             # Commit the changes
-            session.commit()
 
             # Return the payload with the trashed entity
             return {
@@ -9124,7 +9017,6 @@ def resolve_issueDelete(obj, info, **kwargs):
             }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete issue: {str(e)}")
 
 
@@ -9273,10 +9165,8 @@ def resolve_issueUpdate(obj, info, **kwargs):
         issue.updatedAt = now
 
         # Commit the transaction
-        session.commit()
 
         # Refresh the issue to get any database-generated values
-        session.refresh(issue)
 
         # Return the payload
         return {
@@ -9286,10 +9176,8 @@ def resolve_issueUpdate(obj, info, **kwargs):
         }
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for issue update: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update issue: {str(e)}")
 
 
@@ -9411,10 +9299,8 @@ def resolve_issueCreate(obj, info, **kwargs):
         session.add(issue)
 
         # Commit the transaction
-        session.commit()
 
         # Refresh to get any database-generated values
-        session.refresh(issue)
 
         # Return the payload
         return {
@@ -9424,13 +9310,10 @@ def resolve_issueCreate(obj, info, **kwargs):
         }
 
     except KeyError as e:
-        session.rollback()
         raise Exception(f"Missing required field in issue create: {str(e)}")
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid value in issue create: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create issue: {str(e)}")
 
 
@@ -9562,13 +9445,6 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
             session.add(issue)
             created_issues.append(issue)
 
-        # Commit all issues in one transaction
-        session.commit()
-
-        # Refresh all created issues to get database-generated values
-        for issue in created_issues:
-            session.refresh(issue)
-
         # Return the payload
         return {
             'issues': created_issues,
@@ -9577,13 +9453,10 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
         }
 
     except KeyError as e:
-        session.rollback()
         raise Exception(f"Missing required field in issue batch create: {str(e)}")
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid value in issue batch create: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create issue batch: {str(e)}")
 
 
@@ -9743,13 +9616,6 @@ def resolve_issueBatchUpdate(obj, info, **kwargs):
             # Always update the updatedAt timestamp
             issue.updatedAt = now
 
-        # Commit all updates in one transaction
-        session.commit()
-
-        # Refresh all updated issues
-        for issue in issues:
-            session.refresh(issue)
-
         # Return the payload
         return {
             'issues': issues,
@@ -9758,10 +9624,8 @@ def resolve_issueBatchUpdate(obj, info, **kwargs):
         }
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for issue batch update: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update issue batch: {str(e)}")
 
 
@@ -9810,10 +9674,8 @@ def resolve_issueDescriptionUpdateFromFront(obj, info, **kwargs):
         issue.updatedAt = now
 
         # Commit the transaction
-        session.commit()
 
         # Refresh the issue to get updated state
-        session.refresh(issue)
 
         # Return the payload
         return {
@@ -9823,10 +9685,8 @@ def resolve_issueDescriptionUpdateFromFront(obj, info, **kwargs):
         }
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for issue description update: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update issue description: {str(e)}")
 
 
@@ -9876,19 +9736,15 @@ def resolve_issueExternalSyncDisable(obj, info, **kwargs):
         issue.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Refresh the issue to get updated state
-        session.refresh(issue)
 
         # Return the issue
         return issue
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for disabling external sync: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to disable external sync: {str(e)}")
 
 
@@ -9964,18 +9820,14 @@ def resolve_issueImportCreateAsana(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_import)
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue_import)
 
         return issue_import
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for Asana import: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create Asana import job: {str(e)}")
 
 
@@ -10047,18 +9899,14 @@ def resolve_issueImportCreateClubhouse(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_import)
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue_import)
 
         return issue_import
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for Clubhouse import: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create Clubhouse import job: {str(e)}")
 
 
@@ -10138,18 +9986,14 @@ def resolve_issueImportCreateCSVJira(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_import)
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue_import)
 
         return issue_import
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for Jira CSV import: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create Jira CSV import job: {str(e)}")
 
 
@@ -10226,18 +10070,14 @@ def resolve_issueImportCreateGithub(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_import)
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue_import)
 
         return issue_import
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for GitHub import: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create GitHub import job: {str(e)}")
 
 
@@ -10323,18 +10163,14 @@ def resolve_issueImportCreateJira(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_import)
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue_import)
 
         return issue_import
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for Jira import: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create Jira import job: {str(e)}")
 
 
@@ -10388,18 +10224,14 @@ def resolve_issueImportCreateLinearV2(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_import)
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue_import)
 
         return issue_import
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for Linear V2 import: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create Linear V2 import job: {str(e)}")
 
 
@@ -10444,18 +10276,14 @@ def resolve_issueImportProcess(obj, info, **kwargs):
         issue_import.progress = 0.0
 
         # Commit the changes
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue_import)
 
         return issue_import
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for issue import process: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to process issue import: {str(e)}")
 
 
@@ -10494,10 +10322,8 @@ def resolve_issueReminder(obj, info, **kwargs):
         issue.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue)
 
         # Return the payload
         return {
@@ -10507,7 +10333,6 @@ def resolve_issueReminder(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to add issue reminder: {str(e)}")
 
 
@@ -10572,16 +10397,13 @@ def resolve_issueSubscribe(obj, info, **kwargs):
         issue.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Refresh to get the latest state
-        session.refresh(issue)
 
         # Return the updated issue
         return issue
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to subscribe user to issue: {str(e)}")
 
 
@@ -10662,8 +10484,6 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_label)
-        session.commit()
-        session.refresh(issue_label)
 
         # Handle replaceTeamLabels if requested
         # This would replace all team-specific labels with the same name
@@ -10688,14 +10508,10 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
                 # Archive the old team-specific label
                 team_label.archivedAt = now
 
-            session.commit()
-            session.refresh(issue_label)
-
         # Return the created label
         return issue_label
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create issue label: {str(e)}")
 
 
@@ -10757,8 +10573,6 @@ def resolve_issueLabelUpdate(obj, info, **kwargs):
         issue_label.updatedAt = now
 
         # Commit the update
-        session.commit()
-        session.refresh(issue_label)
 
         # Handle replaceTeamLabels if requested
         # This replaces all team-specific labels with the same name with this updated workspace label
@@ -10784,14 +10598,10 @@ def resolve_issueLabelUpdate(obj, info, **kwargs):
                 team_label.archivedAt = now
                 team_label.updatedAt = now
 
-            session.commit()
-            session.refresh(issue_label)
-
         # Return the updated label
         return issue_label
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update issue label: {str(e)}")
 
 
@@ -10828,7 +10638,6 @@ def resolve_issueLabelDelete(obj, info, **kwargs):
         issue_label.updatedAt = now
 
         # Commit the transaction
-        session.commit()
 
         # Return DeletePayload
         return {
@@ -10838,7 +10647,6 @@ def resolve_issueLabelDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete issue label: {str(e)}")
 
 
@@ -10888,17 +10696,13 @@ def resolve_issueRelationCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(issue_relation)
-        session.commit()
-        session.refresh(issue_relation)
 
         # Return the created entity (Ariadne will handle wrapping in IssueRelationPayload)
         return issue_relation
 
     except KeyError as e:
-        session.rollback()
         raise Exception(f"Missing required field: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create issue relation: {str(e)}")
 
 
@@ -10944,14 +10748,11 @@ def resolve_issueRelationUpdate(obj, info, **kwargs):
         issue_relation.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
-        session.refresh(issue_relation)
 
         # Return the updated entity (Ariadne will handle wrapping in IssueRelationPayload)
         return issue_relation
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update issue relation: {str(e)}")
 
 
@@ -10994,8 +10795,6 @@ def resolve_issueRelationDelete(obj, info, **kwargs):
         issue_relation.archivedAt = datetime.now(timezone.utc)
         issue_relation.updatedAt = datetime.now(timezone.utc)
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True,
@@ -11004,7 +10803,6 @@ def resolve_issueRelationDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete issue relation: {str(e)}")
 
 
@@ -11039,15 +10837,12 @@ def resolve_userPromoteAdmin(obj, info, **kwargs):
         # Promote the user by setting admin to True
         user.admin = True
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to promote user to admin: {str(e)}")
 
 
@@ -11082,15 +10877,12 @@ def resolve_userDemoteAdmin(obj, info, **kwargs):
         # Demote the user by setting admin to False
         user.admin = False
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to demote user admin: {str(e)}")
 
 
@@ -11125,15 +10917,12 @@ def resolve_userDemoteMember(obj, info, **kwargs):
         # Demote the user to guest by setting guest to True
         user.guest = True
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to demote user to member/guest: {str(e)}")
 
 
@@ -11168,15 +10957,12 @@ def resolve_userPromoteMember(obj, info, **kwargs):
         # Promote the user from guest to regular member by setting guest to False
         user.guest = False
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to promote user to member: {str(e)}")
 
 
@@ -11211,15 +10997,12 @@ def resolve_userSuspend(obj, info, **kwargs):
         # Suspend the user by setting active to False
         user.active = False
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to suspend user: {str(e)}")
 
 
@@ -11254,15 +11037,12 @@ def resolve_userUnsuspend(obj, info, **kwargs):
         # Unsuspend the user by setting active to True
         user.active = True
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unsuspend user: {str(e)}")
 
 
@@ -11303,15 +11083,12 @@ def resolve_userUnlinkFromIdentityProvider(obj, info, **kwargs):
         user.gitHubUserId = None
         user.discordUserId = None
 
-        session.commit()
-
         # Return success payload
         return {
             'success': True
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unlink user from identity provider: {str(e)}")
 
 
@@ -11376,8 +11153,6 @@ def resolve_userDiscordConnect(obj, info, **kwargs):
         # Connect the Discord account to the user
         user.discordUserId = discord_user_id
 
-        session.commit()
-
         # Return the updated user in a UserPayload format
         return {
             'success': True,
@@ -11385,7 +11160,6 @@ def resolve_userDiscordConnect(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to connect Discord account: {str(e)}")
 
 
@@ -11437,8 +11211,6 @@ def resolve_userExternalUserDisconnect(obj, info, **kwargs):
         else:
             raise Exception(f"Unknown external service: {service}. Supported services: github, discord")
 
-        session.commit()
-
         # Return the updated user in a UserPayload format
         return {
             'success': True,
@@ -11446,7 +11218,6 @@ def resolve_userExternalUserDisconnect(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to disconnect external account: {str(e)}")
 
 
@@ -11524,8 +11295,6 @@ def resolve_userFlagUpdate(obj, info, **kwargs):
         user_flag.lastSyncId = new_sync_id
         user_flag.updatedAt = datetime.utcnow()
 
-        session.commit()
-
         # Return the payload
         return {
             'success': True,
@@ -11535,7 +11304,6 @@ def resolve_userFlagUpdate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update user flag: {str(e)}")
 
 
@@ -11606,7 +11374,6 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
                 user_flag.updatedAt = datetime.utcnow()
 
         # Commit the transaction
-        session.commit()
 
         # Create and return the payload
         payload = UserSettingsFlagsResetPayload(
@@ -11615,7 +11382,6 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
             success=True
         )
         session.add(payload)
-        session.commit()
 
         return {
             'success': True,
@@ -11623,7 +11389,6 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to reset user flags: {str(e)}")
 
 
@@ -11698,13 +11463,11 @@ def resolve_userSettingsUpdate(obj, info, **kwargs):
         user_settings.updatedAt = datetime.utcnow()
 
         # Commit the transaction
-        session.commit()
 
         # Return the updated user settings
         return user_settings
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update user settings: {str(e)}")
 
 
@@ -11777,10 +11540,8 @@ def resolve_userUpdate(obj, info, **kwargs):
         user.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Refresh the user to get any database-generated values
-        session.refresh(user)
 
         # Return the UserPayload
         return {
@@ -11789,10 +11550,8 @@ def resolve_userUpdate(obj, info, **kwargs):
         }
 
     except ValueError as e:
-        session.rollback()
         raise Exception(f"Invalid input for user update: {str(e)}")
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update user: {str(e)}")
 
 
@@ -11827,7 +11586,6 @@ def resolve_notificationArchive(obj, info, **kwargs):
             notification.archivedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -11837,7 +11595,6 @@ def resolve_notificationArchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to archive notification: {str(e)}")
 
 
@@ -11871,7 +11628,6 @@ def resolve_notificationUnarchive(obj, info, **kwargs):
         notification.archivedAt = None
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -11881,7 +11637,6 @@ def resolve_notificationUnarchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unarchive notification: {str(e)}")
 
 
@@ -11933,7 +11688,6 @@ def resolve_notificationUpdate(obj, info, **kwargs):
         notification.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -11943,7 +11697,6 @@ def resolve_notificationUpdate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update notification: {str(e)}")
 
 
@@ -12014,7 +11767,6 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
                 notification.archivedAt = now
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -12024,7 +11776,6 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to archive notifications: {str(e)}")
 
 
@@ -12096,7 +11847,6 @@ def resolve_notificationCategoryChannelSubscriptionUpdate(obj, info, category, c
         user_settings.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -12106,7 +11856,6 @@ def resolve_notificationCategoryChannelSubscriptionUpdate(obj, info, category, c
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update notification subscription: {str(e)}")
 
 
@@ -12198,7 +11947,6 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
                 notification.batchActionPayloadId = batch_payload.id
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -12208,7 +11956,6 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to mark notifications as read: {str(e)}")
 
 
@@ -12288,7 +12035,6 @@ def resolve_notificationMarkUnreadAll(obj, info, **kwargs):
             notification.batchActionPayloadId = batch_payload.id
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -12298,7 +12044,6 @@ def resolve_notificationMarkUnreadAll(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to mark notifications as unread: {str(e)}")
 
 
@@ -12387,7 +12132,6 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
             notification.batchActionPayloadId = batch_payload.id
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -12397,7 +12141,6 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to snooze notifications: {str(e)}")
 
 
@@ -12488,7 +12231,6 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
             notification.batchActionPayloadId = batch_payload.id
 
         # Commit the changes
-        session.commit()
 
         # Return the payload
         return {
@@ -12498,7 +12240,6 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unsnooze notifications: {str(e)}")
 
 
@@ -12529,7 +12270,6 @@ def resolve_organizationCancelDelete(obj, info, **kwargs):
         organization.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return success payload
         return {
@@ -12537,7 +12277,6 @@ def resolve_organizationCancelDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to cancel organization deletion: {str(e)}")
 
 
@@ -12586,7 +12325,6 @@ def resolve_organizationDeleteChallenge(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to generate organization delete challenge: {str(e)}")
 
 
@@ -12648,7 +12386,6 @@ def resolve_organizationDelete(obj, info, **kwargs):
         organization.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return success payload
         return {
@@ -12656,7 +12393,6 @@ def resolve_organizationDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete organization: {str(e)}")
 
 
@@ -12696,7 +12432,6 @@ def resolve_organizationDomainClaim(obj, info, **kwargs):
         organization_domain.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return success payload
         return {
@@ -12704,7 +12439,6 @@ def resolve_organizationDomainClaim(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to claim organization domain: {str(e)}")
 
 
@@ -12763,13 +12497,11 @@ def resolve_organizationDomainVerify(obj, info, **kwargs):
         organization_domain.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the verified domain
         return organization_domain
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to verify organization domain: {str(e)}")
 
 
@@ -12812,7 +12544,6 @@ def resolve_organizationStartTrial(obj, info, **kwargs):
         organization.updatedAt = now
 
         # Commit the changes
-        session.commit()
 
         # Return success payload
         return {
@@ -12820,7 +12551,6 @@ def resolve_organizationStartTrial(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to start organization trial: {str(e)}")
 
 @mutation.field("organizationStartTrialForPlan")
@@ -12881,7 +12611,6 @@ def resolve_organizationStartTrialForPlan(obj, info, **kwargs):
         organization.updatedAt = now
 
         # Commit the changes
-        session.commit()
 
         # Return success payload
         return {
@@ -12889,7 +12618,6 @@ def resolve_organizationStartTrialForPlan(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to start organization trial for plan: {str(e)}")
 
 
@@ -13036,13 +12764,11 @@ def resolve_organizationUpdate(obj, info, **kwargs):
         organization.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the updated organization
         return organization
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update organization: {str(e)}")
 
 
@@ -13182,13 +12908,11 @@ def resolve_projectCreate(obj, info, **kwargs):
             project.labels = labels
 
         # Commit the transaction
-        session.commit()
 
         # Return the created project
         return project
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create project: {str(e)}")
 
 
@@ -13242,13 +12966,11 @@ def resolve_projectAddLabel(obj, info, **kwargs):
         project.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the updated project
         return project
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to add label to project: {str(e)}")
 
 
@@ -13302,13 +13024,11 @@ def resolve_projectRemoveLabel(obj, info, **kwargs):
         project.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the updated project
         return project
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to remove label from project: {str(e)}")
 
 
@@ -13350,7 +13070,6 @@ def resolve_projectArchive(obj, info, **kwargs):
         project.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -13363,7 +13082,6 @@ def resolve_projectArchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to archive project: {str(e)}")
 
 
@@ -13399,7 +13117,6 @@ def resolve_projectUnarchive(obj, info, **kwargs):
         project.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -13412,7 +13129,6 @@ def resolve_projectUnarchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unarchive project: {str(e)}")
 
 
@@ -13449,7 +13165,6 @@ def resolve_projectDelete(obj, info, **kwargs):
             project.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -13462,7 +13177,6 @@ def resolve_projectDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete project: {str(e)}")
 
 
@@ -13511,7 +13225,6 @@ def resolve_projectReassignStatus(obj, info, **kwargs):
                 project.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -13523,7 +13236,6 @@ def resolve_projectReassignStatus(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to reassign project status: {str(e)}")
 
 
@@ -13635,7 +13347,6 @@ def resolve_projectUpdate(obj, info, **kwargs):
         project.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return the updated project (wrapped in payload structure)
         return {
@@ -13644,7 +13355,6 @@ def resolve_projectUpdate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update project: {str(e)}")
 
 
@@ -13712,14 +13422,11 @@ def resolve_projectLabelCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(project_label)
-        session.commit()
-        session.refresh(project_label)
 
         # Return the created project label
         return project_label
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create project label: {str(e)}")
 
 
@@ -13756,7 +13463,6 @@ def resolve_projectLabelDelete(obj, info, **kwargs):
         project_label.updatedAt = now
 
         # Commit the changes
-        session.commit()
 
         # Get the last sync ID (assuming we track this somewhere or use a timestamp)
         # For now, using the current timestamp as a float
@@ -13770,7 +13476,6 @@ def resolve_projectLabelDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete project label: {str(e)}")
 
 
@@ -13825,14 +13530,11 @@ def resolve_projectLabelUpdate(obj, info, **kwargs):
         project_label.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
-        session.refresh(project_label)
 
         # Return the updated project label
         return project_label
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update project label: {str(e)}")
 
 
@@ -13894,14 +13596,11 @@ def resolve_projectMilestoneCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(project_milestone)
-        session.commit()
-        session.refresh(project_milestone)
 
         # Return the created milestone
         return project_milestone
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create project milestone: {str(e)}")
 
 
@@ -13960,14 +13659,11 @@ def resolve_projectMilestoneUpdate(obj, info, **kwargs):
         milestone.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
-        session.refresh(milestone)
 
         # Return the updated milestone
         return milestone
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update project milestone: {str(e)}")
 
 
@@ -14004,7 +13700,6 @@ def resolve_projectMilestoneDelete(obj, info, **kwargs):
         milestone.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -14017,7 +13712,6 @@ def resolve_projectMilestoneDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete project milestone: {str(e)}")
 
 
@@ -14151,8 +13845,6 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
         milestone.updatedAt = datetime.now(timezone.utc)
 
         # Commit all changes
-        session.commit()
-        session.refresh(milestone)
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -14167,7 +13859,6 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to move project milestone: {str(e)}")
 
 
@@ -14232,13 +13923,10 @@ def resolve_projectRelationCreate(obj, info, **kwargs):
 
         # Add to session and commit
         session.add(project_relation)
-        session.commit()
-        session.refresh(project_relation)
 
         return project_relation
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create project relation: {str(e)}")
 
 
@@ -14275,7 +13963,6 @@ def resolve_projectRelationDelete(obj, info, **kwargs):
         project_relation.updatedAt = current_time
 
         # Commit the transaction
-        session.commit()
 
         # Return DeletePayload
         return {
@@ -14285,7 +13972,6 @@ def resolve_projectRelationDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete project relation: {str(e)}")
 
 
@@ -14348,13 +14034,11 @@ def resolve_projectRelationUpdate(obj, info, **kwargs):
         project_relation.updatedAt = current_time
 
         # Commit the transaction
-        session.commit()
 
         # Return the updated project relation
         return project_relation
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update project relation: {str(e)}")
 
 
@@ -14419,7 +14103,6 @@ def resolve_projectStatusCreate(obj, info, **kwargs):
         session.add(project_status)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = now.timestamp()
@@ -14432,7 +14115,6 @@ def resolve_projectStatusCreate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create project status: {str(e)}")
 
 
@@ -14468,7 +14150,6 @@ def resolve_projectStatusArchive(obj, info, **kwargs):
         project_status.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -14481,7 +14162,6 @@ def resolve_projectStatusArchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to archive project status: {str(e)}")
 
 
@@ -14517,7 +14197,6 @@ def resolve_projectStatusUnarchive(obj, info, **kwargs):
         project_status.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -14530,7 +14209,6 @@ def resolve_projectStatusUnarchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unarchive project status: {str(e)}")
 
 
@@ -14593,7 +14271,6 @@ def resolve_projectStatusUpdate(obj, info, **kwargs):
         project_status.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -14606,7 +14283,6 @@ def resolve_projectStatusUpdate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update project status: {str(e)}")
 
 
@@ -14806,13 +14482,11 @@ def resolve_teamCreate(obj, info, **kwargs):
         #     session.add(membership)
 
         # Commit the transaction
-        session.commit()
 
         # Return the team entity (TeamPayload structure expects just the entity)
         return new_team
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create team: {str(e)}")
 
 
@@ -15044,13 +14718,11 @@ def resolve_teamUpdate(obj, info, **kwargs):
         team.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Return the updated team entity
         return team
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update team: {str(e)}")
 
 
@@ -15089,13 +14761,11 @@ def resolve_teamCyclesDelete(obj, info, id: str):
         team.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Return the team entity
         return team
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete team cycles: {str(e)}")
 
 
@@ -15124,7 +14794,6 @@ def resolve_teamDelete(obj, info, id: str):
         team.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -15134,7 +14803,6 @@ def resolve_teamDelete(obj, info, id: str):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete team: {str(e)}")
 
 @mutation.field("teamUnarchive")
@@ -15162,7 +14830,6 @@ def resolve_teamUnarchive(obj, info, id: str):
         team.updatedAt = datetime.now(timezone.utc)
 
         # Commit the changes
-        session.commit()
 
         # Return TeamArchivePayload structure
         return {
@@ -15172,7 +14839,6 @@ def resolve_teamUnarchive(obj, info, id: str):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to unarchive team: {str(e)}")
 
 @mutation.field("teamKeyDelete")
@@ -15212,7 +14878,6 @@ def resolve_teamKeyDelete(obj, info, id: str):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete team key: {str(e)}")
 
 
@@ -15268,14 +14933,12 @@ def resolve_teamMembershipCreate(obj, info, **kwargs):
         session.add(team_membership)
 
         # Commit the transaction
-        session.commit()
 
         # Return the team membership entity
         # Ariadne will handle converting this to TeamMembershipPayload
         return team_membership
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create team membership: {str(e)}")
 
 
@@ -15328,7 +14991,6 @@ def resolve_teamMembershipDelete(obj, info, **kwargs):
         team_membership.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Return DeletePayload structure
         return {
@@ -15338,7 +15000,6 @@ def resolve_teamMembershipDelete(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to delete team membership: {str(e)}")
 
 
@@ -15383,12 +15044,10 @@ def resolve_teamMembershipUpdate(obj, info, **kwargs):
         team_membership.updatedAt = datetime.now(timezone.utc)
 
         # Commit the transaction
-        session.commit()
 
         # Return the updated team membership entity
         # Ariadne will handle converting this to TeamMembershipPayload
         return team_membership
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update team membership: {str(e)}")
