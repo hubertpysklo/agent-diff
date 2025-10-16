@@ -53,18 +53,4 @@ class LinearGraphQL(GraphQL):
         }
 
     async def handle_request(self, request):
-        """
-        Handle GraphQL request with automatic commit/rollback.
-
-        Note: Session lifecycle is managed by IsolationMiddleware,
-        but we still commit/rollback based on GraphQL execution success.
-        """
-        try:
-            resp = await super().handle_request(request)
-            if hasattr(request.state, "db_session") and request.state.db_session:
-                request.state.db_session.commit()
-            return resp
-        except Exception:
-            if hasattr(request.state, "db_session") and request.state.db_session:
-                request.state.db_session.rollback()
-            raise
+        return await super().handle_request(request)
