@@ -1,15 +1,7 @@
 from ariadne import QueryType, MutationType
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, select
-from src.services.linear.database.schema import (
-    Issue, Attachment, User, Team, Organization, OrganizationInvite,
-    OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone,
-    ProjectMilestoneStatus, Notification, NotificationBatchActionPayload,
-    Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation,
-    InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload,
-    IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload,
-    ProjectRelation, WorkflowState, Template
-)
+from Linear.db_schema import Issue, Attachment, User, Team, Organization, OrganizationInvite, OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone, ProjectMilestoneStatus, Notification, NotificationBatchActionPayload, Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation, InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload, IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload, ProjectRelation, WorkflowState, Template
 from typing import Optional
 import base64
 import json
@@ -10629,7 +10621,7 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
 
         # Determine organization_id
         # If team_id is provided, get organization from team
-        # Otherwise, get from session context (assuming it's available)
+        # Otherwise, get from user context
         organization_id = None
         if team_id:
             team = session.query(Team).filter_by(id=team_id).first()
@@ -10637,16 +10629,18 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
                 raise Exception(f"Team with id {team_id} not found")
             organization_id = team.organizationId
         else:
-            # For workspace-level labels, we need to get the organization from context
-            # This assumes the context contains organization info
-            organization_id = info.context.get('organization_id')
+            # For workspace-level labels, get organization from authenticated user
+            user_id = info.context.get('user_id')
+            if not user_id:
+                raise Exception("No authenticated user found. Please provide authentication credentials.")
+
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+            organization_id = user.organizationId
             if not organization_id:
-                # Fallback: try to get any organization (for testing/development)
-                org = session.query(Organization).first()
-                if org:
-                    organization_id = org.id
-                else:
-                    raise Exception("Unable to determine organization for label")
+                raise Exception("User does not have an associated organization")
 
         # Get current timestamp
         now = datetime.now(timezone.utc)
@@ -12559,16 +12553,24 @@ def resolve_organizationDeleteChallenge(obj, info, **kwargs):
     session: Session = info.context['session']
 
     try:
-        # Get the organization from the context (assuming it's set by auth middleware)
-        # In a production system, you would:
+        # Get the organization from the authenticated user's context
+        # In a production system, you would also:
         # 1. Verify the user has administrator privileges
-        # 2. Get the organization ID from the authenticated user's context
-        # 3. Generate a secure delete confirmation token
-        # For now, we'll query for the first organization
-        organization = session.query(Organization).first()
+        # 2. Generate a secure delete confirmation token
+        user_id = info.context.get('user_id')
+        if not user_id:
+            raise Exception("No authenticated user found. Please provide authentication credentials.")
 
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+        if not user.organizationId:
+            raise Exception("User does not have an associated organization")
+
+        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
         if not organization:
-            raise Exception("No organization found")
+            raise Exception(f"Organization with id '{user.organizationId}' not found")
 
         # In a real system, this would:
         # 1. Generate a cryptographically secure delete confirmation token
@@ -12613,16 +12615,24 @@ def resolve_organizationDelete(obj, info, **kwargs):
         if not deletion_code:
             raise Exception("Missing required deletionCode field")
 
-        # Get the organization from the context (assuming it's set by auth middleware)
-        # For now, we'll query for the first organization
-        # In a production system, you would:
+        # Get the organization from the authenticated user's context
+        # In a production system, you would also:
         # 1. Verify the user has administrator privileges
         # 2. Verify the deletionCode matches the expected code for this organization
-        # 3. Get the organization ID from the authenticated user's context
-        organization = session.query(Organization).first()
+        user_id = info.context.get('user_id')
+        if not user_id:
+            raise Exception("No authenticated user found. Please provide authentication credentials.")
 
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+        if not user.organizationId:
+            raise Exception("User does not have an associated organization")
+
+        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
         if not organization:
-            raise Exception("No organization found")
+            raise Exception(f"Organization with id '{user.organizationId}' not found")
 
         # Verify deletion code (in a real system, this would be validated against a stored code)
         # For now, we'll just check that it's provided and non-empty
@@ -12777,13 +12787,21 @@ def resolve_organizationStartTrial(obj, info, **kwargs):
     session: Session = info.context['session']
 
     try:
-        # Get the organization from the context (assuming it's set by auth middleware)
-        # In a production system, you would get the organization ID from the authenticated user's context
-        # For now, we'll query for the first organization
-        organization = session.query(Organization).first()
+        # Get the organization from the authenticated user's context
+        user_id = info.context.get('user_id')
+        if not user_id:
+            raise Exception("No authenticated user found. Please provide authentication credentials.")
 
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+        if not user.organizationId:
+            raise Exception("User does not have an associated organization")
+
+        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
         if not organization:
-            raise Exception("No organization found")
+            raise Exception(f"Organization with id '{user.organizationId}' not found")
 
         # Start the trial with a 14-day trial period
         now = datetime.now(timezone.utc)
@@ -12833,13 +12851,21 @@ def resolve_organizationStartTrialForPlan(obj, info, **kwargs):
         if not plan_type:
             raise Exception("planType is required")
 
-        # Get the organization from the context (assuming it's set by auth middleware)
-        # In a production system, you would get the organization ID from the authenticated user's context
-        # For now, we'll query for the first organization
-        organization = session.query(Organization).first()
+        # Get the organization from the authenticated user's context
+        user_id = info.context.get('user_id')
+        if not user_id:
+            raise Exception("No authenticated user found. Please provide authentication credentials.")
 
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+        if not user.organizationId:
+            raise Exception("User does not have an associated organization")
+
+        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
         if not organization:
-            raise Exception("No organization found")
+            raise Exception(f"Organization with id '{user.organizationId}' not found")
 
         # Start the trial for the specified plan type with a 14-day trial period
         now = datetime.now(timezone.utc)
@@ -12889,13 +12915,21 @@ def resolve_organizationUpdate(obj, info, **kwargs):
         if not input_data:
             raise Exception("Input data is required")
 
-        # Get the organization from the context (assuming it's set by auth middleware)
-        # In a production system, you would get the organization ID from the authenticated user's context
-        # For now, we'll query for the first organization
-        organization = session.query(Organization).first()
+        # Get the organization from the authenticated user's context
+        user_id = info.context.get('user_id')
+        if not user_id:
+            raise Exception("No authenticated user found. Please provide authentication credentials.")
 
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+        if not user.organizationId:
+            raise Exception("User does not have an associated organization")
+
+        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
         if not organization:
-            raise Exception("No organization found")
+            raise Exception(f"Organization with id '{user.organizationId}' not found")
 
         # Update fields if provided in input
         if 'aiAddonEnabled' in input_data:
@@ -13647,15 +13681,18 @@ def resolve_projectLabelCreate(obj, info, **kwargs):
         if not name:
             raise Exception("Project label name is required")
 
-        # Determine organization_id from context
-        organization_id = info.context.get('organization_id')
+        # Determine organization_id from authenticated user
+        user_id = info.context.get('user_id')
+        if not user_id:
+            raise Exception("No authenticated user found. Please provide authentication credentials.")
+
+        user = session.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+        organization_id = user.organizationId
         if not organization_id:
-            # Fallback: try to get any organization (for testing/development)
-            org = session.query(Organization).first()
-            if org:
-                organization_id = org.id
-            else:
-                raise Exception("Unable to determine organization for project label")
+            raise Exception("User does not have an associated organization")
 
         # Get current timestamp
         now = datetime.now(timezone.utc)
@@ -14605,20 +14642,26 @@ def resolve_teamCreate(obj, info, **kwargs):
             raise Exception("Team name is required")
 
         # Get the organization from context (since organizationId is deprecated in input)
-        # In a real implementation, this would come from the authenticated user context
-        # For now, we'll require it or use the first organization
+        # If organizationId is provided in input, use it; otherwise get from authenticated user
         org_id = input_data.get('organizationId')
         if not org_id:
-            # Get the first organization (fallback)
-            org = session.query(Organization).first()
-            if not org:
-                raise Exception("No organization found")
-            org_id = org.id
-        else:
-            # Verify organization exists
-            org = session.query(Organization).filter_by(id=org_id).first()
-            if not org:
-                raise Exception(f"Organization with id {org_id} not found")
+            # Get organization from authenticated user
+            user_id = info.context.get('user_id')
+            if not user_id:
+                raise Exception("No authenticated user found. Please provide authentication credentials.")
+
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+
+            org_id = user.organizationId
+            if not org_id:
+                raise Exception("User does not have an associated organization")
+
+        # Verify organization exists
+        org = session.query(Organization).filter_by(id=org_id).first()
+        if not org:
+            raise Exception(f"Organization with id {org_id} not found")
 
         # Generate ID if not provided
         team_id = input_data.get('id', str(uuid.uuid4()))

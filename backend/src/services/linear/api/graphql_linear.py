@@ -48,7 +48,7 @@ class LinearGraphQL(GraphQL):
             "request": request,
             "session": session,
             "environment_id": env_id,
-            "impersonate_user_id": getattr(request.state, "impersonate_user_id", None),
+            "user_id": getattr(request.state, "impersonate_user_id", None),
             "impersonate_email": getattr(request.state, "impersonate_email", None),
         }
 
