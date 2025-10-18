@@ -73,15 +73,6 @@ TABLE_ORDER = [
     "paid_subscriptions",
     "entity_external_links",
     "issue_imports",
-    # Payload tables (no dependencies)
-    "notification_batch_action_payloads",
-    "front_attachment_payloads",
-    "user_admin_payloads",
-    "user_settings_flags_reset_payloads",
-    "organization_delete_payloads",
-    "organization_domain_simple_payloads",
-    "organization_start_trial_payloads",
-    "success_payloads",
 ]
 
 
