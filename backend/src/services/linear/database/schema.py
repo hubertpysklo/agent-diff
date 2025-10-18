@@ -1274,7 +1274,7 @@ class User(Base):
     drafts: Mapped[list["Draft"]] = relationship(
         "Draft", back_populates="user", foreign_keys="Draft.userId"
     )
-    email: Mapped[str] = mapped_column(String, nullable=False)
+    email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     gitHubUserId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     discordUserId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     guest: Mapped[bool] = mapped_column(Boolean, nullable=False)
