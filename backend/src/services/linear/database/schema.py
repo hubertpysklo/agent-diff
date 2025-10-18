@@ -4,7 +4,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional, List
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Table
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Table, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -158,7 +158,7 @@ class Issue(Base):
     history: Mapped[list["IssueHistory"]] = relationship(
         "IssueHistory", back_populates="issue", foreign_keys="IssueHistory.issueId"
     )
-    identifier: Mapped[str] = mapped_column(String, nullable=False)
+    identifier: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     incomingSuggestions: Mapped[list["IssueSuggestion"]] = relationship(
         "IssueSuggestion", back_populates="issue", foreign_keys="IssueSuggestion.issueId"
     )
@@ -861,6 +861,9 @@ class Reaction(Base):
 
 class Team(Base):
     __tablename__ = "teams"
+    __table_args__ = (
+        UniqueConstraint('organizationId', 'key', name='uq_team_org_key'),
+    )
     id: Mapped[str] = mapped_column(String, primary_key=True)
     parentId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("teams.id"), nullable=True)
     parent: Mapped[Optional["Team"]] = relationship(
@@ -990,7 +993,7 @@ class Team(Base):
         foreign_keys="IntegrationsSettings.teamId",
         uselist=False,
     )
-    inviteHash: Mapped[str] = mapped_column(String, nullable=False)
+    inviteHash: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     issueCount: Mapped[int] = mapped_column(Integer, nullable=False)
     issueEstimationAllowZero: Mapped[bool] = mapped_column(Boolean, nullable=False)
     issueEstimationExtended: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -1230,7 +1233,7 @@ class Organization(Base):
     themeSettings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     trialEndsAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    urlKey: Mapped[str] = mapped_column(String, nullable=False)
+    urlKey: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     userCount: Mapped[int] = mapped_column(Integer, nullable=False)
     workingDays: Mapped[list[float]] = mapped_column(JSON, nullable=False)
 
@@ -1280,7 +1283,7 @@ class User(Base):
     guest: Mapped[bool] = mapped_column(Boolean, nullable=False)
     # identityProvider skipped
     initials: Mapped[str] = mapped_column(String, nullable=False)
-    inviteHash: Mapped[str] = mapped_column(String, nullable=False)
+    inviteHash: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     isAssignable: Mapped[bool] = mapped_column(Boolean, nullable=False)
     isMe: Mapped[bool] = mapped_column(Boolean, nullable=False)
     isMentionable: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -1911,26 +1914,6 @@ class Notification(Base):
         foreign_keys=[projectUpdateId]
     )
     oauthClientApprovalId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    batchActionPayloadId: Mapped[Optional[str]] = mapped_column(ForeignKey("notification_batch_action_payloads.id"), nullable=True)
-    batchActionPayload: Mapped[Optional["NotificationBatchActionPayload"]] = relationship(
-        "NotificationBatchActionPayload",
-        foreign_keys=[batchActionPayloadId],
-        back_populates="notifications"
-    )
-
-
-class NotificationBatchActionPayload(Base):
-    __tablename__ = "notification_batch_action_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-    # Relationship to notifications affected by this batch action
-    notifications: Mapped[List["Notification"]] = relationship(
-        "Notification",
-        foreign_keys="[Notification.batchActionPayloadId]",
-        back_populates="batchActionPayload"
-    )
 
 
 class ExternalUser(Base):
@@ -2009,15 +1992,6 @@ class InitiativeToProject(Base):
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
-class FrontAttachmentPayload(Base):
-    __tablename__ = "front_attachment_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    attachmentId: Mapped[str] = mapped_column(ForeignKey("attachments.id"), nullable=False)
-    attachment: Mapped["Attachment"] = relationship("Attachment", foreign_keys=[attachmentId])
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
 class IssueImport(Base):
     __tablename__ = "issue_imports"
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -2039,12 +2013,6 @@ class IssueImport(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
     teamName: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-
-
-class UserAdminPayload(Base):
-    __tablename__ = "user_admin_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
 
 class UserSettings(Base):
@@ -2073,35 +2041,3 @@ class UserSettings(Base):
     feedSummarySchedule: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     settings: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     usageWarningHistory: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-
-
-class UserSettingsFlagsResetPayload(Base):
-    __tablename__ = "user_settings_flags_reset_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class OrganizationDeletePayload(Base):
-    __tablename__ = "organization_delete_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class OrganizationDomainSimplePayload(Base):
-    __tablename__ = "organization_domain_simple_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class OrganizationStartTrialPayload(Base):
-    __tablename__ = "organization_start_trial_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class SuccessPayload(Base):
-    __tablename__ = "success_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)

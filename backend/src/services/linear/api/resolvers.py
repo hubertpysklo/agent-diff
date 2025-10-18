@@ -1,7 +1,7 @@
 from ariadne import QueryType, MutationType
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, select
-from src.services.linear.database.schema import Issue, Attachment, User, Team, Organization, OrganizationInvite, OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone, ProjectMilestoneStatus, Notification, NotificationBatchActionPayload, Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation, InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload, IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload, ProjectRelation, WorkflowState, Template
+from src.services.linear.database.schema import Issue, Attachment, User, Team, Organization, OrganizationInvite, OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone, ProjectMilestoneStatus, Notification, Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation, InitiativeRelation, InitiativeToProject, ExternalUser, IssueLabel, IssueImport, UserFlag, UserSettings, ProjectRelation, WorkflowState, Template
 from typing import Optional
 import base64
 import json
@@ -45,27 +45,17 @@ def validate_pagination_params(after, before, first, last):
     Raises:
         Exception: If invalid pagination parameters are provided
     """
-    # Validate first and last are positive
     if first is not None and first <= 0:
         raise Exception("Argument 'first' must be a positive integer")
     if last is not None and last <= 0:
         raise Exception("Argument 'last' must be a positive integer")
 
-    # Prevent using both first and last together
-    # The Relay spec strongly discourages this as it leads to confusing behavior
     if first is not None and last is not None:
         raise Exception("Cannot use both 'first' and 'last' together")
 
-    # Prevent using both after and before together
-    # While technically allowed in Relay spec, this creates a "window" query with
-    # confusing pagination semantics, so we reject it for clarity
     if after and before:
         raise Exception("Cannot use both 'after' and 'before' cursors together")
 
-    # Prevent invalid cursor/direction combinations
-    # These combinations are semantically invalid:
-    # - 'after' is for forward pagination, conflicts with 'last' (backward direction)
-    # - 'before' is for backward pagination, conflicts with 'first' (forward direction)
     if after and last:
         raise Exception("Cannot use 'after' cursor with 'last' (incompatible pagination directions)")
     if before and first:
@@ -97,37 +87,25 @@ def apply_pagination(items, after, before, first, last, order_field='createdAt')
     if has_more:
         items = items[:limit]
 
-    # If using backward pagination, reverse the results
-    # This is needed because backward pagination fetches in DESC order
     if last or before:
         items = list(reversed(items))
 
-    # Determine pagination info according to Relay spec
     if last and before:
-        # Backward pagination with 'last' and 'before' cursor
-        # We're fetching items before a cursor, so there's content after
-        has_next_page = True  # There's content after the 'before' cursor
-        has_previous_page = has_more  # More items exist before what we fetched
+        has_next_page = True
+        has_previous_page = has_more
     elif last:
-        # Backward pagination with 'last' but no cursor
-        # Fetching the last N items from the end
-        has_next_page = False  # No cursor, so we don't know if there's content after
+        has_next_page = False
         has_previous_page = has_more
     elif before:
-        # Using 'before' cursor without 'last'
-        # Treat as backward pagination with default limit
-        has_next_page = True  # We used 'before', so there's content after
+        has_next_page = True
         has_previous_page = has_more
     elif after:
-        # Forward pagination with 'after' cursor
         has_next_page = has_more
-        has_previous_page = True  # We used 'after', so there's content before
+        has_previous_page = True
     elif first:
-        # Forward pagination with 'first' but no 'after'
         has_next_page = has_more
-        has_previous_page = False  # Starting from beginning
+        has_previous_page = False
     else:
-        # Default case (no pagination params)
         has_next_page = has_more
         has_previous_page = False
 
@@ -156,7 +134,6 @@ def apply_pagination(items, after, before, first, last, order_field='createdAt')
     }
 
 # Resolver functions will be added here as queries are implemented
-
 @query.field("issue")
 def resolve_issue(obj, info, id: str):
     """
@@ -2634,10 +2611,6 @@ def resolve_organizationInviteCreate(obj, info, **kwargs):
 
         session.add(organization_invite)
 
-        # Commit the transaction
-
-        # Return the organization invite entity
-        # Ariadne will handle converting this to OrganizationInvitePayload
         return organization_invite
 
     except Exception as e:
@@ -2692,9 +2665,6 @@ def resolve_organizationInviteUpdate(obj, info, **kwargs):
         # Update the timestamp
         org_invite.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated organization invite entity
         return org_invite
 
     except Exception as e:
@@ -2727,8 +2697,6 @@ def resolve_organizationInviteDelete(obj, info, **kwargs):
         # Soft delete by setting archivedAt timestamp
         org_invite.archivedAt = datetime.now(timezone.utc)
         org_invite.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return DeletePayload structure
         return {
@@ -5502,11 +5470,14 @@ def resolve_initiativeToProjectCreate(obj, info, **kwargs):
             archivedAt=None
         )
 
-        # Add to session and commit
         session.add(initiative_to_project)
 
-        # Return the created entity (Ariadne will handle wrapping in InitiativeToProjectPayload)
-        return initiative_to_project
+        # Return the proper InitiativeToProjectPayload structure
+        return {
+            'success': True,
+            'lastSyncId': 0.0,
+            'initiativeToProject': initiative_to_project
+        }
 
     except KeyError as e:
         raise Exception(f"Missing required field: {str(e)}")
@@ -5550,10 +5521,12 @@ def resolve_initiativeToProjectUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         entity.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated entity (Ariadne will handle wrapping in InitiativeToProjectPayload)
-        return entity
+        # Return the proper InitiativeToProjectPayload structure
+        return {
+            'success': True,
+            'lastSyncId': 0.0,
+            'initiativeToProject': entity
+        }
 
     except Exception as e:
         raise Exception(f"Failed to update initiativeToProject: {str(e)}")
@@ -5589,8 +5562,6 @@ def resolve_initiativeToProjectDelete(obj, info, **kwargs):
         # Soft delete by setting archivedAt timestamp
         entity.archivedAt = datetime.now(timezone.utc)
         entity.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the transaction
 
         # Return DeletePayload structure
         return {
@@ -5794,10 +5765,8 @@ def resolve_commentCreate(obj, info, **kwargs):
             subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
             comment.subscribers = subscribers
 
-        # Add to session and commit
         session.add(comment)
 
-        # Return the created comment (Ariadne will handle wrapping in CommentPayload)
         return comment
 
     except Exception as e:
@@ -5841,9 +5810,6 @@ def resolve_commentResolve(obj, info, **kwargs):
             if resolving_comment and hasattr(resolving_comment, 'userId'):
                 comment.resolvingUserId = resolving_comment.userId
 
-        # Commit the changes
-
-        # Return the resolved comment
         return comment
 
     except Exception as e:
@@ -5880,9 +5846,6 @@ def resolve_commentUnresolve(obj, info, **kwargs):
         comment.resolvingUserId = None
         comment.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the unresolved comment
         return comment
 
     except Exception as e:
@@ -5948,9 +5911,6 @@ def resolve_commentUpdate(obj, info, **kwargs):
         # Always update updatedAt
         comment.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated comment
         return comment
 
     except Exception as e:
@@ -5984,8 +5944,6 @@ def resolve_commentDelete(obj, info, **kwargs):
         # Soft delete by setting archivedAt timestamp
         comment.archivedAt = datetime.now(timezone.utc)
         comment.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return DeletePayload structure
         return {
@@ -6109,11 +6067,7 @@ def resolve_attachmentCreate(obj, info, **kwargs):
 
             comment = Comment(**comment_data)
             session.add(comment)
-
-        # Commit the transaction
-
-        # Return the attachment entity
-        # Ariadne will handle converting this to AttachmentPayload
+            
         return attachment
 
     except Exception as e:
@@ -6147,8 +6101,6 @@ def resolve_attachmentDelete(obj, info, **kwargs):
         # Soft delete by setting archivedAt timestamp
         attachment.archivedAt = datetime.now(timezone.utc)
         attachment.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return DeletePayload structure
         return {
@@ -6276,9 +6228,6 @@ def resolve_attachmentLinkDiscord(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -6395,20 +6344,12 @@ def resolve_attachmentLinkFront(obj, info, **kwargs):
         # Flush to get the attachment ID
         session.flush()
 
-        # Create the FrontAttachmentPayload
-        payload_id = str(uuid.uuid4())
-        payload = FrontAttachmentPayload(
-            id=payload_id,
-            attachmentId=attachment.id,
-            lastSyncId=0.0,  # Default sync ID
-            success=True
-        )
-        session.add(payload)
-
-        # Commit the transaction
-
-        # Return the payload with the attachment relationship loaded
-        return payload
+        # Return the proper FrontAttachmentPayload structure
+        return {
+            'success': True,
+            'lastSyncId': 0.0,
+            'attachment': attachment
+        }
 
     except Exception as e:
         raise Exception(f"Failed to link Front attachment: {str(e)}")
@@ -6517,12 +6458,6 @@ def resolve_attachmentLinkGitHubIssue(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -6649,12 +6584,6 @@ def resolve_attachmentLinkGitHubPR(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -6782,12 +6711,6 @@ def resolve_attachmentLinkGitLabMR(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -6914,12 +6837,6 @@ def resolve_attachmentLinkIntercom(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -7048,12 +6965,6 @@ def resolve_attachmentLinkJiraIssue(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -7173,9 +7084,6 @@ def resolve_attachmentLinkSalesforce(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -7310,9 +7218,6 @@ def resolve_attachmentLinkSlack(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -7424,9 +7329,6 @@ def resolve_attachmentLinkURL(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -7555,12 +7457,6 @@ def resolve_attachmentLinkZendesk(obj, info, **kwargs):
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -7610,9 +7506,6 @@ def resolve_attachmentSyncToSlack(obj, info, **kwargs):
         # Update the timestamp
         attachment.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
-        # Return the attachment directly
         return attachment
 
     except Exception as e:
@@ -7675,9 +7568,6 @@ def resolve_attachmentUpdate(obj, info, **kwargs):
         # Update the timestamp
         attachment.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
-        # Return the attachment directly
         return attachment
 
     except Exception as e:
@@ -7763,10 +7653,8 @@ def resolve_cycleCreate(obj, info, **kwargs):
             progressHistory={}
         )
 
-        # Add and commit
         session.add(new_cycle)
 
-        # Return CyclePayload structure
         return new_cycle
 
     except Exception as e:
@@ -7801,7 +7689,6 @@ def resolve_cycleArchive(obj, info, **kwargs):
         cycle.archivedAt = datetime.now(timezone.utc)
         cycle.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
 
         # Return CycleArchivePayload structure
         return {
@@ -7863,9 +7750,6 @@ def resolve_cycleShiftAll(obj, info, **kwargs):
             cycle.endsAt = cycle.endsAt + shift_delta
             cycle.updatedAt = now
 
-        # Commit the changes
-
-        # Return the starting cycle as the result
         return starting_cycle
 
     except Exception as e:
@@ -7923,9 +7807,6 @@ def resolve_cycleStartUpcomingCycleToday(obj, info, **kwargs):
             cycle.endsAt = cycle.endsAt + shift_delta
             cycle.updatedAt = now
 
-        # Commit the changes
-
-        # Return the upcoming cycle as the result
         return upcoming_cycle
 
     except Exception as e:
@@ -7985,9 +7866,6 @@ def resolve_cycleUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         cycle.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated cycle
         return cycle
 
     except Exception as e:
@@ -8068,10 +7946,8 @@ def resolve_documentCreate(obj, info, **kwargs):
             subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
             document.subscribers = subscribers
 
-        # Add to session and commit
         session.add(document)
 
-        # Return the created document
         return document
 
     except Exception as e:
@@ -8153,9 +8029,6 @@ def resolve_documentUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         document.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated document
         return document
 
     except Exception as e:
@@ -8189,8 +8062,6 @@ def resolve_documentDelete(obj, info, **kwargs):
         # Soft delete by setting archivedAt timestamp
         document.archivedAt = datetime.now(timezone.utc)
         document.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return DocumentArchivePayload structure
         return {
@@ -8230,8 +8101,6 @@ def resolve_documentUnarchive(obj, info, **kwargs):
         # Restore by clearing archivedAt timestamp
         document.archivedAt = None
         document.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return DocumentArchivePayload structure
         return {
@@ -8296,7 +8165,6 @@ def resolve_initiativeCreate(obj, info, **kwargs):
             trashed=False
         )
 
-        # Add to session and commit
         session.add(initiative)
 
         # Return InitiativePayload structure
@@ -8372,8 +8240,6 @@ def resolve_initiativeUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         initiative.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return InitiativePayload structure
         return {
             'initiative': initiative,
@@ -8412,8 +8278,6 @@ def resolve_initiativeArchive(obj, info, **kwargs):
         # Archive by setting archivedAt timestamp
         initiative.archivedAt = datetime.now(timezone.utc)
         initiative.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return InitiativeArchivePayload structure
         return {
@@ -8454,7 +8318,6 @@ def resolve_initiativeUnarchive(obj, info, **kwargs):
         initiative.archivedAt = None
         initiative.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
 
         # Return InitiativeArchivePayload structure
         return {
@@ -8495,8 +8358,6 @@ def resolve_initiativeDelete(obj, info, **kwargs):
         initiative.trashed = True
         initiative.archivedAt = datetime.now(timezone.utc)
         initiative.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return DeletePayload structure
         return {
@@ -8610,8 +8471,6 @@ def resolve_initiativeRelationDelete(obj, info, **kwargs):
         initiative_relation.archivedAt = datetime.now(timezone.utc)
         initiative_relation.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DeletePayload structure
         return {
             'entityId': relation_id,
@@ -8661,9 +8520,7 @@ def resolve_initiativeRelationUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         initiative_relation.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return DeletePayload structure (as specified in the mutation signature)
+        # Return DeletePayload structure
         return {
             'entityId': relation_id,
             'success': True,
@@ -8726,9 +8583,6 @@ def resolve_issueAddLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated issue
         return issue
 
     except Exception as e:
@@ -8787,9 +8641,6 @@ def resolve_issueRemoveLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated issue
         return issue
 
     except Exception as e:
@@ -8827,20 +8678,6 @@ def resolve_issueArchive(obj, info, **kwargs):
         # Soft delete: set archivedAt timestamp
         if issue.archivedAt is None:
             issue.archivedAt = datetime.now(timezone.utc)
-
-        # If trash is True, we could also set additional fields or perform hard delete
-        # For now, we'll treat trash the same as archive (soft delete)
-        # If you want hard delete for trash=True, uncomment the following:
-        # if trash:
-        #     session.delete(issue)
-        #     session.commit()
-        #     return {
-        #         'success': True,
-        #         'entity': None,  # Entity is None when deleted
-        #         'lastSyncId': 0.0
-        #     }
-
-        # Commit the changes
 
         # Return the payload
         return {
@@ -8880,8 +8717,6 @@ def resolve_issueUnarchive(obj, info, **kwargs):
 
         # Unarchive: clear the archivedAt timestamp
         issue.archivedAt = None
-
-        # Commit the changes
 
         # Return the payload
         return {
@@ -8947,8 +8782,6 @@ def resolve_issueUnsubscribe(obj, info, **kwargs):
         if user in issue.subscribers:
             issue.subscribers.remove(user)
 
-        # Commit the changes
-
         # Return the payload
         return {
             'success': True,
@@ -9006,8 +8839,6 @@ def resolve_issueDelete(obj, info, **kwargs):
             # Mark as trashed
             if hasattr(issue, 'trashed'):
                 issue.trashed = True
-
-            # Commit the changes
 
             # Return the payload with the trashed entity
             return {
@@ -9164,10 +8995,6 @@ def resolve_issueUpdate(obj, info, **kwargs):
         # Always update the updatedAt timestamp
         issue.updatedAt = now
 
-        # Commit the transaction
-
-        # Refresh the issue to get any database-generated values
-
         # Return the payload
         return {
             'issue': issue,
@@ -9297,10 +9124,6 @@ def resolve_issueCreate(obj, info, **kwargs):
 
         # Add to session
         session.add(issue)
-
-        # Commit the transaction
-
-        # Refresh to get any database-generated values
 
         # Return the payload
         return {
@@ -9673,10 +9496,6 @@ def resolve_issueDescriptionUpdateFromFront(obj, info, **kwargs):
         now = datetime.now(timezone.utc)
         issue.updatedAt = now
 
-        # Commit the transaction
-
-        # Refresh the issue to get updated state
-
         # Return the payload
         return {
             'issue': issue,
@@ -9735,11 +9554,6 @@ def resolve_issueExternalSyncDisable(obj, info, **kwargs):
         # Update the issue's timestamp as well since its sync status changed
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Refresh the issue to get updated state
-
-        # Return the issue
         return issue
 
     except ValueError as e:
@@ -9818,10 +9632,8 @@ def resolve_issueImportCreateAsana(obj, info, **kwargs):
             teamName=team_name
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -9897,11 +9709,8 @@ def resolve_issueImportCreateClubhouse(obj, info, **kwargs):
             teamName=team_name
         )
 
-        # Add to session and commit
         session.add(issue_import)
-
-        # Refresh to get the latest state
-
+        
         return issue_import
 
     except ValueError as e:
@@ -9984,10 +9793,7 @@ def resolve_issueImportCreateCSVJira(obj, info, **kwargs):
             teamName=team_name
         )
 
-        # Add to session and commit
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10068,10 +9874,8 @@ def resolve_issueImportCreateGithub(obj, info, **kwargs):
             teamName=team_name
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10161,10 +9965,8 @@ def resolve_issueImportCreateJira(obj, info, **kwargs):
             teamName=team_name
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10222,10 +10024,7 @@ def resolve_issueImportCreateLinearV2(obj, info, **kwargs):
             serviceMetadata=service_metadata,
         )
 
-        # Add to session and commit
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10275,10 +10074,6 @@ def resolve_issueImportProcess(obj, info, **kwargs):
         issue_import.updatedAt = datetime.now(timezone.utc)
         issue_import.progress = 0.0
 
-        # Commit the changes
-
-        # Refresh to get the latest state
-
         return issue_import
 
     except ValueError as e:
@@ -10320,10 +10115,6 @@ def resolve_issueReminder(obj, info, **kwargs):
         # Set the reminder time
         issue.reminderAt = reminder_at
         issue.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
-
-        # Refresh to get the latest state
 
         # Return the payload
         return {
@@ -10395,10 +10186,6 @@ def resolve_issueSubscribe(obj, info, **kwargs):
 
         # Update the updatedAt timestamp
         issue.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
-
-        # Refresh to get the latest state
 
         # Return the updated issue
         return issue
@@ -10482,7 +10269,7 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
             updatedAt=now,
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_label)
 
         # Handle replaceTeamLabels if requested
@@ -10572,8 +10359,6 @@ def resolve_issueLabelUpdate(obj, info, **kwargs):
         now = datetime.now(timezone.utc)
         issue_label.updatedAt = now
 
-        # Commit the update
-
         # Handle replaceTeamLabels if requested
         # This replaces all team-specific labels with the same name with this updated workspace label
         if replace_team_labels and issue_label.teamId is None:
@@ -10637,8 +10422,6 @@ def resolve_issueLabelDelete(obj, info, **kwargs):
         issue_label.archivedAt = now
         issue_label.updatedAt = now
 
-        # Commit the transaction
-
         # Return DeletePayload
         return {
             'success': True,
@@ -10694,11 +10477,14 @@ def resolve_issueRelationCreate(obj, info, **kwargs):
             archivedAt=None
         )
 
-        # Add to session and commit
         session.add(issue_relation)
 
-        # Return the created entity (Ariadne will handle wrapping in IssueRelationPayload)
-        return issue_relation
+        # Return the proper IssueRelationPayload structure
+        return {
+            'success': True,
+            'lastSyncId': 0.0,
+            'issueRelation': issue_relation
+        }
 
     except KeyError as e:
         raise Exception(f"Missing required field: {str(e)}")
@@ -10747,10 +10533,12 @@ def resolve_issueRelationUpdate(obj, info, **kwargs):
         # Always update the updatedAt timestamp
         issue_relation.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated entity (Ariadne will handle wrapping in IssueRelationPayload)
-        return issue_relation
+        # Return the proper IssueRelationPayload structure
+        return {
+            'success': True,
+            'lastSyncId': 0.0,
+            'issueRelation': issue_relation
+        }
 
     except Exception as e:
         raise Exception(f"Failed to update issue relation: {str(e)}")
@@ -11373,16 +11161,8 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
                 user_flag.lastSyncId = new_sync_id
                 user_flag.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
         # Create and return the payload
-        payload = UserSettingsFlagsResetPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=new_sync_id,
-            success=True
-        )
-        session.add(payload)
-
+        # Return the proper UserSettingsFlagsResetPayload structure
         return {
             'success': True,
             'lastSyncId': new_sync_id
@@ -11462,9 +11242,6 @@ def resolve_userSettingsUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         user_settings.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
-        # Return the updated user settings
         return user_settings
 
     except Exception as e:
@@ -11539,10 +11316,6 @@ def resolve_userUpdate(obj, info, **kwargs):
         # Always update the updatedAt timestamp
         user.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Refresh the user to get any database-generated values
-
         # Return the UserPayload
         return {
             'success': True,
@@ -11585,8 +11358,6 @@ def resolve_notificationArchive(obj, info, **kwargs):
         if notification.archivedAt is None:
             notification.archivedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return the payload
         return {
             'success': True,
@@ -11626,8 +11397,6 @@ def resolve_notificationUnarchive(obj, info, **kwargs):
 
         # Unarchive: clear archivedAt timestamp
         notification.archivedAt = None
-
-        # Commit the changes
 
         # Return the payload
         return {
@@ -11686,8 +11455,6 @@ def resolve_notificationUpdate(obj, info, **kwargs):
 
         # Update the updatedAt timestamp
         notification.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return the payload
         return {
@@ -11765,8 +11532,6 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
         for notification in notifications:
             if notification.archivedAt is None:
                 notification.archivedAt = now
-
-        # Commit the changes
 
         # Return the payload
         return {
@@ -11846,8 +11611,6 @@ def resolve_notificationCategoryChannelSubscriptionUpdate(obj, info, category, c
         # Update the timestamp
         user_settings.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return the payload
         return {
             'success': True,
@@ -11872,8 +11635,6 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
     session: Session = info.context['session']
     input_data = kwargs.get('input')
     read_at = kwargs.get('readAt')
@@ -11926,14 +11687,6 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
             }
 
         # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
-
         # Mark all matching notifications as read
         # Convert readAt to datetime if it's a string
         if isinstance(read_at, str):
@@ -11944,15 +11697,12 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
         for notification in notifications:
             if notification.readAt is None:
                 notification.readAt = read_at_dt
-                notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
+        # Return the proper NotificationBatchActionPayload structure
         return {
             'success': True,
             'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
+            'lastSyncId': 0.0
         }
 
     except Exception as e:
@@ -11971,8 +11721,6 @@ def resolve_notificationMarkUnreadAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
     session: Session = info.context['session']
     input_data = kwargs.get('input')
 
@@ -12020,27 +11768,15 @@ def resolve_notificationMarkUnreadAll(obj, info, **kwargs):
                 'lastSyncId': 0.0
             }
 
-        # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
-
         # Mark all matching notifications as unread by clearing readAt
         for notification in notifications:
             notification.readAt = None
-            notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
+        # Return the proper NotificationBatchActionPayload structure
         return {
             'success': True,
             'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
+            'lastSyncId': 0.0
         }
 
     except Exception as e:
@@ -12060,8 +11796,6 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
     session: Session = info.context['session']
     input_data = kwargs.get('input')
     snoozed_until_at = kwargs.get('snoozedUntilAt')
@@ -12117,27 +11851,15 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
                 'lastSyncId': 0.0
             }
 
-        # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
-
         # Snooze all matching notifications by setting snoozedUntilAt timestamp
         for notification in notifications:
             notification.snoozedUntilAt = snoozed_until_at
-            notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
+        # Return the proper NotificationBatchActionPayload structure
         return {
             'success': True,
             'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
+            'lastSyncId': 0.0
         }
 
     except Exception as e:
@@ -12157,8 +11879,6 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
     session: Session = info.context['session']
     input_data = kwargs.get('input')
     unsnoozed_at = kwargs.get('unsnoozedAt')
@@ -12214,29 +11934,17 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
                 'lastSyncId': 0.0
             }
 
-        # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
-
         # Unsnooze all matching notifications by setting unsnoozedAt timestamp
         # and clearing snoozedUntilAt
         for notification in notifications:
             notification.unsnoozedAt = unsnoozed_at
             notification.snoozedUntilAt = None  # Clear the snooze timestamp
-            notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
+        # Return the proper NotificationBatchActionPayload structure
         return {
             'success': True,
             'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
+            'lastSyncId': 0.0
         }
 
     except Exception as e:
@@ -12269,8 +11977,6 @@ def resolve_organizationCancelDelete(obj, info, **kwargs):
         organization.deletionRequestedAt = None
         organization.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return success payload
         return {
             'success': True
@@ -12292,10 +11998,6 @@ def resolve_organizationDeleteChallenge(obj, info, **kwargs):
     session: Session = info.context['session']
 
     try:
-        # Get the organization from the authenticated user's context
-        # In a production system, you would also:
-        # 1. Verify the user has administrator privileges
-        # 2. Generate a secure delete confirmation token
         user_id = info.context.get('user_id')
         if not user_id:
             raise Exception("No authenticated user found. Please provide authentication credentials.")
@@ -12310,14 +12012,6 @@ def resolve_organizationDeleteChallenge(obj, info, **kwargs):
         organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
         if not organization:
             raise Exception(f"Organization with id '{user.organizationId}' not found")
-
-        # In a real system, this would:
-        # 1. Generate a cryptographically secure delete confirmation token
-        # 2. Store the token (possibly with an expiration time) in the database
-        # 3. Send the token to the administrator via email or other secure channel
-        # 4. Return success status
-        # For this implementation, we'll just return success since the token
-        # generation logic would be application-specific
 
         # Return success payload
         return {
@@ -12385,7 +12079,6 @@ def resolve_organizationDelete(obj, info, **kwargs):
         # Update timestamp
         organization.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
 
         # Return success payload
         return {
@@ -12430,9 +12123,7 @@ def resolve_organizationDomainClaim(obj, info, **kwargs):
         organization_domain.claimed = True
         organization_domain.verified = True
         organization_domain.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
-
+        
         # Return success payload
         return {
             'success': True
@@ -12496,9 +12187,6 @@ def resolve_organizationDomainVerify(obj, info, **kwargs):
         organization_domain.verified = True
         organization_domain.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the verified domain
         return organization_domain
 
     except Exception as e:
@@ -12542,8 +12230,6 @@ def resolve_organizationStartTrial(obj, info, **kwargs):
         # Set trial end date (14 days from now)
         organization.trialEndsAt = now + timedelta(days=trial_duration_days)
         organization.updatedAt = now
-
-        # Commit the changes
 
         # Return success payload
         return {
@@ -12610,9 +12296,6 @@ def resolve_organizationStartTrialForPlan(obj, info, **kwargs):
         organization.trialEndsAt = now + timedelta(days=trial_duration_days)
         organization.updatedAt = now
 
-        # Commit the changes
-
-        # Return success payload
         return {
             'success': True
         }
@@ -12763,9 +12446,6 @@ def resolve_organizationUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         organization.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated organization
         return organization
 
     except Exception as e:
@@ -12907,9 +12587,6 @@ def resolve_projectCreate(obj, info, **kwargs):
                 raise Exception("One or more label IDs are invalid")
             project.labels = labels
 
-        # Commit the transaction
-
-        # Return the created project
         return project
 
     except Exception as e:
@@ -12965,9 +12642,6 @@ def resolve_projectAddLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated project
         return project
 
     except Exception as e:
@@ -13023,9 +12697,6 @@ def resolve_projectRemoveLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated project
         return project
 
     except Exception as e:
@@ -13068,8 +12739,6 @@ def resolve_projectArchive(obj, info, **kwargs):
 
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -13164,8 +12833,6 @@ def resolve_projectDelete(obj, info, **kwargs):
         if hasattr(project, 'updatedAt'):
             project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
@@ -13223,8 +12890,6 @@ def resolve_projectReassignStatus(obj, info, **kwargs):
             # Update the updatedAt timestamp
             if hasattr(project, 'updatedAt'):
                 project.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -13346,7 +13011,6 @@ def resolve_projectUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
 
         # Return the updated project (wrapped in payload structure)
         return {
@@ -13420,10 +13084,8 @@ def resolve_projectLabelCreate(obj, info, **kwargs):
             updatedAt=now,
         )
 
-        # Add to session and commit
         session.add(project_label)
 
-        # Return the created project label
         return project_label
 
     except Exception as e:
@@ -13461,8 +13123,7 @@ def resolve_projectLabelDelete(obj, info, **kwargs):
         now = datetime.now(timezone.utc)
         project_label.archivedAt = now
         project_label.updatedAt = now
-
-        # Commit the changes
+        
 
         # Get the last sync ID (assuming we track this somewhere or use a timestamp)
         # For now, using the current timestamp as a float
@@ -13529,9 +13190,6 @@ def resolve_projectLabelUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project_label.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated project label
         return project_label
 
     except Exception as e:
@@ -13594,10 +13252,8 @@ def resolve_projectMilestoneCreate(obj, info, **kwargs):
             status=ProjectMilestoneStatus.UNSTARTED,
         )
 
-        # Add to session and commit
         session.add(project_milestone)
 
-        # Return the created milestone
         return project_milestone
 
     except Exception as e:
@@ -13658,9 +13314,6 @@ def resolve_projectMilestoneUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         milestone.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated milestone
         return milestone
 
     except Exception as e:
@@ -13698,8 +13351,6 @@ def resolve_projectMilestoneDelete(obj, info, **kwargs):
         # Soft delete by setting archivedAt timestamp
         milestone.archivedAt = datetime.now(timezone.utc)
         milestone.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -13844,8 +13495,6 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
         milestone.projectId = target_project_id
         milestone.updatedAt = datetime.now(timezone.utc)
 
-        # Commit all changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
@@ -13921,7 +13570,6 @@ def resolve_projectRelationCreate(obj, info, **kwargs):
             archivedAt=None
         )
 
-        # Add to session and commit
         session.add(project_relation)
 
         return project_relation
@@ -13961,8 +13609,6 @@ def resolve_projectRelationDelete(obj, info, **kwargs):
         current_time = datetime.now(timezone.utc)
         project_relation.archivedAt = current_time
         project_relation.updatedAt = current_time
-
-        # Commit the transaction
 
         # Return DeletePayload
         return {
@@ -14033,8 +13679,6 @@ def resolve_projectRelationUpdate(obj, info, **kwargs):
         current_time = datetime.now(timezone.utc)
         project_relation.updatedAt = current_time
 
-        # Commit the transaction
-
         # Return the updated project relation
         return project_relation
 
@@ -14102,8 +13746,6 @@ def resolve_projectStatusCreate(obj, info, **kwargs):
         # Add to session
         session.add(project_status)
 
-        # Commit the changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = now.timestamp()
 
@@ -14148,9 +13790,7 @@ def resolve_projectStatusArchive(obj, info, **kwargs):
 
         # Update the updatedAt timestamp
         project_status.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
-
+        
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
@@ -14195,8 +13835,6 @@ def resolve_projectStatusUnarchive(obj, info, **kwargs):
 
         # Update the updatedAt timestamp
         project_status.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -14269,8 +13907,6 @@ def resolve_projectStatusUpdate(obj, info, **kwargs):
 
         # Update the updatedAt timestamp
         project_status.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
@@ -14467,21 +14103,24 @@ def resolve_teamCreate(obj, info, **kwargs):
         # Flush to get the ID before creating membership
         session.flush()
 
-        # TODO: Add the creating user as a team member
-        # This would require getting the current user from context:
-        # current_user_id = info.context.get('user_id')
-        # if current_user_id:
-        #     membership = TeamMembership(
-        #         id=str(uuid.uuid4()),
-        #         userId=current_user_id,
-        #         teamId=team_id,
-        #         createdAt=now,
-        #         updatedAt=now,
-        #         owner=True
-        #     )
-        #     session.add(membership)
+        # Add the creating user as team owner
+        creating_user_id = info.context.get('user_id')
+        if creating_user_id:
+            # Verify the user exists in the database
+            user = session.query(User).filter_by(id=creating_user_id).first()
+            if not user:
+                raise Exception(f"Cannot create team membership: User with id '{creating_user_id}' not found in database")
 
-        # Commit the transaction
+            membership = TeamMembership(
+                id=str(uuid.uuid4()),
+                userId=creating_user_id,
+                teamId=team_id,
+                createdAt=now,
+                updatedAt=now,
+                owner=True,
+                sortOrder=0.0,
+            )
+            session.add(membership)
 
         # Return the team entity (TeamPayload structure expects just the entity)
         return new_team
@@ -14717,9 +14356,6 @@ def resolve_teamUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         team.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated team entity
         return team
 
     except Exception as e:
@@ -14760,9 +14396,6 @@ def resolve_teamCyclesDelete(obj, info, id: str):
         # Update the team's updatedAt timestamp
         team.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the team entity
         return team
 
     except Exception as e:
@@ -14792,8 +14425,6 @@ def resolve_teamDelete(obj, info, id: str):
         # Soft delete by setting archivedAt timestamp
         team.archivedAt = datetime.now(timezone.utc)
         team.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return DeletePayload structure
         return {
@@ -14828,8 +14459,6 @@ def resolve_teamUnarchive(obj, info, id: str):
         # Unarchive by clearing the archivedAt timestamp
         team.archivedAt = None
         team.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Return TeamArchivePayload structure
         return {
@@ -14932,11 +14561,12 @@ def resolve_teamMembershipCreate(obj, info, **kwargs):
 
         session.add(team_membership)
 
-        # Commit the transaction
-
-        # Return the team membership entity
-        # Ariadne will handle converting this to TeamMembershipPayload
-        return team_membership
+        # Return the proper TeamMembershipPayload structure
+        return {
+            'success': True,
+            'lastSyncId': 0.0,
+            'teamMembership': team_membership
+        }
 
     except Exception as e:
         raise Exception(f"Failed to create team membership: {str(e)}")
@@ -14990,8 +14620,6 @@ def resolve_teamMembershipDelete(obj, info, **kwargs):
         team_membership.archivedAt = datetime.now(timezone.utc)
         team_membership.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
         # Return DeletePayload structure
         return {
             'success': True,
@@ -15043,11 +14671,12 @@ def resolve_teamMembershipUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         team_membership.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated team membership entity
-        # Ariadne will handle converting this to TeamMembershipPayload
-        return team_membership
+        # Return the proper TeamMembershipPayload structure
+        return {
+            'success': True,
+            'lastSyncId': 0.0,
+            'teamMembership': team_membership
+        }
 
     except Exception as e:
         raise Exception(f"Failed to update team membership: {str(e)}")
