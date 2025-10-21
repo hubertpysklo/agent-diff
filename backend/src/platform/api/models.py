@@ -44,6 +44,17 @@ class TestSuiteDetail(TestSuiteSummary):
     tests: List[TestSummary]
 
 
+class TemplateEnvironmentSummary(BaseModel):
+    id: str
+    service: str
+    name: str
+    location: str  # Location of the template environment in the database (schema_name) or S3 (s3://...)
+
+
+class TemplateEnvironmentListResponse(BaseModel):
+    templates: List[TemplateEnvironmentSummary]
+
+
 class InitEnvRequestBody(BaseModel):
     testId: Optional[UUID] = None
     templateSchema: Optional[str] = None

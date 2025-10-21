@@ -31,8 +31,12 @@ class User(PlatformBase):
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
-    is_organization_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    is_platform_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    is_organization_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
@@ -44,7 +48,9 @@ class User(PlatformBase):
 class OrganizationMembership(PlatformBase):
     __tablename__ = "organization_memberships"
     __table_args__ = ({"schema": "public"},)
-    user_id: Mapped[str] = mapped_column(ForeignKey("public.users.id"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("public.users.id"), primary_key=True
+    )
     organization_id: Mapped[str] = mapped_column(
         ForeignKey("public.organizations.id"), primary_key=True
     )
@@ -80,6 +86,9 @@ class TemplateEnvironment(PlatformBase):
         nullable=False,
         default="global",
     )
+    description: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )  # Run migrations remember
     owner_org_id: Mapped[str | None] = mapped_column(nullable=True)
     owner_user_id: Mapped[str | None] = mapped_column(nullable=True)
     kind: Mapped[str] = mapped_column(
@@ -117,11 +126,15 @@ class RunTimeEnvironment(PlatformBase):
         nullable=False,
         default="initializing",
     )
-    permanent: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    permanent: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false", nullable=False
+    )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     max_idle_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_by: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
+    created_by: Mapped[str] = mapped_column(
+        ForeignKey("public.users.id"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
@@ -207,7 +220,9 @@ class TestMembership(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("public.tests.id"), nullable=False)
+    test_id: Mapped[PyUUID] = mapped_column(
+        ForeignKey("public.tests.id"), nullable=False
+    )
     test_suite_id: Mapped[PyUUID] = mapped_column(
         ForeignKey("public.test_suites.id"), nullable=False
     )
@@ -221,7 +236,9 @@ class TestRun(PlatformBase):
     id: Mapped[PyUUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    test_id: Mapped[PyUUID] = mapped_column(ForeignKey("public.tests.id"), nullable=False)
+    test_id: Mapped[PyUUID] = mapped_column(
+        ForeignKey("public.tests.id"), nullable=False
+    )
     test_suite_id: Mapped[PyUUID | None] = mapped_column(
         ForeignKey("public.test_suites.id"), nullable=True
     )
@@ -247,6 +264,8 @@ class TestRun(PlatformBase):
     after_snapshot_suffix: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
-    created_by: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
+    created_by: Mapped[str] = mapped_column(
+        ForeignKey("public.users.id"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
