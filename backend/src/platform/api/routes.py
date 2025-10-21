@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import ValidationError
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -28,10 +28,12 @@ from src.platform.api.models import (
     Principal,
     TemplateEnvironmentSummary,
     TemplateEnvironmentListResponse,
+    TemplateEnvironmentDetail,
 )
 from src.platform.api.auth import (
     require_resource_access,
     require_resource_access_with_org,
+    check_template_access,
 )
 from src.platform.db.schema import (
     TestSuite,
@@ -50,42 +52,86 @@ from src.platform.isolationEngine.core import CoreIsolationEngine
 logger = logging.getLogger(__name__)
 
 
+def _principal_from_request(request: Request) -> Principal:
+    principal = getattr(request.state, "principal", None)
+    if not principal:
+        raise PermissionError("missing principal context")
+    return principal
+
+
 async def list_environment_templates(
     request: Request,
-) -> TemplateEnvironmentListResponse:
+) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
-    templates = (
-        session.query(TemplateEnvironment)
-        .filter(
+
+    query = session.query(TemplateEnvironment)
+    if not principal.is_platform_admin:
+        query = query.filter(
             or_(
                 TemplateEnvironment.owner_scope == "public",
-                TemplateEnvironment.owner_org_id.in_(principal.org_ids),
-                TemplateEnvironment.owner_user_id == principal.user_id,
+                and_(
+                    TemplateEnvironment.owner_scope == "org",
+                    TemplateEnvironment.owner_org_id.in_(principal.org_ids),
+                ),
+                and_(
+                    TemplateEnvironment.owner_scope == "user",
+                    TemplateEnvironment.owner_user_id == principal.user_id,
+                ),
             )
         )
-        .all()
-    )
-    return TemplateEnvironmentListResponse(
+
+    templates = query.order_by(TemplateEnvironment.created_at.desc()).all()
+
+    response = TemplateEnvironmentListResponse(
         templates=[
             TemplateEnvironmentSummary(
                 id=template.id,
                 service=template.service,
                 description=template.description,
                 name=template.name,
-                version=template.version,
-                location=template.location,
             )
             for template in templates
         ]
     )
+    return JSONResponse(response.model_dump(mode="json"))
 
 
-def _principal_from_request(request: Request) -> Principal:
-    principal = getattr(request.state, "principal", None)
-    if not principal:
-        raise PermissionError("missing principal context")
-    return principal
+async def get_environment_template(
+    request: Request,
+) -> JSONResponse:
+    template_id = request.path_params["template_id"]
+    session = request.state.db_session
+    principal = _principal_from_request(request)
+
+    template = (
+        session.query(TemplateEnvironment)
+        .filter(TemplateEnvironment.id == template_id)
+        .one_or_none()
+    )
+    if template is None:
+        return JSONResponse(
+            APIError(detail="template not found").model_dump(),
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+
+    try:
+        check_template_access(principal, template)
+    except PermissionError:
+        return JSONResponse(
+            APIError(detail="unauthorized").model_dump(),
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
+
+    response = TemplateEnvironmentDetail(
+        id=template.id,
+        service=template.service,
+        description=template.description,
+        name=template.name,
+        version=template.version,
+        location=template.location,
+    )
+    return JSONResponse(response.model_dump(mode="json"))
 
 
 async def list_test_suites(request: Request) -> JSONResponse:
@@ -503,6 +549,8 @@ routes = [
     Route("/health", health_check, methods=["GET"]),
     Route("/testSuites", list_test_suites, methods=["GET"]),
     Route("/testSuites/{suite_id}", get_test_suite, methods=["GET"]),
+    Route("/templates", list_environment_templates, methods=["GET"]),
+    Route("/templates/{template_id}", get_environment_template, methods=["GET"]),
     Route("/initEnv", init_environment, methods=["POST"]),
     Route("/startRun", start_run, methods=["POST"]),
     Route("/endRun", end_run, methods=["POST"]),

@@ -49,6 +49,9 @@ class TemplateEnvironmentSummary(BaseModel):
     service: str
     description: str | None = None
     name: str
+
+
+class TemplateEnvironmentDetail(TemplateEnvironmentSummary):
     version: str
     location: str  # Location of the template environment in the database (schema_name) or S3 (s3://...)
 

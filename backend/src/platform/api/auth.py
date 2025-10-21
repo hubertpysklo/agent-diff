@@ -14,7 +14,12 @@ from sqlalchemy.orm import Session
 
 from src.platform.api.models import Principal, ApiKeyResponse
 from src.platform.isolationEngine.session import SessionManager
-from src.platform.db.schema import ApiKey, OrganizationMembership, User
+from src.platform.db.schema import (
+    ApiKey,
+    OrganizationMembership,
+    User,
+    TemplateEnvironment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,3 +170,21 @@ def require_resource_access_with_org(
 ) -> None:
     if not check_resource_access_with_org(principal, creator_id, creator_org_ids):
         raise PermissionError("unauthorized")
+
+
+def check_template_access(principal: Principal, template: TemplateEnvironment) -> None:
+    if principal.is_platform_admin:
+        return
+    if template.owner_scope == "public":
+        return
+    if template.owner_scope == "user":
+        require_resource_access(principal, template.owner_user_id or "")
+        return
+    if template.owner_scope == "org":
+        require_resource_access_with_org(
+            principal,
+            template.owner_user_id or "",
+            [template.owner_org_id] if template.owner_org_id else [],
+        )
+        return
+    raise PermissionError("unauthorized")
