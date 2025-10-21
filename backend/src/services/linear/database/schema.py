@@ -2,9 +2,21 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Optional, List
+from typing import Any, Optional
 
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, JSON, String, Table
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Table,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -14,6 +26,7 @@ class Base(DeclarativeBase):
 
 class ProjectMilestoneStatus(str, Enum):
     """The status of a project milestone."""
+
     DONE = "done"
     NEXT = "next"
     OVERDUE = "overdue"
@@ -80,21 +93,32 @@ document_subscribers_association = Table(
 class Issue(Base):
     __tablename__ = "issues"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    activitySummary: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    activitySummary: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
     addedToCycleAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    addedToProjectAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    addedToProjectAt: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     addedToTeamAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    asksExternalUserRequesterId: Mapped[Optional[str]] = mapped_column(ForeignKey("external_users.id"), nullable=True)
+    asksExternalUserRequesterId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("external_users.id"), nullable=True
+    )
     asksExternalUserRequester: Mapped[Optional["ExternalUser"]] = relationship(
-        "ExternalUser",
-        foreign_keys=[asksExternalUserRequesterId]
+        "ExternalUser", foreign_keys=[asksExternalUserRequesterId]
     )
-    asksRequesterId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    asksRequesterId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     asksRequester: Mapped[Optional["User"]] = relationship(
-        "User", back_populates="asksRequestedIssues", foreign_keys="Issue.asksRequesterId"
+        "User",
+        back_populates="asksRequestedIssues",
+        foreign_keys="Issue.asksRequesterId",
     )
-    assigneeId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assigneeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     assignee: Mapped[Optional["User"]] = relationship(
         "User", back_populates="assignedIssues", foreign_keys="Issue.assigneeId"
     )
@@ -103,68 +127,99 @@ class Issue(Base):
     )
     autoArchivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     autoClosedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    autoClosedByParentClosing: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    autoClosedByParentClosing: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
     boardOrder: Mapped[float] = mapped_column(Float, nullable=False)
     # botActor skipped
     branchName: Mapped[str] = mapped_column(String, nullable=False)
     canceledAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    parentId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("issues.id"), nullable=True)
+    parentId: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("issues.id"), nullable=True
+    )
     parent: Mapped[Optional["Issue"]] = relationship(
         "Issue", foreign_keys=[parentId], remote_side=[id], back_populates="children"
     )
     children: Mapped[list["Issue"]] = relationship(
-        "Issue", foreign_keys=[parentId], back_populates="parent", cascade="all, delete-orphan", single_parent=True
+        "Issue",
+        foreign_keys=[parentId],
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        single_parent=True,
     )
     comments: Mapped[list["Comment"]] = relationship(
         "Comment", back_populates="issue", foreign_keys="Comment.issueId"
     )
     completedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     creator: Mapped[Optional["User"]] = relationship(
         "User", back_populates="createdIssues", foreign_keys="Issue.creatorId"
     )
     customerTicketCount: Mapped[int] = mapped_column(Integer, nullable=False)
-    cycleId: Mapped[Optional[str]] = mapped_column(ForeignKey("cycles.id"), nullable=True)
+    cycleId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("cycles.id"), nullable=True
+    )
     cycle: Mapped[Optional["Cycle"]] = relationship(
         "Cycle", back_populates="issues", foreign_keys="Issue.cycleId"
     )
-    delegateId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    delegateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     delegate: Mapped[Optional["User"]] = relationship(
         "User", back_populates="delegatedIssues", foreign_keys="Issue.delegateId"
     )
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    descriptionData: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    descriptionData: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
     descriptionState: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     documentContent: Mapped[Optional["DocumentContent"]] = relationship(
-        "DocumentContent", back_populates="issue", foreign_keys="DocumentContent.issueId", uselist=False
+        "DocumentContent",
+        back_populates="issue",
+        foreign_keys="DocumentContent.issueId",
+        uselist=False,
     )
     dueDate: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     estimate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    externalUserCreatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("external_users.id"), nullable=True)
+    externalUserCreatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("external_users.id"), nullable=True
+    )
     externalUserCreator: Mapped[Optional["ExternalUser"]] = relationship(
-        "ExternalUser",
-        foreign_keys=[externalUserCreatorId]
+        "ExternalUser", foreign_keys=[externalUserCreatorId]
     )
     favorite: Mapped[Optional["Favorite"]] = relationship(
-        "Favorite", back_populates="issue", foreign_keys="Favorite.issueId", uselist=False
+        "Favorite",
+        back_populates="issue",
+        foreign_keys="Favorite.issueId",
+        uselist=False,
     )
     formerAttachments: Mapped[list["Attachment"]] = relationship(
-        "Attachment", back_populates="originalIssue", foreign_keys="Attachment.originalIssueId"
+        "Attachment",
+        back_populates="originalIssue",
+        foreign_keys="Attachment.originalIssueId",
     )
     formerNeeds: Mapped[list["CustomerNeed"]] = relationship(
-        "CustomerNeed", back_populates="originalIssue", foreign_keys="CustomerNeed.originalIssueId"
+        "CustomerNeed",
+        back_populates="originalIssue",
+        foreign_keys="CustomerNeed.originalIssueId",
     )
     history: Mapped[list["IssueHistory"]] = relationship(
         "IssueHistory", back_populates="issue", foreign_keys="IssueHistory.issueId"
     )
-    identifier: Mapped[str] = mapped_column(String, nullable=False)
+    identifier: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     incomingSuggestions: Mapped[list["IssueSuggestion"]] = relationship(
-        "IssueSuggestion", back_populates="issue", foreign_keys="IssueSuggestion.issueId"
+        "IssueSuggestion",
+        back_populates="issue",
+        foreign_keys="IssueSuggestion.issueId",
     )
     integrationSourceType: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     inverseRelations: Mapped[list["IssueRelation"]] = relationship(
-        "IssueRelation", back_populates="relatedIssue", foreign_keys="IssueRelation.relatedIssueId"
+        "IssueRelation",
+        back_populates="relatedIssue",
+        foreign_keys="IssueRelation.relatedIssueId",
     )
     labelIds: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     labels: Mapped[list["IssueLabel"]] = relationship(
@@ -172,10 +227,11 @@ class Issue(Base):
         secondary=issue_label_issue_association,
         back_populates="issues",
     )
-    lastAppliedTemplateId: Mapped[Optional[str]] = mapped_column(ForeignKey("templates.id"), nullable=True)
+    lastAppliedTemplateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("templates.id"), nullable=True
+    )
     lastAppliedTemplate: Mapped[Optional["Template"]] = relationship(
-        "Template",
-        foreign_keys=[lastAppliedTemplateId]
+        "Template", foreign_keys=[lastAppliedTemplateId]
     )
     needs: Mapped[list["CustomerNeed"]] = relationship(
         "CustomerNeed", back_populates="issue", foreign_keys="CustomerNeed.issueId"
@@ -185,16 +241,25 @@ class Issue(Base):
     priority: Mapped[float] = mapped_column(Float, nullable=False)
     priorityLabel: Mapped[str] = mapped_column(String, nullable=False)
     prioritySortOrder: Mapped[float] = mapped_column(Float, nullable=False)
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     project: Mapped[Optional["Project"]] = relationship(
         "Project", back_populates="issues", foreign_keys="Issue.projectId"
     )
     convertedToProject: Mapped[Optional["Project"]] = relationship(
-        "Project", back_populates="convertedFromIssue", foreign_keys="Project.convertedFromIssueId", uselist=False
+        "Project",
+        back_populates="convertedFromIssue",
+        foreign_keys="Project.convertedFromIssueId",
+        uselist=False,
     )
-    projectMilestoneId: Mapped[Optional[str]] = mapped_column(ForeignKey("project_milestones.id"), nullable=True)
+    projectMilestoneId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("project_milestones.id"), nullable=True
+    )
     projectMilestone: Mapped[Optional["ProjectMilestone"]] = relationship(
-        "ProjectMilestone", back_populates="issues", foreign_keys="Issue.projectMilestoneId"
+        "ProjectMilestone",
+        back_populates="issues",
+        foreign_keys="Issue.projectMilestoneId",
     )
     reactionData: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     reactions: Mapped[list["Reaction"]] = relationship(
@@ -210,19 +275,27 @@ class Issue(Base):
     slaStartedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # recurringIssueTemplate skipped
     slaType: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    snoozedById: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    snoozedById: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     snoozedBy: Mapped[Optional["User"]] = relationship(
         "User", back_populates="snoozedIssues", foreign_keys="Issue.snoozedById"
     )
     snoozedUntilAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     sortOrder: Mapped[float] = mapped_column(Float, nullable=False)
-    sourceCommentId: Mapped[Optional[str]] = mapped_column(ForeignKey("comments.id"), nullable=True)
+    sourceCommentId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("comments.id"), nullable=True
+    )
     sourceComment: Mapped[Optional["Comment"]] = relationship(
-        "Comment", back_populates="sourceForIssues", foreign_keys="Issue.sourceCommentId"
+        "Comment",
+        back_populates="sourceForIssues",
+        foreign_keys="Issue.sourceCommentId",
     )
     startedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     startedTriageAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    stateId: Mapped[str] = mapped_column(ForeignKey("workflow_states.id"), nullable=False)
+    stateId: Mapped[str] = mapped_column(
+        ForeignKey("workflow_states.id"), nullable=False
+    )
     state: Mapped["WorkflowState"] = relationship(
         "WorkflowState", back_populates="issues", foreign_keys="Issue.stateId"
     )
@@ -237,7 +310,9 @@ class Issue(Base):
         back_populates="suggestedIssue",
         foreign_keys="IssueSuggestion.suggestedIssueId",
     )
-    suggestionsGeneratedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    suggestionsGeneratedAt: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     # syncedWith skipped
     teamId: Mapped[str] = mapped_column(ForeignKey("teams.id"), nullable=False)
     team: Mapped["Team"] = relationship(
@@ -263,23 +338,29 @@ class Attachment(Base):
     __tablename__ = "attachments"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     issueId: Mapped[str] = mapped_column(ForeignKey("issues.id"), nullable=False)
-    issue: Mapped[Issue] = relationship("Issue", back_populates="attachments", foreign_keys="Attachment.issueId")
-    originalIssueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    issue: Mapped[Issue] = relationship(
+        "Issue", back_populates="attachments", foreign_keys="Attachment.issueId"
+    )
+    originalIssueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     originalIssue: Mapped[Optional["Issue"]] = relationship(
-        "Issue", back_populates="formerAttachments", foreign_keys="Attachment.originalIssueId"
+        "Issue",
+        back_populates="formerAttachments",
+        foreign_keys="Attachment.originalIssueId",
     )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     bodyData: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
-    externalUserCreatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("external_users.id"), nullable=True)
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
+    externalUserCreatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("external_users.id"), nullable=True
+    )
     externalUserCreator: Mapped[Optional["ExternalUser"]] = relationship(
-        "ExternalUser",
-        foreign_keys=[externalUserCreatorId]
+        "ExternalUser", foreign_keys=[externalUserCreatorId]
     )
     groupBySource: Mapped[bool] = mapped_column(Boolean, nullable=False)
     metadata_: Mapped[dict[str, Any]] = mapped_column("metadata", JSON, nullable=False)
@@ -313,7 +394,9 @@ class Comment(Base):
         back_populates="parent",
         cascade="all, delete-orphan",
     )
-    agentSessionId: Mapped[Optional[str]] = mapped_column(ForeignKey("agent_sessions.id"), nullable=True)
+    agentSessionId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("agent_sessions.id"), nullable=True
+    )
     agentSession: Mapped[Optional["AgentSession"]] = relationship(
         "AgentSession",
         back_populates="commentWithActiveSession",
@@ -332,31 +415,38 @@ class Comment(Base):
         ForeignKey("document_contents.id"), nullable=True
     )
     documentContent: Mapped[Optional["DocumentContent"]] = relationship(
-        "DocumentContent",
-        foreign_keys=[documentContentId]
+        "DocumentContent", foreign_keys=[documentContentId]
     )
-    documentId: Mapped[Optional[str]] = mapped_column(ForeignKey("documents.id"), nullable=True)
+    documentId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("documents.id"), nullable=True
+    )
     editedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # externalThread skipped
-    externalUserId: Mapped[Optional[str]] = mapped_column(ForeignKey("external_users.id"), nullable=True)
+    externalUserId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("external_users.id"), nullable=True
+    )
     externalUser: Mapped[Optional["ExternalUser"]] = relationship(
-        "ExternalUser",
-        foreign_keys=[externalUserId]
+        "ExternalUser", foreign_keys=[externalUserId]
     )
     initiativeUpdate: Mapped[Optional["InitiativeUpdate"]] = relationship(
-        "InitiativeUpdate", back_populates="comments", foreign_keys="Comment.initiativeUpdateId"
+        "InitiativeUpdate",
+        back_populates="comments",
+        foreign_keys="Comment.initiativeUpdateId",
     )
     initiativeUpdateId: Mapped[Optional[str]] = mapped_column(
         ForeignKey("initiative_updates.id"), nullable=True
     )
-    issueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
-    parentId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("comments.id"), nullable=True)
-    postId: Mapped[Optional[str]] = mapped_column(ForeignKey("posts.id"), nullable=True)
-    post: Mapped[Optional["Post"]] = relationship(
-        "Post",
-        foreign_keys=[postId]
+    issueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
     )
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    parentId: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("comments.id"), nullable=True
+    )
+    postId: Mapped[Optional[str]] = mapped_column(ForeignKey("posts.id"), nullable=True)
+    post: Mapped[Optional["Post"]] = relationship("Post", foreign_keys=[postId])
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     projectUpdateId: Mapped[Optional[str]] = mapped_column(
         String,
         ForeignKey("project_updates.id"),
@@ -386,27 +476,23 @@ class Comment(Base):
     resolvingCommentId: Mapped[Optional[str]] = mapped_column(
         ForeignKey("comments.id"), nullable=True
     )
-    resolvingUserId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    resolvingUserId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     resolvingUser: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[resolvingUserId]
+        "User", foreign_keys=[resolvingUserId]
     )
     # syncedWith skipped
     threadSummary: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     url: Mapped[str] = mapped_column(String, nullable=False)
     userId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    user: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[userId]
-    )
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[userId])
     subscribers: Mapped[list["User"]] = relationship(
-        "User",
-        secondary=comment_subscribers_association
+        "User", secondary=comment_subscribers_association
     )
     document: Mapped[Optional["Document"]] = relationship(
-        "Document",
-        foreign_keys=[documentId]
+        "Document", foreign_keys=[documentId]
     )
 
 
@@ -414,21 +500,30 @@ class InitiativeUpdate(Base):
     __tablename__ = "initiative_updates"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     comments: Mapped[list["Comment"]] = relationship(
-        "Comment", back_populates="initiativeUpdate", foreign_keys="Comment.initiativeUpdateId"
+        "Comment",
+        back_populates="initiativeUpdate",
+        foreign_keys="Comment.initiativeUpdateId",
     )
-    initiativeId: Mapped[str] = mapped_column(ForeignKey("initiatives.id"), nullable=False)
+    initiativeId: Mapped[str] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=False
+    )
     initiative: Mapped["Initiative"] = relationship(
         "Initiative", back_populates="updates", foreign_keys=[initiativeId]
     )
     lastUpdateForInitiative: Mapped[Optional["Initiative"]] = relationship(
-        "Initiative", back_populates="lastUpdate", foreign_keys="Initiative.lastUpdateId", uselist=False
+        "Initiative",
+        back_populates="lastUpdate",
+        foreign_keys="Initiative.lastUpdateId",
+        uselist=False,
     )
 
 
 class AgentSession(Base):
     __tablename__ = "agent_sessions"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    commentId: Mapped[Optional[str]] = mapped_column(ForeignKey("comments.id"), nullable=True)
+    commentId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("comments.id"), nullable=True
+    )
     comment: Mapped[Optional["Comment"]] = relationship(
         "Comment", back_populates="agentSessions", foreign_keys=[commentId]
     )
@@ -443,15 +538,23 @@ class AgentSession(Base):
 class CustomerNeed(Base):
     __tablename__ = "customer_needs"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    originalIssueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
-    originalIssue: Mapped[Optional["Issue"]] = relationship(
-        "Issue", back_populates="formerNeeds", foreign_keys="CustomerNeed.originalIssueId"
+    originalIssueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
     )
-    issueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    originalIssue: Mapped[Optional["Issue"]] = relationship(
+        "Issue",
+        back_populates="formerNeeds",
+        foreign_keys="CustomerNeed.originalIssueId",
+    )
+    issueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     issue: Mapped[Optional["Issue"]] = relationship(
         "Issue", back_populates="needs", foreign_keys="CustomerNeed.issueId"
     )
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     project: Mapped[Optional["Project"]] = relationship(
         "Project", back_populates="needs", foreign_keys="CustomerNeed.projectId"
     )
@@ -466,14 +569,18 @@ class Cycle(Base):
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     autoArchivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     completedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    completedIssueCountHistory: Mapped[list[float]] = mapped_column(JSON, nullable=False)
+    completedIssueCountHistory: Mapped[list[float]] = mapped_column(
+        JSON, nullable=False
+    )
     completedScopeHistory: Mapped[list[float]] = mapped_column(JSON, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     currentProgress: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     endsAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     inProgressScopeHistory: Mapped[list[float]] = mapped_column(JSON, nullable=False)
-    inheritedFromId: Mapped[Optional[str]] = mapped_column(ForeignKey("cycles.id"), nullable=True)
+    inheritedFromId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("cycles.id"), nullable=True
+    )
     inheritedFrom: Mapped[Optional["Cycle"]] = relationship(
         "Cycle",
         back_populates="inheritedChildren",
@@ -518,30 +625,45 @@ class Cycle(Base):
 class DocumentContent(Base):
     __tablename__ = "document_contents"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    issueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    issueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     issue: Mapped[Optional["Issue"]] = relationship(
         "Issue", back_populates="documentContent", foreign_keys=[issueId]
     )
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     project: Mapped[Optional["Project"]] = relationship(
         "Project", back_populates="documentContent", foreign_keys=[projectId]
     )
-    initiativeId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiatives.id"), nullable=True)
+    initiativeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=True
+    )
     initiative: Mapped[Optional["Initiative"]] = relationship(
-        "Initiative", back_populates="documentContent", foreign_keys=[initiativeId], uselist=False
+        "Initiative",
+        back_populates="documentContent",
+        foreign_keys=[initiativeId],
+        uselist=False,
     )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     content: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     contentState: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    documentId: Mapped[Optional[str]] = mapped_column(ForeignKey("documents.id"), nullable=True)
-    document: Mapped[Optional["Document"]] = relationship(
-        "Document",
-        foreign_keys=[documentId]
+    documentId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("documents.id"), nullable=True
     )
-    projectMilestoneId: Mapped[Optional[str]] = mapped_column(ForeignKey("project_milestones.id"), nullable=True)
+    document: Mapped[Optional["Document"]] = relationship(
+        "Document", foreign_keys=[documentId]
+    )
+    projectMilestoneId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("project_milestones.id"), nullable=True
+    )
     projectMilestone: Mapped[Optional["ProjectMilestone"]] = relationship(
-        "ProjectMilestone", back_populates="documentContent", foreign_keys=[projectMilestoneId], uselist=False
+        "ProjectMilestone",
+        back_populates="documentContent",
+        foreign_keys=[projectMilestoneId],
+        uselist=False,
     )
     restoredAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -550,11 +672,15 @@ class DocumentContent(Base):
 class Favorite(Base):
     __tablename__ = "favorites"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    issueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    issueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     issue: Mapped[Optional["Issue"]] = relationship(
         "Issue", back_populates="favorite", foreign_keys=[issueId]
     )
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     project: Mapped[Optional["Project"]] = relationship(
         "Project", back_populates="favorite", foreign_keys=[projectId], uselist=False
     )
@@ -567,10 +693,13 @@ class IssueHistory(Base):
     issue: Mapped[Issue] = relationship(
         "Issue", back_populates="history", foreign_keys=[issueId]
     )
-    fromParentId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    fromParentId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     fromParent: Mapped[Optional["Issue"]] = relationship(
         "Issue", foreign_keys=[fromParentId]
     )
+
 
 class IssueSuggestion(Base):
     __tablename__ = "issue_suggestions"
@@ -579,7 +708,9 @@ class IssueSuggestion(Base):
     issue: Mapped["Issue"] = relationship(
         "Issue", back_populates="incomingSuggestions", foreign_keys=[issueId]
     )
-    suggestedIssueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    suggestedIssueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     suggestedIssue: Mapped[Optional["Issue"]] = relationship(
         "Issue", back_populates="suggestions", foreign_keys=[suggestedIssueId]
     )
@@ -595,7 +726,9 @@ class IssueRelation(Base):
     type: Mapped[str] = mapped_column(String, nullable=False)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
-    issue: Mapped[Issue] = relationship("Issue", back_populates="relations", foreign_keys=[issueId])
+    issue: Mapped[Issue] = relationship(
+        "Issue", back_populates="relations", foreign_keys=[issueId]
+    )
     relatedIssue: Mapped[Issue] = relationship(
         "Issue", back_populates="inverseRelations", foreign_keys=[relatedIssueId]
     )
@@ -613,27 +746,41 @@ class IssueLabel(Base):
     team: Mapped[Optional["Team"]] = relationship(
         "Team", back_populates="labels", foreign_keys="IssueLabel.teamId"
     )
-    organizationId: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    organizationId: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     organization: Mapped["Organization"] = relationship(
-        "Organization", back_populates="labels", foreign_keys="IssueLabel.organizationId"
+        "Organization",
+        back_populates="labels",
+        foreign_keys="IssueLabel.organizationId",
     )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    parentId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("issue_labels.id"), nullable=True)
+    parentId: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("issue_labels.id"), nullable=True
+    )
     parent: Mapped[Optional["IssueLabel"]] = relationship(
-        "IssueLabel", foreign_keys=[parentId], remote_side=[id], back_populates="children"
+        "IssueLabel",
+        foreign_keys=[parentId],
+        remote_side=[id],
+        back_populates="children",
     )
     children: Mapped[list["IssueLabel"]] = relationship(
-        "IssueLabel", foreign_keys=[parentId], back_populates="parent", cascade="all, delete-orphan", single_parent=True
+        "IssueLabel",
+        foreign_keys=[parentId],
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        single_parent=True,
     )
     color: Mapped[str] = mapped_column(String, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    inheritedFromId: Mapped[Optional[str]] = mapped_column(ForeignKey("issue_labels.id"), nullable=True)
+    inheritedFromId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issue_labels.id"), nullable=True
+    )
     inheritedFrom: Mapped[Optional["IssueLabel"]] = relationship(
         "IssueLabel",
         back_populates="inheritedChildren",
@@ -668,28 +815,36 @@ class Project(Base):
     canceledAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     color: Mapped[str] = mapped_column(String, nullable=False)
     comments: Mapped[list["Comment"]] = relationship(
-        "Comment",
-        foreign_keys="Comment.projectId"
+        "Comment", foreign_keys="Comment.projectId"
     )
     completedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    completedIssueCountHistory: Mapped[list[float]] = mapped_column(JSON, nullable=False)
+    completedIssueCountHistory: Mapped[list[float]] = mapped_column(
+        JSON, nullable=False
+    )
     completedScopeHistory: Mapped[list[float]] = mapped_column(JSON, nullable=False)
     content: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     contentState: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    convertedFromIssueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    convertedFromIssueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     convertedFromIssue: Mapped[Optional["Issue"]] = relationship(
-        "Issue", back_populates="convertedToProject", foreign_keys=[convertedFromIssueId], uselist=False
+        "Issue",
+        back_populates="convertedToProject",
+        foreign_keys=[convertedFromIssueId],
+        uselist=False,
     )
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
     currentProgress: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False)
     documentContent: Mapped[Optional["DocumentContent"]] = relationship(
-        "DocumentContent", back_populates="project", foreign_keys="DocumentContent.projectId", uselist=False
+        "DocumentContent",
+        back_populates="project",
+        foreign_keys="DocumentContent.projectId",
+        uselist=False,
     )
     documents: Mapped[list["Document"]] = relationship(
         "Document", back_populates="project", foreign_keys="Document.projectId"
@@ -699,13 +854,18 @@ class Project(Base):
     )
     # externalLinks skipped
     favorite: Mapped[Optional["Favorite"]] = relationship(
-        "Favorite", back_populates="project", foreign_keys="Favorite.projectId", uselist=False
+        "Favorite",
+        back_populates="project",
+        foreign_keys="Favorite.projectId",
+        uselist=False,
     )
     frequencyResolution: Mapped[str] = mapped_column(String, nullable=False)
     health: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     healthUpdatedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     history: Mapped[list["ProjectHistory"]] = relationship(
-        "ProjectHistory", back_populates="project", foreign_keys="ProjectHistory.projectId"
+        "ProjectHistory",
+        back_populates="project",
+        foreign_keys="ProjectHistory.projectId",
     )
     icon: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     inProgressScopeHistory: Mapped[list[float]] = mapped_column(JSON, nullable=False)
@@ -732,12 +892,15 @@ class Project(Base):
         secondary=project_label_project_association,
         back_populates="projects",
     )
-    lastAppliedTemplateId: Mapped[Optional[str]] = mapped_column(ForeignKey("templates.id"), nullable=True)
-    lastAppliedTemplate: Mapped[Optional["Template"]] = relationship(
-        "Template",
-        foreign_keys=[lastAppliedTemplateId]
+    lastAppliedTemplateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("templates.id"), nullable=True
     )
-    lastUpdateId: Mapped[Optional[str]] = mapped_column(ForeignKey("project_updates.id"), nullable=True)
+    lastAppliedTemplate: Mapped[Optional["Template"]] = relationship(
+        "Template", foreign_keys=[lastAppliedTemplateId]
+    )
+    lastUpdateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("project_updates.id"), nullable=True
+    )
     lastUpdate: Mapped[Optional["ProjectUpdate"]] = relationship(
         "ProjectUpdate",
         back_populates="lastUpdateForProject",
@@ -750,13 +913,9 @@ class Project(Base):
         foreign_keys="ProjectUpdate.projectId",
     )
     leadId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    lead: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[leadId]
-    )
+    lead: Mapped[Optional["User"]] = relationship("User", foreign_keys=[leadId])
     members: Mapped[list["User"]] = relationship(
-        "User",
-        secondary=project_members_association
+        "User", secondary=project_members_association
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
     needs: Mapped[list["CustomerNeed"]] = relationship(
@@ -768,9 +927,13 @@ class Project(Base):
     progress: Mapped[float] = mapped_column(Float, nullable=False)
     progressHistory: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     projectMilestones: Mapped[list["ProjectMilestone"]] = relationship(
-        "ProjectMilestone", back_populates="project", foreign_keys="ProjectMilestone.projectId"
+        "ProjectMilestone",
+        back_populates="project",
+        foreign_keys="ProjectMilestone.projectId",
     )
-    projectUpdateRemindersPausedUntilAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    projectUpdateRemindersPausedUntilAt: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     relations: Mapped[list["ProjectRelation"]] = relationship(
         "ProjectRelation",
         back_populates="relatedProject",
@@ -787,16 +950,21 @@ class Project(Base):
     startDateResolution: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     startedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     state: Mapped[str] = mapped_column(String, nullable=False)
-    statusId: Mapped[Optional[str]] = mapped_column(ForeignKey("project_statuses.id"), nullable=True)
+    statusId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("project_statuses.id"), nullable=True
+    )
     status: Mapped[Optional["ProjectStatus"]] = relationship(
-        "ProjectStatus",
-        foreign_keys=[statusId]
+        "ProjectStatus", foreign_keys=[statusId]
     )
     targetDate: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     targetDateResolution: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     trashed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    updateReminderFrequency: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    updateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    updateReminderFrequency: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    updateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
     updateRemindersDay: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     updateRemindersHour: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -807,14 +975,19 @@ class ProjectUpdate(Base):
     __tablename__ = "project_updates"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     comments: Mapped[list["Comment"]] = relationship(
-        "Comment", back_populates="projectUpdate", foreign_keys="Comment.projectUpdateId"
+        "Comment",
+        back_populates="projectUpdate",
+        foreign_keys="Comment.projectUpdateId",
     )
     projectId: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
     project: Mapped["Project"] = relationship(
         "Project", back_populates="updates", foreign_keys=[projectId]
     )
     lastUpdateForProject: Mapped[Optional["Project"]] = relationship(
-        "Project", back_populates="lastUpdate", foreign_keys="Project.lastUpdateId", uselist=False
+        "Project",
+        back_populates="lastUpdate",
+        foreign_keys="Project.lastUpdateId",
+        uselist=False,
     )
 
 
@@ -822,20 +995,27 @@ class ProjectMilestone(Base):
     __tablename__ = "project_milestones"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     issues: Mapped[list["Issue"]] = relationship(
-        "Issue", back_populates="projectMilestone", foreign_keys="Issue.projectMilestoneId"
+        "Issue",
+        back_populates="projectMilestone",
+        foreign_keys="Issue.projectMilestoneId",
     )
     projectId: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
     project: Mapped["Project"] = relationship(
         "Project", back_populates="projectMilestones", foreign_keys=[projectId]
     )
     documentContent: Mapped[Optional["DocumentContent"]] = relationship(
-        "DocumentContent", back_populates="projectMilestone", foreign_keys="DocumentContent.projectMilestoneId", uselist=False
+        "DocumentContent",
+        back_populates="projectMilestone",
+        foreign_keys="DocumentContent.projectMilestoneId",
+        uselist=False,
     )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     currentProgress: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    descriptionData: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    descriptionData: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
+    )
     descriptionState: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     progress: Mapped[float] = mapped_column(Float, nullable=False)
@@ -849,11 +1029,15 @@ class ProjectMilestone(Base):
 class Reaction(Base):
     __tablename__ = "reactions"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    issueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
+    issueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
+    )
     issue: Mapped[Optional["Issue"]] = relationship(
         "Issue", back_populates="reactions", foreign_keys=[issueId]
     )
-    commentId: Mapped[Optional[str]] = mapped_column(ForeignKey("comments.id"), nullable=True)
+    commentId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("comments.id"), nullable=True
+    )
     comment: Mapped[Optional["Comment"]] = relationship(
         "Comment", back_populates="reactions", foreign_keys=[commentId]
     )
@@ -861,8 +1045,13 @@ class Reaction(Base):
 
 class Team(Base):
     __tablename__ = "teams"
+    __table_args__ = (
+        UniqueConstraint("organizationId", "key", name="uq_team_org_key"),
+    )
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    parentId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("teams.id"), nullable=True)
+    parentId: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("teams.id"), nullable=True
+    )
     parent: Mapped[Optional["Team"]] = relationship(
         "Team", foreign_keys=[parentId], remote_side=[id], back_populates="children"
     )
@@ -890,7 +1079,9 @@ class Team(Base):
     cycles: Mapped[list["Cycle"]] = relationship(
         "Cycle", back_populates="team", foreign_keys="Cycle.teamId"
     )
-    activeCycleId: Mapped[Optional[str]] = mapped_column(ForeignKey("cycles.id"), nullable=True)
+    activeCycleId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("cycles.id"), nullable=True
+    )
     activeCycle: Mapped[Optional["Cycle"]] = relationship(
         "Cycle",
         back_populates="activeForTeam",
@@ -901,7 +1092,9 @@ class Team(Base):
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     autoArchivePeriod: Mapped[float] = mapped_column(Float, nullable=False)
     autoCloseChildIssues: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    autoCloseParentIssues: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    autoCloseParentIssues: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
     autoClosePeriod: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     autoCloseStateId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     color: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -982,15 +1175,19 @@ class Team(Base):
     icon: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     inheritIssueEstimation: Mapped[bool] = mapped_column(Boolean, nullable=False)
     inheritWorkflowStatuses: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    inheritProductIntelligenceScope: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    productIntelligenceScope: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    inheritProductIntelligenceScope: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
+    productIntelligenceScope: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True
+    )
     integrationsSettings: Mapped[Optional["IntegrationsSettings"]] = relationship(
         "IntegrationsSettings",
         back_populates="team",
         foreign_keys="IntegrationsSettings.teamId",
         uselist=False,
     )
-    inviteHash: Mapped[str] = mapped_column(String, nullable=False)
+    inviteHash: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     issueCount: Mapped[int] = mapped_column(Integer, nullable=False)
     issueEstimationAllowZero: Mapped[bool] = mapped_column(Boolean, nullable=False)
     issueEstimationExtended: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -1036,7 +1233,9 @@ class Team(Base):
         uselist=False,
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
-    organizationId: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    organizationId: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     organization: Mapped["Organization"] = relationship(
         "Organization", back_populates="teams", foreign_keys=[organizationId]
     )
@@ -1145,7 +1344,9 @@ class Template(Base):
         foreign_keys="Team.defaultTemplateForNonMembersId",
         uselist=False,
     )
-    organizationId: Mapped[Optional[str]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    organizationId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
     organization: Mapped[Optional["Organization"]] = relationship(
         "Organization", back_populates="templates", foreign_keys=[organizationId]
     )
@@ -1164,7 +1365,9 @@ class Organization(Base):
     aiTelemetryEnabled: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     allowMembersToInvite: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     allowedAuthServices: Mapped[list[str]] = mapped_column(JSON, nullable=False)
-    allowedFileUploadContentTypes: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    allowedFileUploadContentTypes: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False
+    )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     createdIssueCount: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -1172,48 +1375,73 @@ class Organization(Base):
     customersConfiguration: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     customersEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     defaultFeedSummarySchedule: Mapped[str] = mapped_column(String, nullable=False)
-    deletionRequestedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    deletionRequestedAt: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
     facets: Mapped[list["Facet"]] = relationship(
-        "Facet", back_populates="sourceOrganization", foreign_keys="Facet.sourceOrganizationId"
+        "Facet",
+        back_populates="sourceOrganization",
+        foreign_keys="Facet.sourceOrganizationId",
     )
     feedEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     fiscalYearStartMonth: Mapped[float] = mapped_column(Float, nullable=False)
     gitBranchFormat: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     gitLinkbackMessagesEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    gitPublicLinkbackMessagesEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    gitPublicLinkbackMessagesEnabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False
+    )
     hipaaComplianceEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    initiativeUpdateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    initiativeUpdateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
     initiativeUpdateRemindersDay: Mapped[date] = mapped_column(Date, nullable=False)
     initiativeUpdateRemindersHour: Mapped[float] = mapped_column(Float, nullable=False)
     integrations: Mapped[list["Integration"]] = relationship(
-        "Integration", back_populates="organization", foreign_keys="Integration.organizationId"
+        "Integration",
+        back_populates="organization",
+        foreign_keys="Integration.organizationId",
     )
     # ipRestrictions skipped
     labels: Mapped[list["IssueLabel"]] = relationship(
-        "IssueLabel", back_populates="organization", foreign_keys="IssueLabel.organizationId"
+        "IssueLabel",
+        back_populates="organization",
+        foreign_keys="IssueLabel.organizationId",
     )
     logoUrl: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     oauthAppReview: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    personalApiKeysEnabled: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    personalApiKeysEnabled: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
     periodUploadVolume: Mapped[float] = mapped_column(Float, nullable=False)
     previousUrlKeys: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     projectLabels: Mapped[list["ProjectLabel"]] = relationship(
-        "ProjectLabel", back_populates="organization", foreign_keys="ProjectLabel.organizationId"
+        "ProjectLabel",
+        back_populates="organization",
+        foreign_keys="ProjectLabel.organizationId",
     )
-    projectUpdateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    projectUpdateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
     projectUpdateRemindersDay: Mapped[date] = mapped_column(Date, nullable=False)
     projectUpdateRemindersHour: Mapped[float] = mapped_column(Float, nullable=False)
     projectUpdatesReminderFrequency: Mapped[str] = mapped_column(String, nullable=False)
     projectStatuses: Mapped[list["ProjectStatus"]] = relationship(
-        "ProjectStatus",
-        foreign_keys="ProjectStatus.organizationId"
+        "ProjectStatus", foreign_keys="ProjectStatus.organizationId"
     )
-    reducedPersonalInformation: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    reducedPersonalInformation: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
     releaseChannel: Mapped[str] = mapped_column(String, nullable=False)
-    restrictAgentInvocationToMembers: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    restrictLabelManagementToAdmins: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    restrictTeamCreationToAdmins: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    restrictAgentInvocationToMembers: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
+    restrictLabelManagementToAdmins: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
+    restrictTeamCreationToAdmins: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
     roadmapEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     samlEnabled: Mapped[bool] = mapped_column(Boolean, nullable=False)
     samlSettings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
@@ -1222,15 +1450,20 @@ class Organization(Base):
     slaDayCount: Mapped[str] = mapped_column(String, nullable=False)
     slaEnabled: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     subscription: Mapped[Optional["PaidSubscription"]] = relationship(
-        "PaidSubscription", back_populates="organization", foreign_keys="PaidSubscription.organizationId", uselist=False
+        "PaidSubscription",
+        back_populates="organization",
+        foreign_keys="PaidSubscription.organizationId",
+        uselist=False,
     )
     templates: Mapped[list["Template"]] = relationship(
-        "Template", back_populates="organization", foreign_keys="Template.organizationId"
+        "Template",
+        back_populates="organization",
+        foreign_keys="Template.organizationId",
     )
     themeSettings: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     trialEndsAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    urlKey: Mapped[str] = mapped_column(String, nullable=False)
+    urlKey: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     userCount: Mapped[int] = mapped_column(Integer, nullable=False)
     workingDays: Mapped[list[float]] = mapped_column(JSON, nullable=False)
 
@@ -1280,7 +1513,7 @@ class User(Base):
     guest: Mapped[bool] = mapped_column(Boolean, nullable=False)
     # identityProvider skipped
     initials: Mapped[str] = mapped_column(String, nullable=False)
-    inviteHash: Mapped[str] = mapped_column(String, nullable=False)
+    inviteHash: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     isAssignable: Mapped[bool] = mapped_column(Boolean, nullable=False)
     isMe: Mapped[bool] = mapped_column(Boolean, nullable=False)
     isMentionable: Mapped[bool] = mapped_column(Boolean, nullable=False)
@@ -1289,7 +1522,9 @@ class User(Base):
     )
     lastSeen: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    organizationId: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    organizationId: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     organization: Mapped["Organization"] = relationship(
         "Organization", back_populates="users", foreign_keys=[organizationId]
     )
@@ -1311,7 +1546,10 @@ class User(Base):
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     url: Mapped[str] = mapped_column(String, nullable=False)
     settings: Mapped[Optional["UserSettings"]] = relationship(
-        "UserSettings", back_populates="user", foreign_keys="UserSettings.userId", uselist=False
+        "UserSettings",
+        back_populates="user",
+        foreign_keys="UserSettings.userId",
+        uselist=False,
     )
 
 
@@ -1408,25 +1646,33 @@ class IssueDraft(Base):
 class Facet(Base):
     __tablename__ = "facets"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    sourceTeamId: Mapped[Optional[str]] = mapped_column(ForeignKey("teams.id"), nullable=True)
+    sourceTeamId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("teams.id"), nullable=True
+    )
     sourceTeam: Mapped[Optional["Team"]] = relationship(
         "Team",
         back_populates="facets",
         foreign_keys=[sourceTeamId],
     )
-    sourceOrganizationId: Mapped[Optional[str]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    sourceOrganizationId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
     sourceOrganization: Mapped[Optional["Organization"]] = relationship(
         "Organization",
         back_populates="facets",
         foreign_keys=[sourceOrganizationId],
     )
-    sourceProjectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    sourceProjectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     sourceProject: Mapped[Optional["Project"]] = relationship(
         "Project",
         back_populates="facets",
         foreign_keys=[sourceProjectId],
     )
-    sourceInitiativeId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiatives.id"), nullable=True)
+    sourceInitiativeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=True
+    )
     sourceInitiative: Mapped[Optional["Initiative"]] = relationship(
         "Initiative",
         back_populates="facets",
@@ -1453,14 +1699,18 @@ class IntegrationsSettings(Base):
         foreign_keys=[teamId],
         uselist=False,
     )
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     project: Mapped[Optional["Project"]] = relationship(
         "Project",
         back_populates="integrationsSettings",
         foreign_keys=[projectId],
         uselist=False,
     )
-    initiativeId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiatives.id"), nullable=True)
+    initiativeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=True
+    )
     initiative: Mapped[Optional["Initiative"]] = relationship(
         "Initiative",
         back_populates="integrationsSettings",
@@ -1481,14 +1731,15 @@ class Post(Base):
     body: Mapped[str] = mapped_column(String, nullable=False)
     bodyData: Mapped[str] = mapped_column(String, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
     editedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     evalLogId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    feedSummaryScheduleAtCreate: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    feedSummaryScheduleAtCreate: Mapped[Optional[str]] = mapped_column(
+        String, nullable=True
+    )
     reactionData: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     slugId: Mapped[str] = mapped_column(String, nullable=False)
     title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -1496,11 +1747,10 @@ class Post(Base):
     type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     userId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    user: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[userId]
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[userId])
+    writtenSummaryData: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON, nullable=True
     )
-    writtenSummaryData: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
 
 
 class TriageResponsibility(Base):
@@ -1524,7 +1774,9 @@ class Webhook(Base):
 class Integration(Base):
     __tablename__ = "integrations"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    organizationId: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    organizationId: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     organization: Mapped["Organization"] = relationship(
         "Organization", back_populates="integrations", foreign_keys=[organizationId]
     )
@@ -1533,9 +1785,14 @@ class Integration(Base):
 class PaidSubscription(Base):
     __tablename__ = "paid_subscriptions"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    organizationId: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    organizationId: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     organization: Mapped["Organization"] = relationship(
-        "Organization", back_populates="subscription", foreign_keys=[organizationId], uselist=False
+        "Organization",
+        back_populates="subscription",
+        foreign_keys=[organizationId],
+        uselist=False,
     )
 
 
@@ -1547,25 +1804,35 @@ class ProjectLabel(Base):
         secondary=project_label_project_association,
         back_populates="labels",
     )
-    organizationId: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    organizationId: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     organization: Mapped["Organization"] = relationship(
         "Organization", back_populates="projectLabels", foreign_keys=[organizationId]
     )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    parentId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("project_labels.id"), nullable=True)
+    parentId: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("project_labels.id"), nullable=True
+    )
     parent: Mapped[Optional["ProjectLabel"]] = relationship(
-        "ProjectLabel", foreign_keys=[parentId], remote_side=[id], back_populates="children"
+        "ProjectLabel",
+        foreign_keys=[parentId],
+        remote_side=[id],
+        back_populates="children",
     )
     children: Mapped[list["ProjectLabel"]] = relationship(
-        "ProjectLabel", foreign_keys=[parentId], back_populates="parent", cascade="all, delete-orphan", single_parent=True
+        "ProjectLabel",
+        foreign_keys=[parentId],
+        back_populates="parent",
+        cascade="all, delete-orphan",
+        single_parent=True,
     )
     color: Mapped[str] = mapped_column(String, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     isGroup: Mapped[bool] = mapped_column(Boolean, nullable=False)
     lastAppliedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
@@ -1577,56 +1844,56 @@ class ProjectLabel(Base):
 class Document(Base):
     __tablename__ = "documents"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     project: Mapped[Optional["Project"]] = relationship(
         "Project", back_populates="documents", foreign_keys=[projectId]
     )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     color: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     comments: Mapped[list["Comment"]] = relationship(
-        "Comment",
-        foreign_keys="Comment.documentId"
+        "Comment", foreign_keys="Comment.documentId"
     )
     content: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     contentState: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
     documentContentId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     hiddenAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     icon: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    initiativeId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiatives.id"), nullable=True)
+    initiativeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=True
+    )
     initiative: Mapped[Optional["Initiative"]] = relationship(
         "Initiative", back_populates="documents", foreign_keys="Document.initiativeId"
     )
-    lastAppliedTemplateId: Mapped[Optional[str]] = mapped_column(ForeignKey("templates.id"), nullable=True)
+    lastAppliedTemplateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("templates.id"), nullable=True
+    )
     lastAppliedTemplate: Mapped[Optional["Template"]] = relationship(
-        "Template",
-        foreign_keys=[lastAppliedTemplateId]
+        "Template", foreign_keys=[lastAppliedTemplateId]
     )
     resourceFolderId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     slugId: Mapped[str] = mapped_column(String, nullable=False)
     sortOrder: Mapped[float] = mapped_column(Float, nullable=False)
     teamId: Mapped[Optional[str]] = mapped_column(ForeignKey("teams.id"), nullable=True)
-    team: Mapped[Optional["Team"]] = relationship(
-        "Team",
-        foreign_keys=[teamId]
-    )
+    team: Mapped[Optional["Team"]] = relationship("Team", foreign_keys=[teamId])
     title: Mapped[str] = mapped_column(String, nullable=False)
     trashed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    updatedById: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    updatedById: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     updatedBy: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[updatedById]
+        "User", foreign_keys=[updatedById]
     )
     url: Mapped[str] = mapped_column(String, nullable=False)
     subscribers: Mapped[list["User"]] = relationship(
-        "User",
-        secondary=document_subscribers_association
+        "User", secondary=document_subscribers_association
     )
 
 
@@ -1647,22 +1914,28 @@ class Initiative(Base):
     content: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
     documentContent: Mapped[Optional["DocumentContent"]] = relationship(
-        "DocumentContent", back_populates="initiative", foreign_keys="DocumentContent.initiativeId", uselist=False
+        "DocumentContent",
+        back_populates="initiative",
+        foreign_keys="DocumentContent.initiativeId",
+        uselist=False,
     )
     facets: Mapped[list["Facet"]] = relationship(
-        "Facet", back_populates="sourceInitiative", foreign_keys="Facet.sourceInitiativeId"
+        "Facet",
+        back_populates="sourceInitiative",
+        foreign_keys="Facet.sourceInitiativeId",
     )
     frequencyResolution: Mapped[str] = mapped_column(String, nullable=False)
     health: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     healthUpdatedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     history: Mapped[list["InitiativeHistory"]] = relationship(
-        "InitiativeHistory", back_populates="initiative", foreign_keys="InitiativeHistory.initiativeId"
+        "InitiativeHistory",
+        back_populates="initiative",
+        foreign_keys="InitiativeHistory.initiativeId",
     )
     icon: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     integrationsSettings: Mapped[Optional["IntegrationsSettings"]] = relationship(
@@ -1671,7 +1944,9 @@ class Initiative(Base):
         foreign_keys="IntegrationsSettings.initiativeId",
         uselist=False,
     )
-    lastUpdateId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiative_updates.id"), nullable=True)
+    lastUpdateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiative_updates.id"), nullable=True
+    )
     lastUpdate: Mapped[Optional["InitiativeUpdate"]] = relationship(
         "InitiativeUpdate",
         back_populates="lastUpdateForInitiative",
@@ -1684,25 +1959,36 @@ class Initiative(Base):
         foreign_keys="InitiativeUpdate.initiativeId",
     )
     links: Mapped[list["EntityExternalLink"]] = relationship(
-        "EntityExternalLink", back_populates="initiative", foreign_keys="EntityExternalLink.initiativeId"
+        "EntityExternalLink",
+        back_populates="initiative",
+        foreign_keys="EntityExternalLink.initiativeId",
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
-    organizationId: Mapped[Optional[str]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    organizationId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
     organization: Mapped[Optional["Organization"]] = relationship(
-        "Organization",
-        foreign_keys=[organizationId]
+        "Organization", foreign_keys=[organizationId]
     )
-    ownerId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    owner: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[ownerId]
+    ownerId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
-    parentInitiativeId: Mapped[Optional[str]] = mapped_column(String, ForeignKey("initiatives.id"), nullable=True)
+    owner: Mapped[Optional["User"]] = relationship("User", foreign_keys=[ownerId])
+    parentInitiativeId: Mapped[Optional[str]] = mapped_column(
+        String, ForeignKey("initiatives.id"), nullable=True
+    )
     parentInitiative: Mapped[Optional["Initiative"]] = relationship(
-        "Initiative", foreign_keys=[parentInitiativeId], remote_side=[id], back_populates="subInitiatives"
+        "Initiative",
+        foreign_keys=[parentInitiativeId],
+        remote_side=[id],
+        back_populates="subInitiatives",
     )
     subInitiatives: Mapped[list["Initiative"]] = relationship(
-        "Initiative", foreign_keys=[parentInitiativeId], back_populates="parentInitiative", cascade="all, delete-orphan", single_parent=True
+        "Initiative",
+        foreign_keys=[parentInitiativeId],
+        back_populates="parentInitiative",
+        cascade="all, delete-orphan",
+        single_parent=True,
     )
     slugId: Mapped[str] = mapped_column(String, nullable=False)
     sortOrder: Mapped[float] = mapped_column(Float, nullable=False)
@@ -1711,8 +1997,12 @@ class Initiative(Base):
     targetDate: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     targetDateResolution: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     trashed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
-    updateReminderFrequency: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    updateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    updateReminderFrequency: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
+    updateReminderFrequencyInWeeks: Mapped[Optional[float]] = mapped_column(
+        Float, nullable=True
+    )
     updateRemindersDay: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     updateRemindersHour: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -1737,7 +2027,9 @@ class ProjectRelation(Base):
         back_populates="inverseRelations",
         foreign_keys=[projectId],
     )
-    relatedProjectId: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    relatedProjectId: Mapped[str] = mapped_column(
+        ForeignKey("projects.id"), nullable=False
+    )
     relatedProject: Mapped["Project"] = relationship(
         "Project",
         back_populates="relations",
@@ -1749,27 +2041,28 @@ class ProjectRelation(Base):
     relatedAnchorType: Mapped[str] = mapped_column(String, nullable=False)
     type: Mapped[str] = mapped_column(String, nullable=False)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    projectMilestoneId: Mapped[Optional[str]] = mapped_column(ForeignKey("project_milestones.id"), nullable=True)
-    projectMilestone: Mapped[Optional["ProjectMilestone"]] = relationship(
-        "ProjectMilestone",
-        foreign_keys=[projectMilestoneId]
+    projectMilestoneId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("project_milestones.id"), nullable=True
     )
-    relatedProjectMilestoneId: Mapped[Optional[str]] = mapped_column(ForeignKey("project_milestones.id"), nullable=True)
+    projectMilestone: Mapped[Optional["ProjectMilestone"]] = relationship(
+        "ProjectMilestone", foreign_keys=[projectMilestoneId]
+    )
+    relatedProjectMilestoneId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("project_milestones.id"), nullable=True
+    )
     relatedProjectMilestone: Mapped[Optional["ProjectMilestone"]] = relationship(
-        "ProjectMilestone",
-        foreign_keys=[relatedProjectMilestoneId]
+        "ProjectMilestone", foreign_keys=[relatedProjectMilestoneId]
     )
     userId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    user: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[userId]
-    )
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[userId])
 
 
 class EntityExternalLink(Base):
     __tablename__ = "entity_external_links"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    initiativeId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiatives.id"), nullable=True)
+    initiativeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=True
+    )
     initiative: Mapped[Optional["Initiative"]] = relationship(
         "Initiative", back_populates="links", foreign_keys=[initiativeId]
     )
@@ -1778,7 +2071,9 @@ class EntityExternalLink(Base):
 class InitiativeHistory(Base):
     __tablename__ = "initiative_histories"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    initiativeId: Mapped[str] = mapped_column(ForeignKey("initiatives.id"), nullable=False)
+    initiativeId: Mapped[str] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=False
+    )
     initiative: Mapped["Initiative"] = relationship(
         "Initiative", back_populates="history", foreign_keys=[initiativeId]
     )
@@ -1787,8 +2082,12 @@ class InitiativeHistory(Base):
 organization_invite_team_association = Table(
     "organization_invite_team",
     Base.metadata,
-    Column("organization_invite_id", ForeignKey("organization_invites.id"), primary_key=True),
-    Column("team_id", ForeignKey("teams.id"), primary_key=True)
+    Column(
+        "organization_invite_id",
+        ForeignKey("organization_invites.id"),
+        primary_key=True,
+    ),
+    Column("team_id", ForeignKey("teams.id"), primary_key=True),
 )
 
 
@@ -1801,27 +2100,25 @@ class OrganizationInvite(Base):
     email: Mapped[str] = mapped_column(String, nullable=False)
     expiresAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     external: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    inviteeId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    invitee: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[inviteeId]
+    inviteeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    invitee: Mapped[Optional["User"]] = relationship("User", foreign_keys=[inviteeId])
     inviterId: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    inviter: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[inviterId]
+    inviter: Mapped["User"] = relationship("User", foreign_keys=[inviterId])
+    metadata_: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        "metadata", JSON, nullable=True
     )
-    metadata_: Mapped[Optional[dict[str, Any]]] = mapped_column("metadata", JSON, nullable=True)
-    organizationId: Mapped[Optional[str]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    organizationId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
     organization: Mapped[Optional["Organization"]] = relationship(
-        "Organization",
-        foreign_keys=[organizationId]
+        "Organization", foreign_keys=[organizationId]
     )
     role: Mapped[str] = mapped_column(String, nullable=False)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     teams: Mapped[list["Team"]] = relationship(
-        "Team",
-        secondary=organization_invite_team_association
+        "Team", secondary=organization_invite_team_association
     )
 
 
@@ -1832,12 +2129,13 @@ class OrganizationDomain(Base):
     authType: Mapped[str] = mapped_column(String, nullable=False)
     claimed: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
-    disableOrganizationCreation: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
+    disableOrganizationCreation: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True
+    )
     identityProviderId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -1848,11 +2146,10 @@ class OrganizationDomain(Base):
 class Notification(Base):
     __tablename__ = "notifications"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    actorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    actor: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[actorId]
+    actorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    actor: Mapped[Optional["User"]] = relationship("User", foreign_keys=[actorId])
     actorAvatarColor: Mapped[str] = mapped_column(String, nullable=False)
     actorAvatarUrl: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     actorInitials: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -1861,10 +2158,11 @@ class Notification(Base):
     category: Mapped[str] = mapped_column(String, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     emailedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    externalUserActorId: Mapped[Optional[str]] = mapped_column(ForeignKey("external_users.id"), nullable=True)
+    externalUserActorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("external_users.id"), nullable=True
+    )
     externalUserActor: Mapped[Optional["ExternalUser"]] = relationship(
-        "ExternalUser",
-        foreign_keys=[externalUserActorId]
+        "ExternalUser", foreign_keys=[externalUserActorId]
     )
     groupingKey: Mapped[str] = mapped_column(String, nullable=False)
     groupingPriority: Mapped[float] = mapped_column(Float, nullable=False)
@@ -1881,56 +2179,36 @@ class Notification(Base):
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     url: Mapped[str] = mapped_column(String, nullable=False)
     userId: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False)
-    user: Mapped["User"] = relationship(
-        "User",
-        foreign_keys=[userId]
+    user: Mapped["User"] = relationship("User", foreign_keys=[userId])
+    issueId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("issues.id"), nullable=True
     )
-    issueId: Mapped[Optional[str]] = mapped_column(ForeignKey("issues.id"), nullable=True)
-    issue: Mapped[Optional["Issue"]] = relationship(
-        "Issue",
-        foreign_keys=[issueId]
+    issue: Mapped[Optional["Issue"]] = relationship("Issue", foreign_keys=[issueId])
+    initiativeId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=True
     )
-    initiativeId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiatives.id"), nullable=True)
     initiative: Mapped[Optional["Initiative"]] = relationship(
-        "Initiative",
-        foreign_keys=[initiativeId]
+        "Initiative", foreign_keys=[initiativeId]
     )
-    initiativeUpdateId: Mapped[Optional[str]] = mapped_column(ForeignKey("initiative_updates.id"), nullable=True)
+    initiativeUpdateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("initiative_updates.id"), nullable=True
+    )
     initiativeUpdate: Mapped[Optional["InitiativeUpdate"]] = relationship(
-        "InitiativeUpdate",
-        foreign_keys=[initiativeUpdateId]
+        "InitiativeUpdate", foreign_keys=[initiativeUpdateId]
     )
-    projectId: Mapped[Optional[str]] = mapped_column(ForeignKey("projects.id"), nullable=True)
+    projectId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("projects.id"), nullable=True
+    )
     project: Mapped[Optional["Project"]] = relationship(
-        "Project",
-        foreign_keys=[projectId]
+        "Project", foreign_keys=[projectId]
     )
-    projectUpdateId: Mapped[Optional[str]] = mapped_column(ForeignKey("project_updates.id"), nullable=True)
+    projectUpdateId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("project_updates.id"), nullable=True
+    )
     projectUpdate: Mapped[Optional["ProjectUpdate"]] = relationship(
-        "ProjectUpdate",
-        foreign_keys=[projectUpdateId]
+        "ProjectUpdate", foreign_keys=[projectUpdateId]
     )
     oauthClientApprovalId: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    batchActionPayloadId: Mapped[Optional[str]] = mapped_column(ForeignKey("notification_batch_action_payloads.id"), nullable=True)
-    batchActionPayload: Mapped[Optional["NotificationBatchActionPayload"]] = relationship(
-        "NotificationBatchActionPayload",
-        foreign_keys=[batchActionPayloadId],
-        back_populates="notifications"
-    )
-
-
-class NotificationBatchActionPayload(Base):
-    __tablename__ = "notification_batch_action_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-    # Relationship to notifications affected by this batch action
-    notifications: Mapped[List["Notification"]] = relationship(
-        "Notification",
-        foreign_keys="[Notification.batchActionPayloadId]",
-        back_populates="batchActionPayload"
-    )
 
 
 class ExternalUser(Base):
@@ -1943,10 +2221,11 @@ class ExternalUser(Base):
     email: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     lastSeen: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    organizationId: Mapped[Optional[str]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    organizationId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
     organization: Mapped[Optional["Organization"]] = relationship(
-        "Organization",
-        foreign_keys=[organizationId]
+        "Organization", foreign_keys=[organizationId]
     )
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
@@ -1954,7 +2233,9 @@ class ExternalUser(Base):
 class ProjectStatus(Base):
     __tablename__ = "project_statuses"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    organizationId: Mapped[str] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    organizationId: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     color: Mapped[str] = mapped_column(String, nullable=False)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -1973,21 +2254,20 @@ class InitiativeRelation(Base):
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     sortOrder: Mapped[float] = mapped_column(Float, nullable=False)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    initiativeId: Mapped[str] = mapped_column(ForeignKey("initiatives.id"), nullable=False)
-    initiative: Mapped["Initiative"] = relationship(
-        "Initiative",
-        foreign_keys=[initiativeId]
+    initiativeId: Mapped[str] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=False
     )
-    relatedInitiativeId: Mapped[str] = mapped_column(ForeignKey("initiatives.id"), nullable=False)
+    initiative: Mapped["Initiative"] = relationship(
+        "Initiative", foreign_keys=[initiativeId]
+    )
+    relatedInitiativeId: Mapped[str] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=False
+    )
     relatedInitiative: Mapped["Initiative"] = relationship(
-        "Initiative",
-        foreign_keys=[relatedInitiativeId]
+        "Initiative", foreign_keys=[relatedInitiativeId]
     )
     userId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    user: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[userId]
-    )
+    user: Mapped[Optional["User"]] = relationship("User", foreign_keys=[userId])
 
 
 class InitiativeToProject(Base):
@@ -1995,27 +2275,16 @@ class InitiativeToProject(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    initiativeId: Mapped[str] = mapped_column(ForeignKey("initiatives.id"), nullable=False)
+    initiativeId: Mapped[str] = mapped_column(
+        ForeignKey("initiatives.id"), nullable=False
+    )
     initiative: Mapped["Initiative"] = relationship(
-        "Initiative",
-        foreign_keys=[initiativeId]
+        "Initiative", foreign_keys=[initiativeId]
     )
     projectId: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
-    project: Mapped["Project"] = relationship(
-        "Project",
-        foreign_keys=[projectId]
-    )
+    project: Mapped["Project"] = relationship("Project", foreign_keys=[projectId])
     sortOrder: Mapped[str] = mapped_column(String, nullable=False)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-
-
-class FrontAttachmentPayload(Base):
-    __tablename__ = "front_attachment_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    attachmentId: Mapped[str] = mapped_column(ForeignKey("attachments.id"), nullable=False)
-    attachment: Mapped["Attachment"] = relationship("Attachment", foreign_keys=[attachmentId])
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
 
 
 class IssueImport(Base):
@@ -2023,11 +2292,10 @@ class IssueImport(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    creatorId: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), nullable=True)
-    creator: Mapped[Optional["User"]] = relationship(
-        "User",
-        foreign_keys=[creatorId]
+    creatorId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
     )
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[creatorId])
     csvFileUrl: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     displayName: Mapped[str] = mapped_column(String, nullable=False)
     error: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -2041,67 +2309,54 @@ class IssueImport(Base):
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
-class UserAdminPayload(Base):
-    __tablename__ = "user_admin_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
 class UserSettings(Base):
     """The settings of a user as a JSON object."""
+
     __tablename__ = "user_settings"
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    userId: Mapped[str] = mapped_column(ForeignKey("users.id"), nullable=False, unique=True)
-    user: Mapped["User"] = relationship("User", back_populates="settings", foreign_keys=[userId])
+    userId: Mapped[str] = mapped_column(
+        ForeignKey("users.id"), nullable=False, unique=True
+    )
+    user: Mapped["User"] = relationship(
+        "User", back_populates="settings", foreign_keys=[userId]
+    )
     archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    autoAssignToSelf: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    autoAssignToSelf: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     calendarHash: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     # Notification preferences stored as JSON
-    notificationCategoryPreferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    notificationChannelPreferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    notificationDeliveryPreferences: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    showFullUserNames: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    subscribedToChangelog: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    subscribedToDPA: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    subscribedToInviteAccepted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    subscribedToPrivacyLegalUpdates: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    subscribedToGeneralMarketingCommunications: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    notificationCategoryPreferences: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    notificationChannelPreferences: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    notificationDeliveryPreferences: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
+    showFullUserNames: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    subscribedToChangelog: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    subscribedToDPA: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+    subscribedToInviteAccepted: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    subscribedToPrivacyLegalUpdates: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    subscribedToGeneralMarketingCommunications: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     unsubscribedFrom: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     # Additional settings fields
     feedSummarySchedule: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     settings: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     usageWarningHistory: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-
-
-class UserSettingsFlagsResetPayload(Base):
-    __tablename__ = "user_settings_flags_reset_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class OrganizationDeletePayload(Base):
-    __tablename__ = "organization_delete_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class OrganizationDomainSimplePayload(Base):
-    __tablename__ = "organization_domain_simple_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class OrganizationStartTrialPayload(Base):
-    __tablename__ = "organization_start_trial_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-class SuccessPayload(Base):
-    __tablename__ = "success_payloads"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    lastSyncId: Mapped[float] = mapped_column(Float, nullable=False)
-    success: Mapped[bool] = mapped_column(Boolean, nullable=False)

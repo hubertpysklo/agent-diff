@@ -1,7 +1,37 @@
 from ariadne import QueryType, MutationType
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_, select
-from src.services.linear.database.schema import Issue, Attachment, User, Team, Organization, OrganizationInvite, OrganizationDomain, ProjectStatus, Project, ProjectLabel, ProjectMilestone, ProjectMilestoneStatus, Notification, NotificationBatchActionPayload, Initiative, Comment, Document, Cycle, TeamMembership, IssueRelation, InitiativeRelation, InitiativeToProject, ExternalUser, FrontAttachmentPayload, IssueLabel, IssueImport, UserFlag, UserSettings, UserSettingsFlagsResetPayload, ProjectRelation, WorkflowState, Template
+from src.services.linear.database.schema import (
+    Issue,
+    Attachment,
+    User,
+    Team,
+    Organization,
+    OrganizationInvite,
+    OrganizationDomain,
+    ProjectStatus,
+    Project,
+    ProjectLabel,
+    ProjectMilestone,
+    ProjectMilestoneStatus,
+    Notification,
+    Initiative,
+    Comment,
+    Document,
+    Cycle,
+    TeamMembership,
+    IssueRelation,
+    InitiativeRelation,
+    InitiativeToProject,
+    ExternalUser,
+    IssueLabel,
+    IssueImport,
+    UserFlag,
+    UserSettings,
+    ProjectRelation,
+    WorkflowState,
+    Template,
+)
 from typing import Optional
 import base64
 import json
@@ -12,23 +42,29 @@ query = QueryType()
 mutation = MutationType()
 
 # Export query and mutation objects for use in schema binding
-__all__ = ['query', 'mutation']
+__all__ = ["query", "mutation"]
+
 
 # Helper functions for cursor-based pagination
-def encode_cursor(item, order_field='createdAt'):
+def encode_cursor(item, order_field="createdAt"):
     """Encode a cursor for pagination"""
     field_value = getattr(item, order_field)
 
     # Handle None values - this shouldn't happen for createdAt/updatedAt but be defensive
     if field_value is None:
-        raise Exception(f"Cannot create cursor: {order_field} is None for item {item.id}")
+        raise Exception(
+            f"Cannot create cursor: {order_field} is None for item {item.id}"
+        )
 
     # Encode datetime fields using isoformat, others as string
     cursor_data = {
-        'field': field_value.isoformat() if hasattr(field_value, 'isoformat') else str(field_value),
-        'id': item.id
+        "field": field_value.isoformat()
+        if hasattr(field_value, "isoformat")
+        else str(field_value),
+        "id": item.id,
     }
     return base64.b64encode(json.dumps(cursor_data).encode()).decode()
+
 
 def decode_cursor(cursor):
     """Decode a cursor from pagination"""
@@ -38,6 +74,7 @@ def decode_cursor(cursor):
     except Exception:
         raise Exception(f"Invalid cursor: {cursor}")
 
+
 def validate_pagination_params(after, before, first, last):
     """
     Validate pagination parameters according to Relay Cursor Connections Specification.
@@ -45,33 +82,28 @@ def validate_pagination_params(after, before, first, last):
     Raises:
         Exception: If invalid pagination parameters are provided
     """
-    # Validate first and last are positive
     if first is not None and first <= 0:
         raise Exception("Argument 'first' must be a positive integer")
     if last is not None and last <= 0:
         raise Exception("Argument 'last' must be a positive integer")
 
-    # Prevent using both first and last together
-    # The Relay spec strongly discourages this as it leads to confusing behavior
     if first is not None and last is not None:
         raise Exception("Cannot use both 'first' and 'last' together")
 
-    # Prevent using both after and before together
-    # While technically allowed in Relay spec, this creates a "window" query with
-    # confusing pagination semantics, so we reject it for clarity
     if after and before:
         raise Exception("Cannot use both 'after' and 'before' cursors together")
 
-    # Prevent invalid cursor/direction combinations
-    # These combinations are semantically invalid:
-    # - 'after' is for forward pagination, conflicts with 'last' (backward direction)
-    # - 'before' is for backward pagination, conflicts with 'first' (forward direction)
     if after and last:
-        raise Exception("Cannot use 'after' cursor with 'last' (incompatible pagination directions)")
+        raise Exception(
+            "Cannot use 'after' cursor with 'last' (incompatible pagination directions)"
+        )
     if before and first:
-        raise Exception("Cannot use 'before' cursor with 'first' (incompatible pagination directions)")
+        raise Exception(
+            "Cannot use 'before' cursor with 'first' (incompatible pagination directions)"
+        )
 
-def apply_pagination(items, after, before, first, last, order_field='createdAt'):
+
+def apply_pagination(items, after, before, first, last, order_field="createdAt"):
     """
     Apply pagination logic and build connection response.
 
@@ -97,66 +129,46 @@ def apply_pagination(items, after, before, first, last, order_field='createdAt')
     if has_more:
         items = items[:limit]
 
-    # If using backward pagination, reverse the results
-    # This is needed because backward pagination fetches in DESC order
     if last or before:
         items = list(reversed(items))
 
-    # Determine pagination info according to Relay spec
     if last and before:
-        # Backward pagination with 'last' and 'before' cursor
-        # We're fetching items before a cursor, so there's content after
-        has_next_page = True  # There's content after the 'before' cursor
-        has_previous_page = has_more  # More items exist before what we fetched
+        has_next_page = True
+        has_previous_page = has_more
     elif last:
-        # Backward pagination with 'last' but no cursor
-        # Fetching the last N items from the end
-        has_next_page = False  # No cursor, so we don't know if there's content after
+        has_next_page = False
         has_previous_page = has_more
     elif before:
-        # Using 'before' cursor without 'last'
-        # Treat as backward pagination with default limit
-        has_next_page = True  # We used 'before', so there's content after
+        has_next_page = True
         has_previous_page = has_more
     elif after:
-        # Forward pagination with 'after' cursor
         has_next_page = has_more
-        has_previous_page = True  # We used 'after', so there's content before
+        has_previous_page = True
     elif first:
-        # Forward pagination with 'first' but no 'after'
         has_next_page = has_more
-        has_previous_page = False  # Starting from beginning
+        has_previous_page = False
     else:
-        # Default case (no pagination params)
         has_next_page = has_more
         has_previous_page = False
 
     # Build edges
     edges = [
-        {
-            'node': item,
-            'cursor': encode_cursor(item, order_field)
-        }
-        for item in items
+        {"node": item, "cursor": encode_cursor(item, order_field)} for item in items
     ]
 
     # Build pageInfo
     page_info = {
-        'hasNextPage': has_next_page,
-        'hasPreviousPage': has_previous_page,
-        'startCursor': edges[0]['cursor'] if edges else None,
-        'endCursor': edges[-1]['cursor'] if edges else None
+        "hasNextPage": has_next_page,
+        "hasPreviousPage": has_previous_page,
+        "startCursor": edges[0]["cursor"] if edges else None,
+        "endCursor": edges[-1]["cursor"] if edges else None,
     }
 
     # Return connection
-    return {
-        'edges': edges,
-        'nodes': items,
-        'pageInfo': page_info
-    }
+    return {"edges": edges, "nodes": items, "pageInfo": page_info}
+
 
 # Resolver functions will be added here as queries are implemented
-
 @query.field("issue")
 def resolve_issue(obj, info, id: str):
     """
@@ -170,7 +182,7 @@ def resolve_issue(obj, info, id: str):
     Returns:
         Issue: The issue with the specified id
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the issue by id
     issue = session.query(Issue).filter(Issue.id == id).first()
@@ -194,7 +206,7 @@ def resolve_issueRelation(obj, info, id: str):
     Returns:
         IssueRelation: The issue relation with the specified id
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the issue relation by id
     issue_relation = session.query(IssueRelation).filter(IssueRelation.id == id).first()
@@ -214,7 +226,7 @@ def resolve_issueRelations(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     All issue relationships.
@@ -233,15 +245,17 @@ def resolve_issueRelations(
         dict: IssueRelationConnection with edges, nodes, and pageInfo
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine order field
-    order_field = orderBy if orderBy else 'createdAt'
-    if order_field not in ['createdAt', 'updatedAt']:
-        raise Exception(f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'")
+    order_field = orderBy if orderBy else "createdAt"
+    if order_field not in ["createdAt", "updatedAt"]:
+        raise Exception(
+            f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'"
+        )
 
     # Build base query
     base_query = session.query(IssueRelation)
@@ -253,11 +267,11 @@ def resolve_issueRelations(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -265,17 +279,17 @@ def resolve_issueRelations(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, IssueRelation.id > cursor_id)
+                and_(order_column == cursor_field_value, IssueRelation.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -283,7 +297,7 @@ def resolve_issueRelations(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, IssueRelation.id < cursor_id)
+                and_(order_column == cursor_field_value, IssueRelation.id < cursor_id),
             )
         )
 
@@ -318,7 +332,7 @@ def resolve_attachmentSources(obj, info, teamId: Optional[str] = None):
     Returns:
         dict: AttachmentSourcesPayload with 'sources' field containing unique source types
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Build base query for attachments
     base_query = session.query(Attachment.sourceType).distinct()
@@ -340,9 +354,7 @@ def resolve_attachmentSources(obj, info, teamId: Optional[str] = None):
             sources[source_type] = True
 
     # Return the payload
-    return {
-        'sources': sources
-    }
+    return {"sources": sources}
 
 
 @query.field("attachment")
@@ -359,7 +371,7 @@ def resolve_attachment(obj, info, id: str):
     Returns:
         Attachment: The attachment with the specified id
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the attachment by id
     attachment = session.query(Attachment).filter(Attachment.id == id).first()
@@ -383,15 +395,14 @@ def resolve_attachmentIssue(obj, info, id: str):
     Returns:
         Issue: The issue associated with the attachment
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the attachment by id or url (deprecated behavior)
-    attachment = session.query(Attachment).filter(
-        or_(
-            Attachment.id == id,
-            Attachment.url == id
-        )
-    ).first()
+    attachment = (
+        session.query(Attachment)
+        .filter(or_(Attachment.id == id, Attachment.url == id))
+        .first()
+    )
 
     if not attachment:
         raise Exception(f"Attachment with id or url '{id}' not found")
@@ -411,7 +422,7 @@ def resolve_attachments(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     All issue attachments.
@@ -433,15 +444,17 @@ def resolve_attachments(
         dict: AttachmentConnection with edges, nodes, and pageInfo
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine order field
-    order_field = orderBy if orderBy else 'createdAt'
-    if order_field not in ['createdAt', 'updatedAt']:
-        raise Exception(f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'")
+    order_field = orderBy if orderBy else "createdAt"
+    if order_field not in ["createdAt", "updatedAt"]:
+        raise Exception(
+            f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'"
+        )
 
     # Build base query
     base_query = session.query(Attachment)
@@ -457,11 +470,11 @@ def resolve_attachments(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -469,17 +482,17 @@ def resolve_attachments(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Attachment.id > cursor_id)
+                and_(order_column == cursor_field_value, Attachment.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -487,7 +500,7 @@ def resolve_attachments(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Attachment.id < cursor_id)
+                and_(order_column == cursor_field_value, Attachment.id < cursor_id),
             )
         )
 
@@ -519,7 +532,7 @@ def resolve_attachmentsForURL(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Returns issue attachments for a given URL.
@@ -539,15 +552,17 @@ def resolve_attachmentsForURL(
         dict: AttachmentConnection with edges, nodes, and pageInfo
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine order field
-    order_field = orderBy if orderBy else 'createdAt'
-    if order_field not in ['createdAt', 'updatedAt']:
-        raise Exception(f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'")
+    order_field = orderBy if orderBy else "createdAt"
+    if order_field not in ["createdAt", "updatedAt"]:
+        raise Exception(
+            f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'"
+        )
 
     # Build base query with URL filter
     base_query = session.query(Attachment).filter(Attachment.url == url)
@@ -559,11 +574,11 @@ def resolve_attachmentsForURL(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -571,17 +586,17 @@ def resolve_attachmentsForURL(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Attachment.id > cursor_id)
+                and_(order_column == cursor_field_value, Attachment.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -589,7 +604,7 @@ def resolve_attachmentsForURL(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Attachment.id < cursor_id)
+                and_(order_column == cursor_field_value, Attachment.id < cursor_id),
             )
         )
 
@@ -621,7 +636,7 @@ def resolve_issueFigmaFileKeySearch(
     first: Optional[int] = None,
     last: Optional[int] = None,
     includeArchived: bool = False,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Find issues that are related to a given Figma file key.
@@ -641,22 +656,22 @@ def resolve_issueFigmaFileKeySearch(
         IssueConnection: Paginated list of issues with Figma attachments
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query: find issues that have attachments with Figma URLs containing the fileKey
     # Figma URLs typically look like: https://www.figma.com/file/{fileKey}/...
-    base_query = session.query(Issue).join(
-        Attachment, Issue.id == Attachment.issueId
-    ).filter(
-        Attachment.url.like(f'%figma.com/file/{fileKey}%')
+    base_query = (
+        session.query(Issue)
+        .join(Attachment, Issue.id == Attachment.issueId)
+        .filter(Attachment.url.like(f"%figma.com/file/{fileKey}%"))
     )
 
     # Apply archived filter
@@ -666,11 +681,11 @@ def resolve_issueFigmaFileKeySearch(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -678,17 +693,17 @@ def resolve_issueFigmaFileKeySearch(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id > cursor_id)
+                and_(order_column == cursor_field_value, Issue.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -696,7 +711,7 @@ def resolve_issueFigmaFileKeySearch(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id < cursor_id)
+                and_(order_column == cursor_field_value, Issue.id < cursor_id),
             )
         )
 
@@ -732,7 +747,7 @@ def resolve_searchIssues(
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
     snippetSize: Optional[float] = None,
-    teamId: Optional[str] = None
+    teamId: Optional[str] = None,
 ):
     """
     Search issues.
@@ -756,33 +771,35 @@ def resolve_searchIssues(
         IssueSearchPayload: Search results with edges, nodes, pageInfo, totalCount, and archivePayload
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query for issues
     base_query = session.query(Issue)
 
     # Apply search term filter (search in title and description)
     if term:
-        search_pattern = f'%{term}%'
+        search_pattern = f"%{term}%"
         search_conditions = [
             Issue.title.like(search_pattern),
-            Issue.description.like(search_pattern)
+            Issue.description.like(search_pattern),
         ]
 
         # If includeComments is true, search in comments too
         if includeComments:
             # Subquery to find issue IDs that have matching comments
-            comment_subquery = session.query(Comment.issueId).filter(
-                Comment.body.like(search_pattern)
-            ).distinct()
+            comment_subquery = (
+                session.query(Comment.issueId)
+                .filter(Comment.body.like(search_pattern))
+                .distinct()
+            )
 
             # Add condition to include issues with matching comments
             search_conditions.append(Issue.id.in_(comment_subquery))
@@ -808,11 +825,11 @@ def resolve_searchIssues(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -820,17 +837,17 @@ def resolve_searchIssues(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id > cursor_id)
+                and_(order_column == cursor_field_value, Issue.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -838,7 +855,7 @@ def resolve_searchIssues(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id < cursor_id)
+                and_(order_column == cursor_field_value, Issue.id < cursor_id),
             )
         )
 
@@ -864,16 +881,13 @@ def resolve_searchIssues(
     # No need to manually spread __dict__ attributes
 
     # Build archivePayload (empty for now as we don't have archived entities)
-    archive_payload = {
-        'success': True,
-        'lastSyncId': 0.0
-    }
+    archive_payload = {"success": True, "lastSyncId": 0.0}
 
     # Return IssueSearchPayload
     return {
         **pagination_result,
-        'totalCount': float(total_count),
-        'archivePayload': archive_payload
+        "totalCount": float(total_count),
+        "archivePayload": archive_payload,
     }
 
 
@@ -888,7 +902,7 @@ def resolve_issueSearch(
     includeArchived: bool = False,
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
-    query: Optional[str] = None
+    query: Optional[str] = None,
 ):
     """
     [DEPRECATED] Search issues. This endpoint is deprecated and will be removed in the future.
@@ -910,15 +924,15 @@ def resolve_issueSearch(
         IssueConnection: Paginated list of issues matching the search criteria
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(Issue)
@@ -926,11 +940,10 @@ def resolve_issueSearch(
     # Apply search query if provided (deprecated parameter)
     # Search in title and description fields
     if query:
-        search_pattern = f'%{query}%'
+        search_pattern = f"%{query}%"
         base_query = base_query.filter(
             or_(
-                Issue.title.like(search_pattern),
-                Issue.description.like(search_pattern)
+                Issue.title.like(search_pattern), Issue.description.like(search_pattern)
             )
         )
 
@@ -946,11 +959,11 @@ def resolve_issueSearch(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -958,17 +971,17 @@ def resolve_issueSearch(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id > cursor_id)
+                and_(order_column == cursor_field_value, Issue.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -976,7 +989,7 @@ def resolve_issueSearch(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id < cursor_id)
+                and_(order_column == cursor_field_value, Issue.id < cursor_id),
             )
         )
 
@@ -1015,7 +1028,7 @@ def validate_issue_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -1023,17 +1036,25 @@ def validate_issue_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_issue_filter(sub_filter, f"{path}.and[{i}]")
 
     # Check for nested relation filters (not fully implemented)
     unsupported_relation_keys = {
-        'assignee': ['email', 'name', 'displayName', 'active', 'admin', 'createdAt', 'updatedAt'],
-        'team': ['name', 'key', 'description', 'createdAt', 'updatedAt'],
-        'state': ['name', 'color', 'type', 'description', 'createdAt', 'updatedAt'],
-        'project': ['name', 'description', 'slugId', 'state', 'createdAt', 'updatedAt'],
-        'cycle': ['name', 'number', 'startsAt', 'endsAt', 'createdAt', 'updatedAt']
+        "assignee": [
+            "email",
+            "name",
+            "displayName",
+            "active",
+            "admin",
+            "createdAt",
+            "updatedAt",
+        ],
+        "team": ["name", "key", "description", "createdAt", "updatedAt"],
+        "state": ["name", "color", "type", "description", "createdAt", "updatedAt"],
+        "project": ["name", "description", "slugId", "state", "createdAt", "updatedAt"],
+        "cycle": ["name", "number", "startsAt", "endsAt", "createdAt", "updatedAt"],
     }
 
     for relation_name, unsupported_keys in unsupported_relation_keys.items():
@@ -1075,103 +1096,113 @@ def apply_issue_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_issue_filter(query, sub_filter)
 
     # Note: OR filters are validated and rejected in validate_issue_filter()
     # They are not implemented due to complexity of building condition expressions
 
     # String comparators
-    if 'title' in filter_dict:
-        query = apply_string_comparator(query, Issue.title, filter_dict['title'])
+    if "title" in filter_dict:
+        query = apply_string_comparator(query, Issue.title, filter_dict["title"])
 
-    if 'description' in filter_dict:
-        query = apply_string_comparator(query, Issue.description, filter_dict['description'])
+    if "description" in filter_dict:
+        query = apply_string_comparator(
+            query, Issue.description, filter_dict["description"]
+        )
 
-    if 'identifier' in filter_dict:
-        query = apply_string_comparator(query, Issue.identifier, filter_dict['identifier'])
+    if "identifier" in filter_dict:
+        query = apply_string_comparator(
+            query, Issue.identifier, filter_dict["identifier"]
+        )
 
     # Number comparators
-    if 'number' in filter_dict:
-        query = apply_number_comparator(query, Issue.number, filter_dict['number'])
+    if "number" in filter_dict:
+        query = apply_number_comparator(query, Issue.number, filter_dict["number"])
 
-    if 'priority' in filter_dict:
-        query = apply_number_comparator(query, Issue.priority, filter_dict['priority'])
+    if "priority" in filter_dict:
+        query = apply_number_comparator(query, Issue.priority, filter_dict["priority"])
 
-    if 'estimate' in filter_dict:
-        query = apply_number_comparator(query, Issue.estimate, filter_dict['estimate'])
+    if "estimate" in filter_dict:
+        query = apply_number_comparator(query, Issue.estimate, filter_dict["estimate"])
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, Issue.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(query, Issue.createdAt, filter_dict["createdAt"])
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, Issue.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(query, Issue.updatedAt, filter_dict["updatedAt"])
 
-    if 'completedAt' in filter_dict:
-        query = apply_date_comparator(query, Issue.completedAt, filter_dict['completedAt'])
+    if "completedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Issue.completedAt, filter_dict["completedAt"]
+        )
 
-    if 'startedAt' in filter_dict:
-        query = apply_date_comparator(query, Issue.startedAt, filter_dict['startedAt'])
+    if "startedAt" in filter_dict:
+        query = apply_date_comparator(query, Issue.startedAt, filter_dict["startedAt"])
 
-    if 'canceledAt' in filter_dict:
-        query = apply_date_comparator(query, Issue.canceledAt, filter_dict['canceledAt'])
+    if "canceledAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Issue.canceledAt, filter_dict["canceledAt"]
+        )
 
-    if 'archivedAt' in filter_dict:
-        query = apply_date_comparator(query, Issue.archivedAt, filter_dict['archivedAt'])
+    if "archivedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Issue.archivedAt, filter_dict["archivedAt"]
+        )
 
-    if 'dueDate' in filter_dict:
-        query = apply_date_comparator(query, Issue.dueDate, filter_dict['dueDate'])
+    if "dueDate" in filter_dict:
+        query = apply_date_comparator(query, Issue.dueDate, filter_dict["dueDate"])
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, Issue.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, Issue.id, filter_dict["id"])
 
     # Relation filters (simplified - full implementation would need joins)
-    if 'assignee' in filter_dict:
-        assignee_filter = filter_dict['assignee']
-        if assignee_filter.get('null') is True:
+    if "assignee" in filter_dict:
+        assignee_filter = filter_dict["assignee"]
+        if assignee_filter.get("null") is True:
             query = query.filter(Issue.assigneeId.is_(None))
-        elif assignee_filter.get('null') is False:
+        elif assignee_filter.get("null") is False:
             query = query.filter(Issue.assigneeId.isnot(None))
         # Additional user filter criteria would be applied with joins
 
-    if 'team' in filter_dict:
-        team_filter = filter_dict['team']
-        if team_filter.get('null') is True:
+    if "team" in filter_dict:
+        team_filter = filter_dict["team"]
+        if team_filter.get("null") is True:
             query = query.filter(Issue.teamId.is_(None))
-        elif team_filter.get('null') is False:
+        elif team_filter.get("null") is False:
             query = query.filter(Issue.teamId.isnot(None))
-        if 'id' in team_filter:
-            query = apply_id_comparator(query, Issue.teamId, team_filter['id'])
+        if "id" in team_filter:
+            query = apply_id_comparator(query, Issue.teamId, team_filter["id"])
 
-    if 'state' in filter_dict:
-        state_filter = filter_dict['state']
-        if state_filter.get('null') is True:
+    if "state" in filter_dict:
+        state_filter = filter_dict["state"]
+        if state_filter.get("null") is True:
             query = query.filter(Issue.stateId.is_(None))
-        elif state_filter.get('null') is False:
+        elif state_filter.get("null") is False:
             query = query.filter(Issue.stateId.isnot(None))
-        if 'id' in state_filter:
-            query = apply_id_comparator(query, Issue.stateId, state_filter['id'])
+        if "id" in state_filter:
+            query = apply_id_comparator(query, Issue.stateId, state_filter["id"])
 
-    if 'project' in filter_dict:
-        project_filter = filter_dict['project']
-        if project_filter.get('null') is True:
+    if "project" in filter_dict:
+        project_filter = filter_dict["project"]
+        if project_filter.get("null") is True:
             query = query.filter(Issue.projectId.is_(None))
-        elif project_filter.get('null') is False:
+        elif project_filter.get("null") is False:
             query = query.filter(Issue.projectId.isnot(None))
-        if 'id' in project_filter:
-            query = apply_id_comparator(query, Issue.projectId, project_filter['id'])
+        if "id" in project_filter:
+            query = apply_id_comparator(query, Issue.projectId, project_filter["id"])
 
-    if 'cycle' in filter_dict:
-        cycle_filter = filter_dict['cycle']
-        if cycle_filter.get('null') is True:
+    if "cycle" in filter_dict:
+        cycle_filter = filter_dict["cycle"]
+        if cycle_filter.get("null") is True:
             query = query.filter(Issue.cycleId.is_(None))
-        elif cycle_filter.get('null') is False:
+        elif cycle_filter.get("null") is False:
             query = query.filter(Issue.cycleId.isnot(None))
-        if 'id' in cycle_filter:
-            query = apply_id_comparator(query, Issue.cycleId, cycle_filter['id'])
+        if "id" in cycle_filter:
+            query = apply_id_comparator(query, Issue.cycleId, cycle_filter["id"])
 
     return query
 
@@ -1194,52 +1225,62 @@ def apply_attachment_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_attachment_filter(query, sub_filter)
 
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         # Build OR conditions
         conditions = []
-        for sub_filter in filter_dict['or']:
+        for sub_filter in filter_dict["or"]:
             # We need to apply each filter to a fresh query and extract the whereclause
             # For simplicity, we'll raise an exception for now
             raise Exception("OR filters are not currently supported for attachments")
 
     # String comparators
-    if 'title' in filter_dict:
-        query = apply_string_comparator(query, Attachment.title, filter_dict['title'])
+    if "title" in filter_dict:
+        query = apply_string_comparator(query, Attachment.title, filter_dict["title"])
 
-    if 'subtitle' in filter_dict:
-        query = apply_nullable_string_comparator(query, Attachment.subtitle, filter_dict['subtitle'])
+    if "subtitle" in filter_dict:
+        query = apply_nullable_string_comparator(
+            query, Attachment.subtitle, filter_dict["subtitle"]
+        )
 
-    if 'url' in filter_dict:
-        query = apply_string_comparator(query, Attachment.url, filter_dict['url'])
+    if "url" in filter_dict:
+        query = apply_string_comparator(query, Attachment.url, filter_dict["url"])
 
-    if 'sourceType' in filter_dict:
+    if "sourceType" in filter_dict:
         # SourceType is a string comparator
-        query = apply_string_comparator(query, Attachment.sourceType, filter_dict['sourceType'])
+        query = apply_string_comparator(
+            query, Attachment.sourceType, filter_dict["sourceType"]
+        )
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, Attachment.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Attachment.createdAt, filter_dict["createdAt"]
+        )
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, Attachment.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Attachment.updatedAt, filter_dict["updatedAt"]
+        )
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, Attachment.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, Attachment.id, filter_dict["id"])
 
     # Relation filters
-    if 'creator' in filter_dict:
-        creator_filter = filter_dict['creator']
-        if creator_filter.get('null') is True:
+    if "creator" in filter_dict:
+        creator_filter = filter_dict["creator"]
+        if creator_filter.get("null") is True:
             query = query.filter(Attachment.creatorId.is_(None))
-        elif creator_filter.get('null') is False:
+        elif creator_filter.get("null") is False:
             query = query.filter(Attachment.creatorId.isnot(None))
-        if 'id' in creator_filter:
-            query = apply_id_comparator(query, Attachment.creatorId, creator_filter['id'])
+        if "id" in creator_filter:
+            query = apply_id_comparator(
+                query, Attachment.creatorId, creator_filter["id"]
+            )
 
     return query
 
@@ -1247,31 +1288,33 @@ def apply_attachment_filter(query, filter_dict):
 def apply_string_comparator(query, column, comparator):
     """Apply string comparison filters."""
     if not isinstance(comparator, dict):
-        raise Exception(f"Invalid comparator for string field. Expected dictionary with comparison operators, got {type(comparator).__name__}.")
+        raise Exception(
+            f"Invalid comparator for string field. Expected dictionary with comparison operators, got {type(comparator).__name__}."
+        )
 
-    if 'eq' in comparator:
-        query = query.filter(column == comparator['eq'])
-    if 'neq' in comparator:
-        query = query.filter(column != comparator['neq'])
-    if 'contains' in comparator:
+    if "eq" in comparator:
+        query = query.filter(column == comparator["eq"])
+    if "neq" in comparator:
+        query = query.filter(column != comparator["neq"])
+    if "contains" in comparator:
         query = query.filter(column.like(f"%{comparator['contains']}%"))
-    if 'notContains' in comparator:
+    if "notContains" in comparator:
         query = query.filter(~column.like(f"%{comparator['notContains']}%"))
-    if 'startsWith' in comparator:
+    if "startsWith" in comparator:
         query = query.filter(column.like(f"{comparator['startsWith']}%"))
-    if 'endsWith' in comparator:
+    if "endsWith" in comparator:
         query = query.filter(column.like(f"%{comparator['endsWith']}"))
-    if 'in' in comparator:
-        query = query.filter(column.in_(comparator['in']))
-    if 'notIn' in comparator:
-        query = query.filter(~column.in_(comparator['notIn']))
-    if 'containsIgnoreCase' in comparator:
+    if "in" in comparator:
+        query = query.filter(column.in_(comparator["in"]))
+    if "notIn" in comparator:
+        query = query.filter(~column.in_(comparator["notIn"]))
+    if "containsIgnoreCase" in comparator:
         query = query.filter(column.ilike(f"%{comparator['containsIgnoreCase']}%"))
-    if 'notContainsIgnoreCase' in comparator:
+    if "notContainsIgnoreCase" in comparator:
         query = query.filter(~column.ilike(f"%{comparator['notContainsIgnoreCase']}%"))
-    if 'startsWithIgnoreCase' in comparator:
+    if "startsWithIgnoreCase" in comparator:
         query = query.filter(column.ilike(f"{comparator['startsWithIgnoreCase']}%"))
-    if 'endsWithIgnoreCase' in comparator:
+    if "endsWithIgnoreCase" in comparator:
         query = query.filter(column.ilike(f"%{comparator['endsWithIgnoreCase']}"))
     return query
 
@@ -1279,24 +1322,26 @@ def apply_string_comparator(query, column, comparator):
 def apply_number_comparator(query, column, comparator):
     """Apply number comparison filters."""
     if not isinstance(comparator, dict):
-        raise Exception(f"Invalid comparator for number field. Expected dictionary with comparison operators, got {type(comparator).__name__}.")
+        raise Exception(
+            f"Invalid comparator for number field. Expected dictionary with comparison operators, got {type(comparator).__name__}."
+        )
 
-    if 'eq' in comparator:
-        query = query.filter(column == comparator['eq'])
-    if 'neq' in comparator:
-        query = query.filter(column != comparator['neq'])
-    if 'gt' in comparator:
-        query = query.filter(column > comparator['gt'])
-    if 'gte' in comparator:
-        query = query.filter(column >= comparator['gte'])
-    if 'lt' in comparator:
-        query = query.filter(column < comparator['lt'])
-    if 'lte' in comparator:
-        query = query.filter(column <= comparator['lte'])
-    if 'in' in comparator:
-        query = query.filter(column.in_(comparator['in']))
-    if 'notIn' in comparator:
-        query = query.filter(~column.in_(comparator['notIn']))
+    if "eq" in comparator:
+        query = query.filter(column == comparator["eq"])
+    if "neq" in comparator:
+        query = query.filter(column != comparator["neq"])
+    if "gt" in comparator:
+        query = query.filter(column > comparator["gt"])
+    if "gte" in comparator:
+        query = query.filter(column >= comparator["gte"])
+    if "lt" in comparator:
+        query = query.filter(column < comparator["lt"])
+    if "lte" in comparator:
+        query = query.filter(column <= comparator["lte"])
+    if "in" in comparator:
+        query = query.filter(column.in_(comparator["in"]))
+    if "notIn" in comparator:
+        query = query.filter(~column.in_(comparator["notIn"]))
     return query
 
 
@@ -1304,25 +1349,51 @@ def apply_date_comparator(query, column, comparator):
     """Apply date comparison filters."""
 
     if not isinstance(comparator, dict):
-        raise Exception(f"Invalid comparator for date field. Expected dictionary with comparison operators, got {type(comparator).__name__}.")
+        raise Exception(
+            f"Invalid comparator for date field. Expected dictionary with comparison operators, got {type(comparator).__name__}."
+        )
 
-    if 'eq' in comparator:
-        date_val = datetime.fromisoformat(comparator['eq']) if isinstance(comparator['eq'], str) else comparator['eq']
+    if "eq" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["eq"])
+            if isinstance(comparator["eq"], str)
+            else comparator["eq"]
+        )
         query = query.filter(column == date_val)
-    if 'neq' in comparator:
-        date_val = datetime.fromisoformat(comparator['neq']) if isinstance(comparator['neq'], str) else comparator['neq']
+    if "neq" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["neq"])
+            if isinstance(comparator["neq"], str)
+            else comparator["neq"]
+        )
         query = query.filter(column != date_val)
-    if 'gt' in comparator:
-        date_val = datetime.fromisoformat(comparator['gt']) if isinstance(comparator['gt'], str) else comparator['gt']
+    if "gt" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["gt"])
+            if isinstance(comparator["gt"], str)
+            else comparator["gt"]
+        )
         query = query.filter(column > date_val)
-    if 'gte' in comparator:
-        date_val = datetime.fromisoformat(comparator['gte']) if isinstance(comparator['gte'], str) else comparator['gte']
+    if "gte" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["gte"])
+            if isinstance(comparator["gte"], str)
+            else comparator["gte"]
+        )
         query = query.filter(column >= date_val)
-    if 'lt' in comparator:
-        date_val = datetime.fromisoformat(comparator['lt']) if isinstance(comparator['lt'], str) else comparator['lt']
+    if "lt" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["lt"])
+            if isinstance(comparator["lt"], str)
+            else comparator["lt"]
+        )
         query = query.filter(column < date_val)
-    if 'lte' in comparator:
-        date_val = datetime.fromisoformat(comparator['lte']) if isinstance(comparator['lte'], str) else comparator['lte']
+    if "lte" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["lte"])
+            if isinstance(comparator["lte"], str)
+            else comparator["lte"]
+        )
         query = query.filter(column <= date_val)
     return query
 
@@ -1330,16 +1401,18 @@ def apply_date_comparator(query, column, comparator):
 def apply_id_comparator(query, column, comparator):
     """Apply ID comparison filters."""
     if not isinstance(comparator, dict):
-        raise Exception(f"Invalid comparator for ID field. Expected dictionary with comparison operators, got {type(comparator).__name__}.")
+        raise Exception(
+            f"Invalid comparator for ID field. Expected dictionary with comparison operators, got {type(comparator).__name__}."
+        )
 
-    if 'eq' in comparator:
-        query = query.filter(column == comparator['eq'])
-    if 'neq' in comparator:
-        query = query.filter(column != comparator['neq'])
-    if 'in' in comparator:
-        query = query.filter(column.in_(comparator['in']))
-    if 'notIn' in comparator:
-        query = query.filter(~column.in_(comparator['notIn']))
+    if "eq" in comparator:
+        query = query.filter(column == comparator["eq"])
+    if "neq" in comparator:
+        query = query.filter(column != comparator["neq"])
+    if "in" in comparator:
+        query = query.filter(column.in_(comparator["in"]))
+    if "notIn" in comparator:
+        query = query.filter(~column.in_(comparator["notIn"]))
     return query
 
 
@@ -1359,7 +1432,7 @@ def resolve_user(obj, info, id: str):
     Raises:
         Exception: If the user is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the user by id
     user = session.query(User).filter(User.id == id).first()
@@ -1383,7 +1456,7 @@ def resolve_issueVcsBranchSearch(obj, info, branchName: str):
     Returns:
         Issue: The issue with the matching branch name, or None if not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the issue by branch name
     issue = session.query(Issue).filter(Issue.branchName == branchName).first()
@@ -1403,7 +1476,7 @@ def resolve_issues(
     includeArchived: bool = False,
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
-    sort: Optional[list] = None
+    sort: Optional[list] = None,
 ):
     """
     Query all issues with filtering, sorting, and pagination.
@@ -1424,15 +1497,15 @@ def resolve_issues(
         IssueConnection: Paginated list of issues
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(Issue)
@@ -1450,16 +1523,18 @@ def resolve_issues(
     # The [INTERNAL] sort parameter uses complex multi-field sorting that is
     # incompatible with cursor-based pagination
     if sort and (after or before):
-        raise Exception("Cannot use cursor pagination (after/before) with the [INTERNAL] sort parameter. Use orderBy instead.")
+        raise Exception(
+            "Cannot use cursor pagination (after/before) with the [INTERNAL] sort parameter. Use orderBy instead."
+        )
 
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -1467,17 +1542,17 @@ def resolve_issues(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id > cursor_id)
+                and_(order_column == cursor_field_value, Issue.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -1485,7 +1560,7 @@ def resolve_issues(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Issue.id < cursor_id)
+                and_(order_column == cursor_field_value, Issue.id < cursor_id),
             )
         )
 
@@ -1539,66 +1614,68 @@ def apply_issue_sort(query, sort_list):
         # Each sort_input is a dictionary with one or more sort fields
         # Each field value is a dictionary with direction (e.g., {"direction": "ASC"})
 
-        if 'assignee' in sort_input:
+        if "assignee" in sort_input:
             # Sort by assignee name - would require join with User table
             # For now, we'll sort by assigneeId as a simplified implementation
-            direction = sort_input['assignee'].get('direction', 'ASC')
+            direction = sort_input["assignee"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.assigneeId) if direction == 'ASC' else desc(Issue.assigneeId)
+                asc(Issue.assigneeId) if direction == "ASC" else desc(Issue.assigneeId)
             )
 
-        if 'completedAt' in sort_input:
-            direction = sort_input['completedAt'].get('direction', 'ASC')
+        if "completedAt" in sort_input:
+            direction = sort_input["completedAt"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.completedAt) if direction == 'ASC' else desc(Issue.completedAt)
+                asc(Issue.completedAt)
+                if direction == "ASC"
+                else desc(Issue.completedAt)
             )
 
-        if 'createdAt' in sort_input:
-            direction = sort_input['createdAt'].get('direction', 'ASC')
+        if "createdAt" in sort_input:
+            direction = sort_input["createdAt"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.createdAt) if direction == 'ASC' else desc(Issue.createdAt)
+                asc(Issue.createdAt) if direction == "ASC" else desc(Issue.createdAt)
             )
 
-        if 'customerCount' in sort_input:
+        if "customerCount" in sort_input:
             # This would require aggregating customer needs
             # For now, skip or use a placeholder
             pass
 
-        if 'dueDate' in sort_input:
-            direction = sort_input['dueDate'].get('direction', 'ASC')
+        if "dueDate" in sort_input:
+            direction = sort_input["dueDate"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.dueDate) if direction == 'ASC' else desc(Issue.dueDate)
+                asc(Issue.dueDate) if direction == "ASC" else desc(Issue.dueDate)
             )
 
-        if 'estimate' in sort_input:
-            direction = sort_input['estimate'].get('direction', 'ASC')
+        if "estimate" in sort_input:
+            direction = sort_input["estimate"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.estimate) if direction == 'ASC' else desc(Issue.estimate)
+                asc(Issue.estimate) if direction == "ASC" else desc(Issue.estimate)
             )
 
-        if 'priority' in sort_input:
-            direction = sort_input['priority'].get('direction', 'ASC')
+        if "priority" in sort_input:
+            direction = sort_input["priority"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.priority) if direction == 'ASC' else desc(Issue.priority)
+                asc(Issue.priority) if direction == "ASC" else desc(Issue.priority)
             )
 
-        if 'title' in sort_input:
-            direction = sort_input['title'].get('direction', 'ASC')
+        if "title" in sort_input:
+            direction = sort_input["title"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.title) if direction == 'ASC' else desc(Issue.title)
+                asc(Issue.title) if direction == "ASC" else desc(Issue.title)
             )
 
-        if 'updatedAt' in sort_input:
-            direction = sort_input['updatedAt'].get('direction', 'ASC')
+        if "updatedAt" in sort_input:
+            direction = sort_input["updatedAt"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.updatedAt) if direction == 'ASC' else desc(Issue.updatedAt)
+                asc(Issue.updatedAt) if direction == "ASC" else desc(Issue.updatedAt)
             )
 
-        if 'manual' in sort_input:
+        if "manual" in sort_input:
             # Manual sorting uses sortOrder field
-            direction = sort_input['manual'].get('direction', 'ASC')
+            direction = sort_input["manual"].get("direction", "ASC")
             order_clauses.append(
-                asc(Issue.sortOrder) if direction == 'ASC' else desc(Issue.sortOrder)
+                asc(Issue.sortOrder) if direction == "ASC" else desc(Issue.sortOrder)
             )
 
     # Apply all order clauses to the query
@@ -1623,7 +1700,7 @@ def validate_user_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -1631,12 +1708,12 @@ def validate_user_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_user_filter(sub_filter, f"{path}.and[{i}]")
 
     # Check for nested relation filters (not fully implemented)
-    if 'assignedIssues' in filter_dict:
+    if "assignedIssues" in filter_dict:
         # This would require complex join logic
         raise Exception(
             f"Nested collection filters are not currently supported. "
@@ -1645,7 +1722,7 @@ def validate_user_filter(filter_dict, path="filter"):
         )
 
     # Check for isMe filter (not implemented - requires auth context)
-    if 'isMe' in filter_dict:
+    if "isMe" in filter_dict:
         raise Exception(
             f"The 'isMe' filter is not currently supported. "
             f"Use the 'viewer' query to get the current user, or filter by specific user IDs."
@@ -1667,57 +1744,59 @@ def apply_user_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_user_filter(query, sub_filter)
 
     # Boolean comparators
-    if 'active' in filter_dict:
-        query = apply_boolean_comparator(query, User.active, filter_dict['active'])
+    if "active" in filter_dict:
+        query = apply_boolean_comparator(query, User.active, filter_dict["active"])
 
-    if 'admin' in filter_dict:
-        query = apply_boolean_comparator(query, User.admin, filter_dict['admin'])
+    if "admin" in filter_dict:
+        query = apply_boolean_comparator(query, User.admin, filter_dict["admin"])
 
-    if 'app' in filter_dict:
-        query = apply_boolean_comparator(query, User.app, filter_dict['app'])
+    if "app" in filter_dict:
+        query = apply_boolean_comparator(query, User.app, filter_dict["app"])
 
-    if 'invited' in filter_dict or 'isInvited' in filter_dict:
+    if "invited" in filter_dict or "isInvited" in filter_dict:
         # Both 'invited' and 'isInvited' refer to the same thing
         # In Linear's API, a user is "invited" if they haven't accepted yet
         # For simplicity, we'll check if the user has a valid inviteHash
-        invited_filter = filter_dict.get('invited', filter_dict.get('isInvited'))
+        invited_filter = filter_dict.get("invited", filter_dict.get("isInvited"))
         if isinstance(invited_filter, dict):
-            if invited_filter.get('eq') is True:
+            if invited_filter.get("eq") is True:
                 query = query.filter(User.inviteHash.isnot(None))
-            elif invited_filter.get('eq') is False:
+            elif invited_filter.get("eq") is False:
                 query = query.filter(User.inviteHash.is_(None))
-            elif invited_filter.get('neq') is True:
+            elif invited_filter.get("neq") is True:
                 query = query.filter(User.inviteHash.is_(None))
-            elif invited_filter.get('neq') is False:
+            elif invited_filter.get("neq") is False:
                 query = query.filter(User.inviteHash.isnot(None))
 
     # Note: 'isMe' filter is validated and rejected in validate_user_filter()
 
     # String comparators
-    if 'displayName' in filter_dict:
-        query = apply_string_comparator(query, User.displayName, filter_dict['displayName'])
+    if "displayName" in filter_dict:
+        query = apply_string_comparator(
+            query, User.displayName, filter_dict["displayName"]
+        )
 
-    if 'email' in filter_dict:
-        query = apply_string_comparator(query, User.email, filter_dict['email'])
+    if "email" in filter_dict:
+        query = apply_string_comparator(query, User.email, filter_dict["email"])
 
-    if 'name' in filter_dict:
-        query = apply_string_comparator(query, User.name, filter_dict['name'])
+    if "name" in filter_dict:
+        query = apply_string_comparator(query, User.name, filter_dict["name"])
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, User.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(query, User.createdAt, filter_dict["createdAt"])
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, User.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(query, User.updatedAt, filter_dict["updatedAt"])
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, User.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, User.id, filter_dict["id"])
 
     return query
 
@@ -1725,12 +1804,14 @@ def apply_user_filter(query, filter_dict):
 def apply_boolean_comparator(query, column, comparator):
     """Apply boolean comparison filters."""
     if not isinstance(comparator, dict):
-        raise Exception(f"Invalid comparator for boolean field. Expected dictionary with comparison operators, got {type(comparator).__name__}.")
+        raise Exception(
+            f"Invalid comparator for boolean field. Expected dictionary with comparison operators, got {type(comparator).__name__}."
+        )
 
-    if 'eq' in comparator:
-        query = query.filter(column == comparator['eq'])
-    if 'neq' in comparator:
-        query = query.filter(column != comparator['neq'])
+    if "eq" in comparator:
+        query = query.filter(column == comparator["eq"])
+    if "neq" in comparator:
+        query = query.filter(column != comparator["neq"])
 
     return query
 
@@ -1754,16 +1835,16 @@ def apply_user_sort(query, sort_list):
     order_clauses = []
 
     for sort_input in sort_list:
-        if 'displayName' in sort_input:
-            direction = sort_input['displayName'].get('direction', 'ASC')
+        if "displayName" in sort_input:
+            direction = sort_input["displayName"].get("direction", "ASC")
             order_clauses.append(
-                asc(User.displayName) if direction == 'ASC' else desc(User.displayName)
+                asc(User.displayName) if direction == "ASC" else desc(User.displayName)
             )
 
-        if 'name' in sort_input:
-            direction = sort_input['name'].get('direction', 'ASC')
+        if "name" in sort_input:
+            direction = sort_input["name"].get("direction", "ASC")
             order_clauses.append(
-                asc(User.name) if direction == 'ASC' else desc(User.name)
+                asc(User.name) if direction == "ASC" else desc(User.name)
             )
 
     if order_clauses:
@@ -1784,7 +1865,7 @@ def resolve_users(
     includeDisabled: bool = False,
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
-    sort: Optional[list] = None
+    sort: Optional[list] = None,
 ):
     """
     Query all users for the organization.
@@ -1806,15 +1887,15 @@ def resolve_users(
         UserConnection: Paginated list of users
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(User)
@@ -1834,16 +1915,18 @@ def resolve_users(
 
     # Validate that sort parameter is not used with cursors
     if sort and (after or before):
-        raise Exception("Cannot use cursor pagination (after/before) with the [INTERNAL] sort parameter. Use orderBy instead.")
+        raise Exception(
+            "Cannot use cursor pagination (after/before) with the [INTERNAL] sort parameter. Use orderBy instead."
+        )
 
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -1851,17 +1934,17 @@ def resolve_users(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, User.id > cursor_id)
+                and_(order_column == cursor_field_value, User.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -1869,7 +1952,7 @@ def resolve_users(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, User.id < cursor_id)
+                and_(order_column == cursor_field_value, User.id < cursor_id),
             )
         )
 
@@ -1910,21 +1993,25 @@ def resolve_viewer(obj, info):
     Raises:
         Exception: If no authenticated user is found in context or user doesn't exist
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Get the current user ID from the authentication context
     # In a real implementation, this would come from a JWT token, session, etc.
     # The context should be set up by the authentication middleware
-    current_user_id = info.context.get('user_id')
+    current_user_id = info.context.get("user_id")
 
     if not current_user_id:
-        raise Exception("No authenticated user found. Please provide authentication credentials.")
+        raise Exception(
+            "No authenticated user found. Please provide authentication credentials."
+        )
 
     # Query for the authenticated user
     viewer = session.query(User).filter(User.id == current_user_id).first()
 
     if not viewer:
-        raise Exception(f"Authenticated user with id '{current_user_id}' not found in database")
+        raise Exception(
+            f"Authenticated user with id '{current_user_id}' not found in database"
+        )
 
     return viewer
 
@@ -1944,7 +2031,7 @@ def validate_team_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -1952,14 +2039,14 @@ def validate_team_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_team_filter(sub_filter, f"{path}.and[{i}]")
 
     # Check for nested relation filters (not fully implemented)
-    if 'parent' in filter_dict:
+    if "parent" in filter_dict:
         # Nested parent filters would require complex join logic
-        parent_filter = filter_dict['parent']
+        parent_filter = filter_dict["parent"]
 
         # Validate that parent filter is a dictionary
         if parent_filter and not isinstance(parent_filter, dict):
@@ -1970,7 +2057,7 @@ def validate_team_filter(filter_dict, path="filter"):
 
         if parent_filter and isinstance(parent_filter, dict):
             # Only 'null' filter is supported for parent
-            unsupported_keys = [k for k in parent_filter.keys() if k not in ['null']]
+            unsupported_keys = [k for k in parent_filter.keys() if k not in ["null"]]
             if unsupported_keys:
                 raise Exception(
                     f"Nested parent filters are not currently supported. "
@@ -1979,7 +2066,7 @@ def validate_team_filter(filter_dict, path="filter"):
                 )
 
     # Check for nested issue collection filters (not implemented)
-    if 'issues' in filter_dict:
+    if "issues" in filter_dict:
         raise Exception(
             f"Nested collection filters are not currently supported. "
             f"Found at: {path}.issues. "
@@ -2002,42 +2089,44 @@ def apply_team_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_team_filter(query, sub_filter)
 
     # String comparators
-    if 'name' in filter_dict:
-        query = apply_string_comparator(query, Team.name, filter_dict['name'])
+    if "name" in filter_dict:
+        query = apply_string_comparator(query, Team.name, filter_dict["name"])
 
-    if 'key' in filter_dict:
-        query = apply_string_comparator(query, Team.key, filter_dict['key'])
+    if "key" in filter_dict:
+        query = apply_string_comparator(query, Team.key, filter_dict["key"])
 
-    if 'description' in filter_dict:
-        query = apply_nullable_string_comparator(query, Team.description, filter_dict['description'])
+    if "description" in filter_dict:
+        query = apply_nullable_string_comparator(
+            query, Team.description, filter_dict["description"]
+        )
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, Team.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(query, Team.createdAt, filter_dict["createdAt"])
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, Team.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(query, Team.updatedAt, filter_dict["updatedAt"])
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, Team.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, Team.id, filter_dict["id"])
 
     # Boolean comparator
-    if 'private' in filter_dict:
-        query = apply_boolean_comparator(query, Team.private, filter_dict['private'])
+    if "private" in filter_dict:
+        query = apply_boolean_comparator(query, Team.private, filter_dict["private"])
 
     # Parent filter (simplified - only null check supported)
-    if 'parent' in filter_dict:
-        parent_filter = filter_dict['parent']
+    if "parent" in filter_dict:
+        parent_filter = filter_dict["parent"]
         if parent_filter and isinstance(parent_filter, dict):
-            if parent_filter.get('null') is True:
+            if parent_filter.get("null") is True:
                 query = query.filter(Team.parentId.is_(None))
-            elif parent_filter.get('null') is False:
+            elif parent_filter.get("null") is False:
                 query = query.filter(Team.parentId.isnot(None))
 
     return query
@@ -2046,39 +2135,41 @@ def apply_team_filter(query, filter_dict):
 def apply_nullable_string_comparator(query, column, comparator):
     """Apply nullable string comparison filters."""
     if not isinstance(comparator, dict):
-        raise Exception(f"Invalid comparator for nullable string field. Expected dictionary with comparison operators, got {type(comparator).__name__}.")
+        raise Exception(
+            f"Invalid comparator for nullable string field. Expected dictionary with comparison operators, got {type(comparator).__name__}."
+        )
 
     # Handle null checks first
-    if 'null' in comparator:
-        if comparator['null'] is True:
+    if "null" in comparator:
+        if comparator["null"] is True:
             query = query.filter(column.is_(None))
-        elif comparator['null'] is False:
+        elif comparator["null"] is False:
             query = query.filter(column.isnot(None))
 
     # Apply string comparisons (only when not null)
-    if 'eq' in comparator:
-        query = query.filter(column == comparator['eq'])
-    if 'neq' in comparator:
-        query = query.filter(column != comparator['neq'])
-    if 'contains' in comparator:
+    if "eq" in comparator:
+        query = query.filter(column == comparator["eq"])
+    if "neq" in comparator:
+        query = query.filter(column != comparator["neq"])
+    if "contains" in comparator:
         query = query.filter(column.like(f"%{comparator['contains']}%"))
-    if 'notContains' in comparator:
+    if "notContains" in comparator:
         query = query.filter(~column.like(f"%{comparator['notContains']}%"))
-    if 'startsWith' in comparator:
+    if "startsWith" in comparator:
         query = query.filter(column.like(f"{comparator['startsWith']}%"))
-    if 'endsWith' in comparator:
+    if "endsWith" in comparator:
         query = query.filter(column.like(f"%{comparator['endsWith']}"))
-    if 'in' in comparator:
-        query = query.filter(column.in_(comparator['in']))
-    if 'notIn' in comparator:
-        query = query.filter(~column.in_(comparator['notIn']))
-    if 'containsIgnoreCase' in comparator:
+    if "in" in comparator:
+        query = query.filter(column.in_(comparator["in"]))
+    if "notIn" in comparator:
+        query = query.filter(~column.in_(comparator["notIn"]))
+    if "containsIgnoreCase" in comparator:
         query = query.filter(column.ilike(f"%{comparator['containsIgnoreCase']}%"))
-    if 'notContainsIgnoreCase' in comparator:
+    if "notContainsIgnoreCase" in comparator:
         query = query.filter(~column.ilike(f"%{comparator['notContainsIgnoreCase']}%"))
-    if 'startsWithIgnoreCase' in comparator:
+    if "startsWithIgnoreCase" in comparator:
         query = query.filter(column.ilike(f"{comparator['startsWithIgnoreCase']}%"))
-    if 'endsWithIgnoreCase' in comparator:
+    if "endsWithIgnoreCase" in comparator:
         query = query.filter(column.ilike(f"%{comparator['endsWithIgnoreCase']}"))
 
     return query
@@ -2094,7 +2185,7 @@ def resolve_administrableTeams(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all teams the user can administrate.
@@ -2117,15 +2208,15 @@ def resolve_administrableTeams(
         TeamConnection: Paginated list of teams
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     # TODO: In a real implementation, this would filter by user's admin permissions
@@ -2144,11 +2235,11 @@ def resolve_administrableTeams(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -2156,17 +2247,17 @@ def resolve_administrableTeams(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Team.id > cursor_id)
+                and_(order_column == cursor_field_value, Team.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -2174,7 +2265,7 @@ def resolve_administrableTeams(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Team.id < cursor_id)
+                and_(order_column == cursor_field_value, Team.id < cursor_id),
             )
         )
 
@@ -2210,13 +2301,11 @@ def resolve_archivedTeams(obj, info):
     Returns:
         list[Team]: List of all archived teams
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for all teams that have been archived
     # A team is archived if archivedAt is not null
-    archived_teams = session.query(Team).filter(
-        Team.archivedAt.isnot(None)
-    ).all()
+    archived_teams = session.query(Team).filter(Team.archivedAt.isnot(None)).all()
 
     return archived_teams
 
@@ -2237,7 +2326,7 @@ def resolve_team(obj, info, id: str):
     Raises:
         Exception: If the team is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the team by id
     team = session.query(Team).filter(Team.id == id).first()
@@ -2258,7 +2347,7 @@ def resolve_teams(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all teams whose issues can be accessed by the user.
@@ -2281,15 +2370,15 @@ def resolve_teams(
         TeamConnection: Paginated list of teams
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     # All teams whose issues can be accessed by the user
@@ -2309,11 +2398,11 @@ def resolve_teams(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -2321,17 +2410,17 @@ def resolve_teams(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Team.id > cursor_id)
+                and_(order_column == cursor_field_value, Team.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -2339,7 +2428,7 @@ def resolve_teams(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Team.id < cursor_id)
+                and_(order_column == cursor_field_value, Team.id < cursor_id),
             )
         )
 
@@ -2378,23 +2467,31 @@ def resolve_organization(obj, info):
     Raises:
         Exception: If no authenticated user is found or the user's organization doesn't exist
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Get the current user ID from the authentication context
     # The context should be set up by the authentication middleware
-    current_user_id = info.context.get('user_id')
+    current_user_id = info.context.get("user_id")
 
     if not current_user_id:
-        raise Exception("No authenticated user found. Please provide authentication credentials.")
+        raise Exception(
+            "No authenticated user found. Please provide authentication credentials."
+        )
 
     # First, get the current user to find their organization ID
     user = session.query(User).filter(User.id == current_user_id).first()
 
     if not user:
-        raise Exception(f"Authenticated user with id '{current_user_id}' not found in database")
+        raise Exception(
+            f"Authenticated user with id '{current_user_id}' not found in database"
+        )
 
     # Query for the user's organization
-    organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
+    organization = (
+        session.query(Organization)
+        .filter(Organization.id == user.organizationId)
+        .first()
+    )
 
     if not organization:
         raise Exception(f"Organization with id '{user.organizationId}' not found")
@@ -2415,19 +2512,16 @@ def resolve_organizationExists(obj, info, urlKey: str):
     Returns:
         dict: OrganizationExistsPayload with 'exists' and 'success' fields
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for an organization with the given urlKey
     # The organization could be active or archived, so we check both
-    organization = session.query(Organization).filter(
-        Organization.urlKey == urlKey
-    ).first()
+    organization = (
+        session.query(Organization).filter(Organization.urlKey == urlKey).first()
+    )
 
     # Return the payload
-    return {
-        'exists': organization is not None,
-        'success': True
-    }
+    return {"exists": organization is not None, "success": True}
 
 
 @query.field("organizationInvite")
@@ -2446,12 +2540,12 @@ def resolve_organizationInvite(obj, info, id: str):
     Raises:
         Exception: If the organization invite is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the organization invite by id
-    organization_invite = session.query(OrganizationInvite).filter(
-        OrganizationInvite.id == id
-    ).first()
+    organization_invite = (
+        session.query(OrganizationInvite).filter(OrganizationInvite.id == id).first()
+    )
 
     if not organization_invite:
         raise Exception(f"OrganizationInvite with id '{id}' not found")
@@ -2468,7 +2562,7 @@ def resolve_organizationInvites(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all invites for the organization.
@@ -2487,15 +2581,15 @@ def resolve_organizationInvites(
         OrganizationInviteConnection: Paginated list of organization invites
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(OrganizationInvite)
@@ -2507,11 +2601,11 @@ def resolve_organizationInvites(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -2519,17 +2613,20 @@ def resolve_organizationInvites(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, OrganizationInvite.id > cursor_id)
+                and_(
+                    order_column == cursor_field_value,
+                    OrganizationInvite.id > cursor_id,
+                ),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -2537,7 +2634,10 @@ def resolve_organizationInvites(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, OrganizationInvite.id < cursor_id)
+                and_(
+                    order_column == cursor_field_value,
+                    OrganizationInvite.id < cursor_id,
+                ),
             )
         )
 
@@ -2545,9 +2645,13 @@ def resolve_organizationInvites(
     order_column = getattr(OrganizationInvite, order_field)
     if last or before:
         # For backward pagination, reverse the order
-        base_query = base_query.order_by(order_column.desc(), OrganizationInvite.id.desc())
+        base_query = base_query.order_by(
+            order_column.desc(), OrganizationInvite.id.desc()
+        )
     else:
-        base_query = base_query.order_by(order_column.asc(), OrganizationInvite.id.asc())
+        base_query = base_query.order_by(
+            order_column.asc(), OrganizationInvite.id.asc()
+        )
 
     # Determine limit
     limit = first if first else (last if last else 50)
@@ -2563,6 +2667,7 @@ def resolve_organizationInvites(
 # OrganizationInvite Mutations
 # ============================================================================
 
+
 @mutation.field("organizationInviteCreate")
 def resolve_organizationInviteCreate(obj, info, **kwargs):
     """
@@ -2576,49 +2681,51 @@ def resolve_organizationInviteCreate(obj, info, **kwargs):
     Returns:
         The created OrganizationInvite entity
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input data
-        input_data = kwargs.get('input', {})
+        input_data = kwargs.get("input", {})
 
         # Validate required fields
-        if not input_data.get('email'):
+        if not input_data.get("email"):
             raise Exception("Field 'email' is required")
 
         # Generate ID if not provided
-        invite_id = input_data.get('id', str(uuid.uuid4()))
+        invite_id = input_data.get("id", str(uuid.uuid4()))
 
         # Get current timestamp
         now = datetime.now(timezone.utc)
 
         # Build organization invite data
         invite_data = {
-            'id': invite_id,
-            'email': input_data['email'],
-            'role': input_data.get('role', 'user'),  # Default to 'user' as specified in input
-            'metadata_': input_data.get('metadata'),  # Optional metadata
-            'external': False,  # Will be determined by system logic
-            'createdAt': now,
-            'updatedAt': now,
+            "id": invite_id,
+            "email": input_data["email"],
+            "role": input_data.get(
+                "role", "user"
+            ),  # Default to 'user' as specified in input
+            "metadata_": input_data.get("metadata"),  # Optional metadata
+            "external": False,  # Will be determined by system logic
+            "createdAt": now,
+            "updatedAt": now,
         }
 
         # Handle organizationId - this should typically come from context
         # For now, we'll allow it to be set via input if needed
         # In a real implementation, this might come from the authenticated user's org
-        if 'organizationId' in input_data:
-            invite_data['organizationId'] = input_data['organizationId']
+        if "organizationId" in input_data:
+            invite_data["organizationId"] = input_data["organizationId"]
 
         # Handle inviterId - this should typically come from the authenticated user
         # For now, we'll allow it to be set via input if needed
-        if 'inviterId' in input_data:
-            invite_data['inviterId'] = input_data['inviterId']
+        if "inviterId" in input_data:
+            invite_data["inviterId"] = input_data["inviterId"]
 
         # Create the organization invite entity
         organization_invite = OrganizationInvite(**invite_data)
 
         # Handle team associations if teamIds are provided
-        team_ids = input_data.get('teamIds', [])
+        team_ids = input_data.get("teamIds", [])
         if team_ids:
             # Query for the teams
             teams = session.query(Team).filter(Team.id.in_(team_ids)).all()
@@ -2634,10 +2741,6 @@ def resolve_organizationInviteCreate(obj, info, **kwargs):
 
         session.add(organization_invite)
 
-        # Commit the transaction
-
-        # Return the organization invite entity
-        # Ariadne will handle converting this to OrganizationInvitePayload
         return organization_invite
 
     except Exception as e:
@@ -2657,12 +2760,12 @@ def resolve_organizationInviteUpdate(obj, info, **kwargs):
     Returns:
         The updated OrganizationInvite entity
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        invite_id = kwargs.get('id')
-        input_data = kwargs.get('input', {})
+        invite_id = kwargs.get("id")
+        input_data = kwargs.get("input", {})
 
         # Validate required fields
         if not invite_id:
@@ -2675,7 +2778,7 @@ def resolve_organizationInviteUpdate(obj, info, **kwargs):
             raise Exception(f"OrganizationInvite with id {invite_id} not found")
 
         # Handle team associations update
-        team_ids = input_data.get('teamIds', [])
+        team_ids = input_data.get("teamIds", [])
         if team_ids is not None:  # Allow empty list to clear teams
             # Query for the teams
             teams = session.query(Team).filter(Team.id.in_(team_ids)).all()
@@ -2692,9 +2795,6 @@ def resolve_organizationInviteUpdate(obj, info, **kwargs):
         # Update the timestamp
         org_invite.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated organization invite entity
         return org_invite
 
     except Exception as e:
@@ -2714,8 +2814,8 @@ def resolve_organizationInviteDelete(obj, info, **kwargs):
     Returns:
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
-    session: Session = info.context['session']
-    invite_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    invite_id = kwargs.get("id")
 
     try:
         # Fetch the organization invite to delete
@@ -2728,13 +2828,11 @@ def resolve_organizationInviteDelete(obj, info, **kwargs):
         org_invite.archivedAt = datetime.now(timezone.utc)
         org_invite.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DeletePayload structure
         return {
-            'entityId': invite_id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entityId": invite_id,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -2757,7 +2855,7 @@ def resolve_projectStatus(obj, info, id: str):
     Raises:
         Exception: If the project status is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the project status by id
     project_status = session.query(ProjectStatus).filter(ProjectStatus.id == id).first()
@@ -2777,7 +2875,7 @@ def resolve_projectStatuses(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all project statuses.
@@ -2796,15 +2894,15 @@ def resolve_projectStatuses(
         ProjectStatusConnection: Paginated list of project statuses
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(ProjectStatus)
@@ -2816,11 +2914,11 @@ def resolve_projectStatuses(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -2828,17 +2926,17 @@ def resolve_projectStatuses(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectStatus.id > cursor_id)
+                and_(order_column == cursor_field_value, ProjectStatus.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -2846,7 +2944,7 @@ def resolve_projectStatuses(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectStatus.id < cursor_id)
+                and_(order_column == cursor_field_value, ProjectStatus.id < cursor_id),
             )
         )
 
@@ -2886,7 +2984,7 @@ def resolve_projectStatusProjectCount(obj, info, id: str):
     Returns:
         dict: ProjectStatusCountPayload with count, archivedTeamCount, and privateCount fields
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Verify the project status exists
     project_status = session.query(ProjectStatus).filter(ProjectStatus.id == id).first()
@@ -2895,33 +2993,33 @@ def resolve_projectStatusProjectCount(obj, info, id: str):
 
     # Count total projects using this project status
     # This includes all projects regardless of team status
-    total_count = session.query(Project).filter(
-        Project.statusId == id
-    ).count()
+    total_count = session.query(Project).filter(Project.statusId == id).count()
 
     # Count projects in archived teams
     # Join with teams and filter for archived teams
-    archived_team_count = session.query(Project).join(
-        Team, Project.teams
-    ).filter(
-        Project.statusId == id,
-        Team.archivedAt.isnot(None)
-    ).distinct().count()
+    archived_team_count = (
+        session.query(Project)
+        .join(Team, Project.teams)
+        .filter(Project.statusId == id, Team.archivedAt.isnot(None))
+        .distinct()
+        .count()
+    )
 
     # Count projects in private teams
     # Join with teams and filter for private teams
-    private_count = session.query(Project).join(
-        Team, Project.teams
-    ).filter(
-        Project.statusId == id,
-        Team.private == True
-    ).distinct().count()
+    private_count = (
+        session.query(Project)
+        .join(Team, Project.teams)
+        .filter(Project.statusId == id, Team.private == True)
+        .distinct()
+        .count()
+    )
 
     # Return the payload
     return {
-        'count': float(total_count),
-        'archivedTeamCount': float(archived_team_count),
-        'privateCount': float(private_count)
+        "count": float(total_count),
+        "archivedTeamCount": float(archived_team_count),
+        "privateCount": float(private_count),
     }
 
 
@@ -2940,7 +3038,7 @@ def validate_project_label_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -2948,21 +3046,21 @@ def validate_project_label_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_project_label_filter(sub_filter, f"{path}.and[{i}]")
 
     # Check for nested relation filters
-    if 'creator' in filter_dict:
-        creator_filter = filter_dict['creator']
+    if "creator" in filter_dict:
+        creator_filter = filter_dict["creator"]
         if creator_filter and not isinstance(creator_filter, dict):
             raise Exception(
                 f"Invalid filter value for relation 'creator'. "
                 f"Expected a dictionary with 'null' key, got {type(creator_filter).__name__}."
             )
 
-    if 'parent' in filter_dict:
-        parent_filter = filter_dict['parent']
+    if "parent" in filter_dict:
+        parent_filter = filter_dict["parent"]
         if parent_filter and not isinstance(parent_filter, dict):
             raise Exception(
                 f"Invalid filter value for relation 'parent'. "
@@ -2988,50 +3086,60 @@ def apply_project_label_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_project_label_filter(query, sub_filter)
 
     # String comparators
-    if 'name' in filter_dict:
-        query = apply_string_comparator(query, ProjectLabel.name, filter_dict['name'])
+    if "name" in filter_dict:
+        query = apply_string_comparator(query, ProjectLabel.name, filter_dict["name"])
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, ProjectLabel.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(
+            query, ProjectLabel.createdAt, filter_dict["createdAt"]
+        )
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, ProjectLabel.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, ProjectLabel.updatedAt, filter_dict["updatedAt"]
+        )
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, ProjectLabel.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, ProjectLabel.id, filter_dict["id"])
 
     # Boolean comparator
-    if 'isGroup' in filter_dict:
-        query = apply_boolean_comparator(query, ProjectLabel.isGroup, filter_dict['isGroup'])
+    if "isGroup" in filter_dict:
+        query = apply_boolean_comparator(
+            query, ProjectLabel.isGroup, filter_dict["isGroup"]
+        )
 
     # Creator filter (nullable user filter)
-    if 'creator' in filter_dict:
-        creator_filter = filter_dict['creator']
+    if "creator" in filter_dict:
+        creator_filter = filter_dict["creator"]
         if creator_filter and isinstance(creator_filter, dict):
-            if creator_filter.get('null') is True:
+            if creator_filter.get("null") is True:
                 query = query.filter(ProjectLabel.creatorId.is_(None))
-            elif creator_filter.get('null') is False:
+            elif creator_filter.get("null") is False:
                 query = query.filter(ProjectLabel.creatorId.isnot(None))
 
     # Parent filter (recursive project label filter)
-    if 'parent' in filter_dict:
-        parent_filter = filter_dict['parent']
+    if "parent" in filter_dict:
+        parent_filter = filter_dict["parent"]
         if parent_filter and isinstance(parent_filter, dict):
             # For nested parent filters, we need to recursively apply filters
             # This is a simplified implementation that only supports basic operations
-            if 'id' in parent_filter:
-                query = apply_id_comparator(query, ProjectLabel.parentId, parent_filter['id'])
-            if 'name' in parent_filter:
+            if "id" in parent_filter:
+                query = apply_id_comparator(
+                    query, ProjectLabel.parentId, parent_filter["id"]
+                )
+            if "name" in parent_filter:
                 # This requires a join with the parent label
                 query = query.join(ProjectLabel.parent).filter(
-                    apply_string_comparator(query, ProjectLabel.name, parent_filter['name'])
+                    apply_string_comparator(
+                        query, ProjectLabel.name, parent_filter["name"]
+                    )
                 )
 
     return query
@@ -3053,7 +3161,7 @@ def resolve_projectLabel(obj, info, id: str):
     Raises:
         Exception: If the project label is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the project label by id
     project_label = session.query(ProjectLabel).filter(ProjectLabel.id == id).first()
@@ -3074,7 +3182,7 @@ def resolve_projectLabels(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all project labels.
@@ -3094,15 +3202,15 @@ def resolve_projectLabels(
         ProjectLabelConnection: Paginated list of project labels
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(ProjectLabel)
@@ -3119,11 +3227,11 @@ def resolve_projectLabels(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -3131,17 +3239,17 @@ def resolve_projectLabels(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectLabel.id > cursor_id)
+                and_(order_column == cursor_field_value, ProjectLabel.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -3149,7 +3257,7 @@ def resolve_projectLabels(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectLabel.id < cursor_id)
+                and_(order_column == cursor_field_value, ProjectLabel.id < cursor_id),
             )
         )
 
@@ -3186,7 +3294,7 @@ def validate_project_milestone_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -3194,8 +3302,8 @@ def validate_project_milestone_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_project_milestone_filter(sub_filter, f"{path}.and[{i}]")
 
 
@@ -3214,27 +3322,35 @@ def apply_project_milestone_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_project_milestone_filter(query, sub_filter)
 
     # String comparators
-    if 'name' in filter_dict:
-        query = apply_nullable_string_comparator(query, ProjectMilestone.name, filter_dict['name'])
+    if "name" in filter_dict:
+        query = apply_nullable_string_comparator(
+            query, ProjectMilestone.name, filter_dict["name"]
+        )
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, ProjectMilestone.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(
+            query, ProjectMilestone.createdAt, filter_dict["createdAt"]
+        )
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, ProjectMilestone.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, ProjectMilestone.updatedAt, filter_dict["updatedAt"]
+        )
 
-    if 'targetDate' in filter_dict:
-        query = apply_nullable_date_comparator(query, ProjectMilestone.targetDate, filter_dict['targetDate'])
+    if "targetDate" in filter_dict:
+        query = apply_nullable_date_comparator(
+            query, ProjectMilestone.targetDate, filter_dict["targetDate"]
+        )
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, ProjectMilestone.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, ProjectMilestone.id, filter_dict["id"])
 
     return query
 
@@ -3243,33 +3359,59 @@ def apply_nullable_date_comparator(query, column, comparator):
     """Apply nullable date comparison filters."""
 
     if not isinstance(comparator, dict):
-        raise Exception(f"Invalid comparator for nullable date field. Expected dictionary with comparison operators, got {type(comparator).__name__}.")
+        raise Exception(
+            f"Invalid comparator for nullable date field. Expected dictionary with comparison operators, got {type(comparator).__name__}."
+        )
 
     # Handle null checks first
-    if 'null' in comparator:
-        if comparator['null'] is True:
+    if "null" in comparator:
+        if comparator["null"] is True:
             query = query.filter(column.is_(None))
-        elif comparator['null'] is False:
+        elif comparator["null"] is False:
             query = query.filter(column.isnot(None))
 
     # Apply date comparisons (only when not null)
-    if 'eq' in comparator:
-        date_val = datetime.fromisoformat(comparator['eq']) if isinstance(comparator['eq'], str) else comparator['eq']
+    if "eq" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["eq"])
+            if isinstance(comparator["eq"], str)
+            else comparator["eq"]
+        )
         query = query.filter(column == date_val)
-    if 'neq' in comparator:
-        date_val = datetime.fromisoformat(comparator['neq']) if isinstance(comparator['neq'], str) else comparator['neq']
+    if "neq" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["neq"])
+            if isinstance(comparator["neq"], str)
+            else comparator["neq"]
+        )
         query = query.filter(column != date_val)
-    if 'gt' in comparator:
-        date_val = datetime.fromisoformat(comparator['gt']) if isinstance(comparator['gt'], str) else comparator['gt']
+    if "gt" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["gt"])
+            if isinstance(comparator["gt"], str)
+            else comparator["gt"]
+        )
         query = query.filter(column > date_val)
-    if 'gte' in comparator:
-        date_val = datetime.fromisoformat(comparator['gte']) if isinstance(comparator['gte'], str) else comparator['gte']
+    if "gte" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["gte"])
+            if isinstance(comparator["gte"], str)
+            else comparator["gte"]
+        )
         query = query.filter(column >= date_val)
-    if 'lt' in comparator:
-        date_val = datetime.fromisoformat(comparator['lt']) if isinstance(comparator['lt'], str) else comparator['lt']
+    if "lt" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["lt"])
+            if isinstance(comparator["lt"], str)
+            else comparator["lt"]
+        )
         query = query.filter(column < date_val)
-    if 'lte' in comparator:
-        date_val = datetime.fromisoformat(comparator['lte']) if isinstance(comparator['lte'], str) else comparator['lte']
+    if "lte" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["lte"])
+            if isinstance(comparator["lte"], str)
+            else comparator["lte"]
+        )
         query = query.filter(column <= date_val)
 
     return query
@@ -3291,10 +3433,12 @@ def resolve_projectMilestone(obj, info, id: str):
     Raises:
         Exception: If the project milestone is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the project milestone by id
-    project_milestone = session.query(ProjectMilestone).filter(ProjectMilestone.id == id).first()
+    project_milestone = (
+        session.query(ProjectMilestone).filter(ProjectMilestone.id == id).first()
+    )
 
     if not project_milestone:
         raise Exception(f"ProjectMilestone with id '{id}' not found")
@@ -3312,7 +3456,7 @@ def resolve_projectMilestones(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all milestones for the project.
@@ -3332,15 +3476,15 @@ def resolve_projectMilestones(
         ProjectMilestoneConnection: Paginated list of project milestones
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(ProjectMilestone)
@@ -3357,11 +3501,11 @@ def resolve_projectMilestones(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -3369,17 +3513,19 @@ def resolve_projectMilestones(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectMilestone.id > cursor_id)
+                and_(
+                    order_column == cursor_field_value, ProjectMilestone.id > cursor_id
+                ),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -3387,7 +3533,9 @@ def resolve_projectMilestones(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectMilestone.id < cursor_id)
+                and_(
+                    order_column == cursor_field_value, ProjectMilestone.id < cursor_id
+                ),
             )
         )
 
@@ -3395,7 +3543,9 @@ def resolve_projectMilestones(
     order_column = getattr(ProjectMilestone, order_field)
     if last or before:
         # For backward pagination, reverse the order
-        base_query = base_query.order_by(order_column.desc(), ProjectMilestone.id.desc())
+        base_query = base_query.order_by(
+            order_column.desc(), ProjectMilestone.id.desc()
+        )
     else:
         base_query = base_query.order_by(order_column.asc(), ProjectMilestone.id.asc())
 
@@ -3425,12 +3575,12 @@ def resolve_projectRelation(obj, info, id: str):
     Raises:
         Exception: If the project relation is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query the project relation by ID
-    project_relation = session.query(ProjectRelation).filter(
-        ProjectRelation.id == id
-    ).first()
+    project_relation = (
+        session.query(ProjectRelation).filter(ProjectRelation.id == id).first()
+    )
 
     # Raise an error if not found
     if not project_relation:
@@ -3448,7 +3598,7 @@ def resolve_projectRelations(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     All project relationships.
@@ -3467,15 +3617,17 @@ def resolve_projectRelations(
         dict: ProjectRelationConnection with edges, nodes, and pageInfo
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine order field
-    order_field = orderBy if orderBy else 'createdAt'
-    if order_field not in ['createdAt', 'updatedAt']:
-        raise Exception(f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'")
+    order_field = orderBy if orderBy else "createdAt"
+    if order_field not in ["createdAt", "updatedAt"]:
+        raise Exception(
+            f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'"
+        )
 
     # Build base query
     base_query = session.query(ProjectRelation)
@@ -3487,11 +3639,11 @@ def resolve_projectRelations(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -3499,17 +3651,19 @@ def resolve_projectRelations(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectRelation.id > cursor_id)
+                and_(
+                    order_column == cursor_field_value, ProjectRelation.id > cursor_id
+                ),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -3517,7 +3671,9 @@ def resolve_projectRelations(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, ProjectRelation.id < cursor_id)
+                and_(
+                    order_column == cursor_field_value, ProjectRelation.id < cursor_id
+                ),
             )
         )
 
@@ -3552,7 +3708,7 @@ def resolve_searchProjects(
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
     snippetSize: Optional[float] = None,
-    teamId: Optional[str] = None
+    teamId: Optional[str] = None,
 ):
     """
     Search projects.
@@ -3575,27 +3731,27 @@ def resolve_searchProjects(
         ProjectSearchPayload: Search results with edges, nodes, pageInfo, totalCount, and archivePayload
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query for projects
     base_query = session.query(Project)
 
     # Apply search term filter (search in name, description, slugId)
     if term:
-        search_pattern = f'%{term}%'
+        search_pattern = f"%{term}%"
         base_query = base_query.filter(
             or_(
                 Project.name.like(search_pattern),
                 Project.description.like(search_pattern),
-                Project.slugId.like(search_pattern)
+                Project.slugId.like(search_pattern),
             )
         )
 
@@ -3615,11 +3771,11 @@ def resolve_searchProjects(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -3627,17 +3783,17 @@ def resolve_searchProjects(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Project.id > cursor_id)
+                and_(order_column == cursor_field_value, Project.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -3645,7 +3801,7 @@ def resolve_searchProjects(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Project.id < cursor_id)
+                and_(order_column == cursor_field_value, Project.id < cursor_id),
             )
         )
 
@@ -3696,41 +3852,38 @@ def resolve_searchProjects(
     # ProjectSearchResult is essentially the Project with search metadata
     edges = [
         {
-            'node': {
+            "node": {
                 # Include all project fields
-                **{k: v for k, v in project.__dict__.items() if not k.startswith('_')},
+                **{k: v for k, v in project.__dict__.items() if not k.startswith("_")},
                 # Add search-specific metadata
-                'metadata': {}  # Empty metadata for now
+                "metadata": {},  # Empty metadata for now
             },
-            'cursor': encode_cursor(project, order_field)
+            "cursor": encode_cursor(project, order_field),
         }
         for project in items
     ]
 
     # Build nodes - same as edge nodes
-    nodes = [edge['node'] for edge in edges]
+    nodes = [edge["node"] for edge in edges]
 
     # Build pageInfo
     page_info = {
-        'hasNextPage': has_next_page,
-        'hasPreviousPage': has_previous_page,
-        'startCursor': edges[0]['cursor'] if edges else None,
-        'endCursor': edges[-1]['cursor'] if edges else None
+        "hasNextPage": has_next_page,
+        "hasPreviousPage": has_previous_page,
+        "startCursor": edges[0]["cursor"] if edges else None,
+        "endCursor": edges[-1]["cursor"] if edges else None,
     }
 
     # Build archivePayload (empty for now as we don't have archived entities)
-    archive_payload = {
-        'success': True,
-        'lastSyncId': 0.0
-    }
+    archive_payload = {"success": True, "lastSyncId": 0.0}
 
     # Return ProjectSearchPayload
     return {
-        'edges': edges,
-        'nodes': nodes,
-        'pageInfo': page_info,
-        'totalCount': float(total_count),
-        'archivePayload': archive_payload
+        "edges": edges,
+        "nodes": nodes,
+        "pageInfo": page_info,
+        "totalCount": float(total_count),
+        "archivePayload": archive_payload,
     }
 
 
@@ -3750,7 +3903,7 @@ def resolve_notification(obj, info, id: str):
     Raises:
         Exception: If notification with the given id is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the notification by id
     notification = session.query(Notification).filter(Notification.id == id).first()
@@ -3771,7 +3924,7 @@ def resolve_notifications(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all notifications with filtering, sorting, and pagination.
@@ -3791,15 +3944,15 @@ def resolve_notifications(
         NotificationConnection: Paginated list of notifications
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(Notification)
@@ -3816,11 +3969,11 @@ def resolve_notifications(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -3828,17 +3981,17 @@ def resolve_notifications(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Notification.id > cursor_id)
+                and_(order_column == cursor_field_value, Notification.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -3846,7 +3999,7 @@ def resolve_notifications(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Notification.id < cursor_id)
+                and_(order_column == cursor_field_value, Notification.id < cursor_id),
             )
         )
 
@@ -3883,13 +4036,13 @@ def validate_notification_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (supported recursively)
-    if 'or' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['or']):
+    if "or" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["or"]):
             validate_notification_filter(sub_filter, f"{path}.or[{i}]")
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_notification_filter(sub_filter, f"{path}.and[{i}]")
 
 
@@ -3908,47 +4061,69 @@ def apply_notification_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_notification_filter(query, sub_filter)
 
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         # Build a list of conditions for OR
         or_conditions = []
-        for sub_filter in filter_dict['or']:
+        for sub_filter in filter_dict["or"]:
             # Create a temporary query to extract the filters
             # We'll use a subquery approach by building conditions
-            if 'archivedAt' in sub_filter:
-                or_conditions.append(build_date_condition(Notification.archivedAt, sub_filter['archivedAt']))
-            if 'createdAt' in sub_filter:
-                or_conditions.append(build_date_condition(Notification.createdAt, sub_filter['createdAt']))
-            if 'id' in sub_filter:
-                or_conditions.append(build_id_condition(Notification.id, sub_filter['id']))
-            if 'type' in sub_filter:
-                or_conditions.append(build_string_condition(Notification.type, sub_filter['type']))
-            if 'updatedAt' in sub_filter:
-                or_conditions.append(build_date_condition(Notification.updatedAt, sub_filter['updatedAt']))
+            if "archivedAt" in sub_filter:
+                or_conditions.append(
+                    build_date_condition(
+                        Notification.archivedAt, sub_filter["archivedAt"]
+                    )
+                )
+            if "createdAt" in sub_filter:
+                or_conditions.append(
+                    build_date_condition(
+                        Notification.createdAt, sub_filter["createdAt"]
+                    )
+                )
+            if "id" in sub_filter:
+                or_conditions.append(
+                    build_id_condition(Notification.id, sub_filter["id"])
+                )
+            if "type" in sub_filter:
+                or_conditions.append(
+                    build_string_condition(Notification.type, sub_filter["type"])
+                )
+            if "updatedAt" in sub_filter:
+                or_conditions.append(
+                    build_date_condition(
+                        Notification.updatedAt, sub_filter["updatedAt"]
+                    )
+                )
 
         if or_conditions:
             query = query.filter(or_(*or_conditions))
 
     # Date comparators
-    if 'archivedAt' in filter_dict:
-        query = apply_date_comparator(query, Notification.archivedAt, filter_dict['archivedAt'])
+    if "archivedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Notification.archivedAt, filter_dict["archivedAt"]
+        )
 
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, Notification.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Notification.createdAt, filter_dict["createdAt"]
+        )
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, Notification.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Notification.updatedAt, filter_dict["updatedAt"]
+        )
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, Notification.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, Notification.id, filter_dict["id"])
 
     # String comparator
-    if 'type' in filter_dict:
-        query = apply_string_comparator(query, Notification.type, filter_dict['type'])
+    if "type" in filter_dict:
+        query = apply_string_comparator(query, Notification.type, filter_dict["type"])
 
     return query
 
@@ -3957,72 +4132,114 @@ def build_date_condition(column, comparator):
     """Build a date comparison condition for use in OR filters."""
 
     conditions = []
-    if 'eq' in comparator:
-        date_val = datetime.fromisoformat(comparator['eq']) if isinstance(comparator['eq'], str) else comparator['eq']
+    if "eq" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["eq"])
+            if isinstance(comparator["eq"], str)
+            else comparator["eq"]
+        )
         conditions.append(column == date_val)
-    if 'neq' in comparator:
-        date_val = datetime.fromisoformat(comparator['neq']) if isinstance(comparator['neq'], str) else comparator['neq']
+    if "neq" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["neq"])
+            if isinstance(comparator["neq"], str)
+            else comparator["neq"]
+        )
         conditions.append(column != date_val)
-    if 'gt' in comparator:
-        date_val = datetime.fromisoformat(comparator['gt']) if isinstance(comparator['gt'], str) else comparator['gt']
+    if "gt" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["gt"])
+            if isinstance(comparator["gt"], str)
+            else comparator["gt"]
+        )
         conditions.append(column > date_val)
-    if 'gte' in comparator:
-        date_val = datetime.fromisoformat(comparator['gte']) if isinstance(comparator['gte'], str) else comparator['gte']
+    if "gte" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["gte"])
+            if isinstance(comparator["gte"], str)
+            else comparator["gte"]
+        )
         conditions.append(column >= date_val)
-    if 'lt' in comparator:
-        date_val = datetime.fromisoformat(comparator['lt']) if isinstance(comparator['lt'], str) else comparator['lt']
+    if "lt" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["lt"])
+            if isinstance(comparator["lt"], str)
+            else comparator["lt"]
+        )
         conditions.append(column < date_val)
-    if 'lte' in comparator:
-        date_val = datetime.fromisoformat(comparator['lte']) if isinstance(comparator['lte'], str) else comparator['lte']
+    if "lte" in comparator:
+        date_val = (
+            datetime.fromisoformat(comparator["lte"])
+            if isinstance(comparator["lte"], str)
+            else comparator["lte"]
+        )
         conditions.append(column <= date_val)
 
-    return and_(*conditions) if len(conditions) > 1 else conditions[0] if conditions else None
+    return (
+        and_(*conditions)
+        if len(conditions) > 1
+        else conditions[0]
+        if conditions
+        else None
+    )
 
 
 def build_id_condition(column, comparator):
     """Build an ID comparison condition for use in OR filters."""
     conditions = []
-    if 'eq' in comparator:
-        conditions.append(column == comparator['eq'])
-    if 'neq' in comparator:
-        conditions.append(column != comparator['neq'])
-    if 'in' in comparator:
-        conditions.append(column.in_(comparator['in']))
-    if 'notIn' in comparator:
-        conditions.append(~column.in_(comparator['notIn']))
+    if "eq" in comparator:
+        conditions.append(column == comparator["eq"])
+    if "neq" in comparator:
+        conditions.append(column != comparator["neq"])
+    if "in" in comparator:
+        conditions.append(column.in_(comparator["in"]))
+    if "notIn" in comparator:
+        conditions.append(~column.in_(comparator["notIn"]))
 
-    return and_(*conditions) if len(conditions) > 1 else conditions[0] if conditions else None
+    return (
+        and_(*conditions)
+        if len(conditions) > 1
+        else conditions[0]
+        if conditions
+        else None
+    )
 
 
 def build_string_condition(column, comparator):
     """Build a string comparison condition for use in OR filters."""
     conditions = []
-    if 'eq' in comparator:
-        conditions.append(column == comparator['eq'])
-    if 'neq' in comparator:
-        conditions.append(column != comparator['neq'])
-    if 'contains' in comparator:
+    if "eq" in comparator:
+        conditions.append(column == comparator["eq"])
+    if "neq" in comparator:
+        conditions.append(column != comparator["neq"])
+    if "contains" in comparator:
         conditions.append(column.like(f"%{comparator['contains']}%"))
-    if 'notContains' in comparator:
+    if "notContains" in comparator:
         conditions.append(~column.like(f"%{comparator['notContains']}%"))
-    if 'startsWith' in comparator:
+    if "startsWith" in comparator:
         conditions.append(column.like(f"{comparator['startsWith']}%"))
-    if 'endsWith' in comparator:
+    if "endsWith" in comparator:
         conditions.append(column.like(f"%{comparator['endsWith']}"))
-    if 'in' in comparator:
-        conditions.append(column.in_(comparator['in']))
-    if 'notIn' in comparator:
-        conditions.append(~column.in_(comparator['notIn']))
-    if 'containsIgnoreCase' in comparator:
+    if "in" in comparator:
+        conditions.append(column.in_(comparator["in"]))
+    if "notIn" in comparator:
+        conditions.append(~column.in_(comparator["notIn"]))
+    if "containsIgnoreCase" in comparator:
         conditions.append(column.ilike(f"%{comparator['containsIgnoreCase']}%"))
-    if 'notContainsIgnoreCase' in comparator:
+    if "notContainsIgnoreCase" in comparator:
         conditions.append(~column.ilike(f"%{comparator['notContainsIgnoreCase']}%"))
-    if 'startsWithIgnoreCase' in comparator:
+    if "startsWithIgnoreCase" in comparator:
         conditions.append(column.ilike(f"{comparator['startsWithIgnoreCase']}%"))
-    if 'endsWithIgnoreCase' in comparator:
+    if "endsWithIgnoreCase" in comparator:
         conditions.append(column.ilike(f"%{comparator['endsWithIgnoreCase']}"))
 
-    return and_(*conditions) if len(conditions) > 1 else conditions[0] if conditions else None
+    return (
+        and_(*conditions)
+        if len(conditions) > 1
+        else conditions[0]
+        if conditions
+        else None
+    )
 
 
 @query.field("initiative")
@@ -4041,11 +4258,13 @@ def resolve_initiative(obj, info, **kwargs):
     Raises:
         Exception: If the initiative is not found
     """
-    session: Session = info.context['session']
-    initiative_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    initiative_id = kwargs.get("id")
 
     # Query for the initiative by ID
-    initiative = session.query(Initiative).filter(Initiative.id == initiative_id).first()
+    initiative = (
+        session.query(Initiative).filter(Initiative.id == initiative_id).first()
+    )
 
     if initiative is None:
         raise Exception(f"Initiative with id '{initiative_id}' not found")
@@ -4070,7 +4289,7 @@ def validate_initiative_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -4078,14 +4297,14 @@ def validate_initiative_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_initiative_filter(sub_filter, f"{path}.and[{i}]")
 
     # Check for nested collection filters (not fully implemented)
     unsupported_nested_filters = {
-        'ancestors': 'InitiativeCollectionFilter',
-        'teams': 'TeamCollectionFilter',
+        "ancestors": "InitiativeCollectionFilter",
+        "teams": "TeamCollectionFilter",
     }
 
     for filter_name, filter_type in unsupported_nested_filters.items():
@@ -4098,8 +4317,24 @@ def validate_initiative_filter(filter_dict, path="filter"):
 
     # Check for nested relation filters (not fully implemented)
     unsupported_relation_keys = {
-        'creator': ['email', 'name', 'displayName', 'active', 'admin', 'createdAt', 'updatedAt'],
-        'owner': ['email', 'name', 'displayName', 'active', 'admin', 'createdAt', 'updatedAt'],
+        "creator": [
+            "email",
+            "name",
+            "displayName",
+            "active",
+            "admin",
+            "createdAt",
+            "updatedAt",
+        ],
+        "owner": [
+            "email",
+            "name",
+            "displayName",
+            "active",
+            "admin",
+            "createdAt",
+            "updatedAt",
+        ],
     }
 
     for relation_name, unsupported_keys in unsupported_relation_keys.items():
@@ -4141,67 +4376,77 @@ def apply_initiative_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_initiative_filter(query, sub_filter)
 
     # Note: OR filters are validated and rejected in validate_initiative_filter()
 
     # String comparators
-    if 'activityType' in filter_dict:
+    if "activityType" in filter_dict:
         # activityType is a computed field, not stored in DB
         # Skip this filter for now
         pass
 
-    if 'health' in filter_dict:
-        query = apply_string_comparator(query, Initiative.health, filter_dict['health'])
+    if "health" in filter_dict:
+        query = apply_string_comparator(query, Initiative.health, filter_dict["health"])
 
-    if 'healthWithAge' in filter_dict:
+    if "healthWithAge" in filter_dict:
         # healthWithAge is a computed field, not stored in DB
         # For now, we'll use the health field as a fallback
-        query = apply_string_comparator(query, Initiative.health, filter_dict['healthWithAge'])
+        query = apply_string_comparator(
+            query, Initiative.health, filter_dict["healthWithAge"]
+        )
 
-    if 'name' in filter_dict:
-        query = apply_string_comparator(query, Initiative.name, filter_dict['name'])
+    if "name" in filter_dict:
+        query = apply_string_comparator(query, Initiative.name, filter_dict["name"])
 
-    if 'slugId' in filter_dict:
-        query = apply_string_comparator(query, Initiative.slugId, filter_dict['slugId'])
+    if "slugId" in filter_dict:
+        query = apply_string_comparator(query, Initiative.slugId, filter_dict["slugId"])
 
-    if 'status' in filter_dict:
-        query = apply_string_comparator(query, Initiative.status, filter_dict['status'])
+    if "status" in filter_dict:
+        query = apply_string_comparator(query, Initiative.status, filter_dict["status"])
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, Initiative.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Initiative.createdAt, filter_dict["createdAt"]
+        )
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, Initiative.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Initiative.updatedAt, filter_dict["updatedAt"]
+        )
 
-    if 'targetDate' in filter_dict:
-        query = apply_date_comparator(query, Initiative.targetDate, filter_dict['targetDate'])
+    if "targetDate" in filter_dict:
+        query = apply_date_comparator(
+            query, Initiative.targetDate, filter_dict["targetDate"]
+        )
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, Initiative.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, Initiative.id, filter_dict["id"])
 
     # Relation filters (simplified - full implementation would need joins)
-    if 'creator' in filter_dict:
-        creator_filter = filter_dict['creator']
-        if creator_filter.get('null') is True:
+    if "creator" in filter_dict:
+        creator_filter = filter_dict["creator"]
+        if creator_filter.get("null") is True:
             query = query.filter(Initiative.creatorId.is_(None))
-        elif creator_filter.get('null') is False:
+        elif creator_filter.get("null") is False:
             query = query.filter(Initiative.creatorId.isnot(None))
-        if 'id' in creator_filter:
-            query = apply_id_comparator(query, Initiative.creatorId, creator_filter['id'])
+        if "id" in creator_filter:
+            query = apply_id_comparator(
+                query, Initiative.creatorId, creator_filter["id"]
+            )
 
-    if 'owner' in filter_dict:
-        owner_filter = filter_dict['owner']
-        if owner_filter.get('null') is True:
+    if "owner" in filter_dict:
+        owner_filter = filter_dict["owner"]
+        if owner_filter.get("null") is True:
             query = query.filter(Initiative.ownerId.is_(None))
-        elif owner_filter.get('null') is False:
+        elif owner_filter.get("null") is False:
             query = query.filter(Initiative.ownerId.isnot(None))
-        if 'id' in owner_filter:
-            query = apply_id_comparator(query, Initiative.ownerId, owner_filter['id'])
+        if "id" in owner_filter:
+            query = apply_id_comparator(query, Initiative.ownerId, owner_filter["id"])
 
     return query
 
@@ -4232,55 +4477,69 @@ def apply_initiative_sort(query, sort_list):
         # Each sort_input is a dictionary with one or more sort fields
         # Each field value is a dictionary with direction (e.g., {"direction": "ASC"})
 
-        if 'createdAt' in sort_input:
-            direction = sort_input['createdAt'].get('direction', 'ASC')
+        if "createdAt" in sort_input:
+            direction = sort_input["createdAt"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.createdAt) if direction == 'ASC' else desc(Initiative.createdAt)
+                asc(Initiative.createdAt)
+                if direction == "ASC"
+                else desc(Initiative.createdAt)
             )
 
-        if 'updatedAt' in sort_input:
-            direction = sort_input['updatedAt'].get('direction', 'ASC')
+        if "updatedAt" in sort_input:
+            direction = sort_input["updatedAt"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.updatedAt) if direction == 'ASC' else desc(Initiative.updatedAt)
+                asc(Initiative.updatedAt)
+                if direction == "ASC"
+                else desc(Initiative.updatedAt)
             )
 
-        if 'health' in sort_input:
-            direction = sort_input['health'].get('direction', 'ASC')
+        if "health" in sort_input:
+            direction = sort_input["health"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.health) if direction == 'ASC' else desc(Initiative.health)
+                asc(Initiative.health)
+                if direction == "ASC"
+                else desc(Initiative.health)
             )
 
-        if 'healthUpdatedAt' in sort_input:
-            direction = sort_input['healthUpdatedAt'].get('direction', 'ASC')
+        if "healthUpdatedAt" in sort_input:
+            direction = sort_input["healthUpdatedAt"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.healthUpdatedAt) if direction == 'ASC' else desc(Initiative.healthUpdatedAt)
+                asc(Initiative.healthUpdatedAt)
+                if direction == "ASC"
+                else desc(Initiative.healthUpdatedAt)
             )
 
-        if 'manual' in sort_input:
+        if "manual" in sort_input:
             # Manual sort uses sortOrder field
-            direction = sort_input['manual'].get('direction', 'ASC')
+            direction = sort_input["manual"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.sortOrder) if direction == 'ASC' else desc(Initiative.sortOrder)
+                asc(Initiative.sortOrder)
+                if direction == "ASC"
+                else desc(Initiative.sortOrder)
             )
 
-        if 'name' in sort_input:
-            direction = sort_input['name'].get('direction', 'ASC')
+        if "name" in sort_input:
+            direction = sort_input["name"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.name) if direction == 'ASC' else desc(Initiative.name)
+                asc(Initiative.name) if direction == "ASC" else desc(Initiative.name)
             )
 
-        if 'owner' in sort_input:
+        if "owner" in sort_input:
             # Sort by owner name - would require join with User table
             # For now, we'll sort by ownerId as a simplified implementation
-            direction = sort_input['owner'].get('direction', 'ASC')
+            direction = sort_input["owner"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.ownerId) if direction == 'ASC' else desc(Initiative.ownerId)
+                asc(Initiative.ownerId)
+                if direction == "ASC"
+                else desc(Initiative.ownerId)
             )
 
-        if 'targetDate' in sort_input:
-            direction = sort_input['targetDate'].get('direction', 'ASC')
+        if "targetDate" in sort_input:
+            direction = sort_input["targetDate"].get("direction", "ASC")
             order_clauses.append(
-                asc(Initiative.targetDate) if direction == 'ASC' else desc(Initiative.targetDate)
+                asc(Initiative.targetDate)
+                if direction == "ASC"
+                else desc(Initiative.targetDate)
             )
 
     # Apply all order clauses
@@ -4301,7 +4560,7 @@ def resolve_initiatives(
     includeArchived: bool = False,
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
-    sort: Optional[list] = None
+    sort: Optional[list] = None,
 ):
     """
     Query all initiatives with filtering, sorting, and pagination.
@@ -4322,15 +4581,15 @@ def resolve_initiatives(
         InitiativeConnection: Paginated list of initiatives
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(Initiative)
@@ -4348,16 +4607,18 @@ def resolve_initiatives(
     # The [INTERNAL] sort parameter uses complex multi-field sorting that is
     # incompatible with cursor-based pagination
     if sort and (after or before):
-        raise Exception("Cannot use cursor pagination (after/before) with the [INTERNAL] sort parameter. Use orderBy instead.")
+        raise Exception(
+            "Cannot use cursor pagination (after/before) with the [INTERNAL] sort parameter. Use orderBy instead."
+        )
 
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -4365,17 +4626,17 @@ def resolve_initiatives(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Initiative.id > cursor_id)
+                and_(order_column == cursor_field_value, Initiative.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -4383,7 +4644,7 @@ def resolve_initiatives(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Initiative.id < cursor_id)
+                and_(order_column == cursor_field_value, Initiative.id < cursor_id),
             )
         )
 
@@ -4410,6 +4671,7 @@ def resolve_initiatives(
     # Use the centralized pagination helper
     return apply_pagination(items, after, before, first, last, order_field)
 
+
 @query.field("document")
 def resolve_document(obj, info, **kwargs):
     """
@@ -4426,8 +4688,8 @@ def resolve_document(obj, info, **kwargs):
     Raises:
         Exception: If the document is not found
     """
-    session: Session = info.context['session']
-    document_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    document_id = kwargs.get("id")
 
     # Query for the document by ID
     document = session.query(Document).filter(Document.id == document_id).first()
@@ -4455,7 +4717,7 @@ def validate_document_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -4463,12 +4725,12 @@ def validate_document_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_document_filter(sub_filter, f"{path}.and[{i}]")
 
     # Check for nested relation filters (simplified - only basic fields supported)
-    nested_relation_filters = ['creator', 'initiative', 'project']
+    nested_relation_filters = ["creator", "initiative", "project"]
 
     for relation_name in nested_relation_filters:
         if relation_name in filter_dict:
@@ -4495,61 +4757,80 @@ def apply_document_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_document_filter(query, sub_filter)
 
     # Note: OR filters are validated and rejected in validate_document_filter()
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, Document.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, Document.id, filter_dict["id"])
 
     # String comparators
-    if 'slugId' in filter_dict:
-        query = apply_string_comparator(query, Document.slugId, filter_dict['slugId'])
+    if "slugId" in filter_dict:
+        query = apply_string_comparator(query, Document.slugId, filter_dict["slugId"])
 
-    if 'title' in filter_dict:
-        query = apply_string_comparator(query, Document.title, filter_dict['title'])
+    if "title" in filter_dict:
+        query = apply_string_comparator(query, Document.title, filter_dict["title"])
 
     # Date comparators
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, Document.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Document.createdAt, filter_dict["createdAt"]
+        )
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, Document.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, Document.updatedAt, filter_dict["updatedAt"]
+        )
 
     # Nested relation filters
-    if 'creator' in filter_dict:
-        creator_filter = filter_dict['creator']
+    if "creator" in filter_dict:
+        creator_filter = filter_dict["creator"]
         # Join with User table if needed
-        if not any(isinstance(desc['entity'], type(User)) for desc in query.column_descriptions if 'entity' in desc):
+        if not any(
+            desc["entity"] is User
+            for desc in query.column_descriptions
+            if "entity" in desc
+        ):
             from sqlalchemy.orm import aliased
+
             CreatorAlias = aliased(User)
             query = query.join(CreatorAlias, Document.creatorId == CreatorAlias.id)
             # Apply user filters on the aliased table
-            if 'id' in creator_filter:
-                query = apply_id_comparator(query, CreatorAlias.id, creator_filter['id'])
-            if 'email' in creator_filter:
-                query = apply_string_comparator(query, CreatorAlias.email, creator_filter['email'])
-            if 'name' in creator_filter:
-                query = apply_string_comparator(query, CreatorAlias.name, creator_filter['name'])
+            if "id" in creator_filter:
+                query = apply_id_comparator(
+                    query, CreatorAlias.id, creator_filter["id"]
+                )
+            if "email" in creator_filter:
+                query = apply_string_comparator(
+                    query, CreatorAlias.email, creator_filter["email"]
+                )
+            if "name" in creator_filter:
+                query = apply_string_comparator(
+                    query, CreatorAlias.name, creator_filter["name"]
+                )
         else:
             # Simple ID filtering without join
-            if 'id' in creator_filter:
-                query = apply_id_comparator(query, Document.creatorId, creator_filter['id'])
+            if "id" in creator_filter:
+                query = apply_id_comparator(
+                    query, Document.creatorId, creator_filter["id"]
+                )
 
-    if 'initiative' in filter_dict:
-        initiative_filter = filter_dict['initiative']
+    if "initiative" in filter_dict:
+        initiative_filter = filter_dict["initiative"]
         # Simple ID filtering
-        if 'id' in initiative_filter:
-            query = apply_id_comparator(query, Document.initiativeId, initiative_filter['id'])
+        if "id" in initiative_filter:
+            query = apply_id_comparator(
+                query, Document.initiativeId, initiative_filter["id"]
+            )
 
-    if 'project' in filter_dict:
-        project_filter = filter_dict['project']
+    if "project" in filter_dict:
+        project_filter = filter_dict["project"]
         # Simple ID filtering
-        if 'id' in project_filter:
-            query = apply_id_comparator(query, Document.projectId, project_filter['id'])
+        if "id" in project_filter:
+            query = apply_id_comparator(query, Document.projectId, project_filter["id"])
 
     return query
 
@@ -4569,7 +4850,7 @@ def validate_cycle_filter(filter_dict, path="filter"):
         return
 
     # Check for OR filters (not implemented)
-    if 'or' in filter_dict:
+    if "or" in filter_dict:
         raise Exception(
             f"OR filters are not currently supported. "
             f"Found at: {path}.or. "
@@ -4577,12 +4858,12 @@ def validate_cycle_filter(filter_dict, path="filter"):
         )
 
     # Check for AND filters recursively
-    if 'and' in filter_dict:
-        for i, sub_filter in enumerate(filter_dict['and']):
+    if "and" in filter_dict:
+        for i, sub_filter in enumerate(filter_dict["and"]):
             validate_cycle_filter(sub_filter, f"{path}.and[{i}]")
 
     # Check for nested issue collection filters (not implemented)
-    if 'issues' in filter_dict:
+    if "issues" in filter_dict:
         raise Exception(
             f"Nested collection filters are not currently supported. "
             f"Found at: {path}.issues. "
@@ -4590,11 +4871,11 @@ def validate_cycle_filter(filter_dict, path="filter"):
         )
 
     # Check for nested team filters (limited support)
-    if 'team' in filter_dict:
-        team_filter = filter_dict['team']
+    if "team" in filter_dict:
+        team_filter = filter_dict["team"]
         if team_filter and isinstance(team_filter, dict):
             # Only 'id' filter is supported for team
-            unsupported_keys = [k for k in team_filter.keys() if k not in ['id']]
+            unsupported_keys = [k for k in team_filter.keys() if k not in ["id"]]
             if unsupported_keys:
                 raise Exception(
                     f"Complex nested team filters are not currently supported. "
@@ -4618,65 +4899,69 @@ def apply_cycle_filter(query, filter_dict):
         return query
 
     # Handle compound filters
-    if 'and' in filter_dict:
-        for sub_filter in filter_dict['and']:
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
             query = apply_cycle_filter(query, sub_filter)
 
     # ID comparator
-    if 'id' in filter_dict:
-        query = apply_id_comparator(query, Cycle.id, filter_dict['id'])
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, Cycle.id, filter_dict["id"])
 
     # String comparators
-    if 'name' in filter_dict:
-        query = apply_nullable_string_comparator(query, Cycle.name, filter_dict['name'])
+    if "name" in filter_dict:
+        query = apply_nullable_string_comparator(query, Cycle.name, filter_dict["name"])
 
     # Number comparators
-    if 'number' in filter_dict:
-        query = apply_number_comparator(query, Cycle.number, filter_dict['number'])
+    if "number" in filter_dict:
+        query = apply_number_comparator(query, Cycle.number, filter_dict["number"])
 
     # Date comparators
-    if 'completedAt' in filter_dict:
-        query = apply_nullable_date_comparator(query, Cycle.completedAt, filter_dict['completedAt'])
+    if "completedAt" in filter_dict:
+        query = apply_nullable_date_comparator(
+            query, Cycle.completedAt, filter_dict["completedAt"]
+        )
 
-    if 'createdAt' in filter_dict:
-        query = apply_date_comparator(query, Cycle.createdAt, filter_dict['createdAt'])
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(query, Cycle.createdAt, filter_dict["createdAt"])
 
-    if 'endsAt' in filter_dict:
-        query = apply_date_comparator(query, Cycle.endsAt, filter_dict['endsAt'])
+    if "endsAt" in filter_dict:
+        query = apply_date_comparator(query, Cycle.endsAt, filter_dict["endsAt"])
 
-    if 'startsAt' in filter_dict:
-        query = apply_date_comparator(query, Cycle.startsAt, filter_dict['startsAt'])
+    if "startsAt" in filter_dict:
+        query = apply_date_comparator(query, Cycle.startsAt, filter_dict["startsAt"])
 
-    if 'updatedAt' in filter_dict:
-        query = apply_date_comparator(query, Cycle.updatedAt, filter_dict['updatedAt'])
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(query, Cycle.updatedAt, filter_dict["updatedAt"])
 
     # Boolean comparators
-    if 'isActive' in filter_dict:
-        query = apply_boolean_comparator(query, Cycle.isActive, filter_dict['isActive'])
+    if "isActive" in filter_dict:
+        query = apply_boolean_comparator(query, Cycle.isActive, filter_dict["isActive"])
 
-    if 'isFuture' in filter_dict:
-        query = apply_boolean_comparator(query, Cycle.isFuture, filter_dict['isFuture'])
+    if "isFuture" in filter_dict:
+        query = apply_boolean_comparator(query, Cycle.isFuture, filter_dict["isFuture"])
 
-    if 'isInCooldown' in filter_dict:
+    if "isInCooldown" in filter_dict:
         # Note: isInCooldown is a computed field in GraphQL but not stored in the database
         # We'll skip this for now as it requires more complex logic
         pass
 
-    if 'isNext' in filter_dict:
-        query = apply_boolean_comparator(query, Cycle.isNext, filter_dict['isNext'])
+    if "isNext" in filter_dict:
+        query = apply_boolean_comparator(query, Cycle.isNext, filter_dict["isNext"])
 
-    if 'isPast' in filter_dict:
-        query = apply_boolean_comparator(query, Cycle.isPast, filter_dict['isPast'])
+    if "isPast" in filter_dict:
+        query = apply_boolean_comparator(query, Cycle.isPast, filter_dict["isPast"])
 
-    if 'isPrevious' in filter_dict:
-        query = apply_boolean_comparator(query, Cycle.isPrevious, filter_dict['isPrevious'])
+    if "isPrevious" in filter_dict:
+        query = apply_boolean_comparator(
+            query, Cycle.isPrevious, filter_dict["isPrevious"]
+        )
 
     # Nested relation filters
-    if 'team' in filter_dict:
-        team_filter = filter_dict['team']
+    if "team" in filter_dict:
+        team_filter = filter_dict["team"]
         # Simple ID filtering
-        if 'id' in team_filter:
-            query = apply_id_comparator(query, Cycle.teamId, team_filter['id'])
+        if "id" in team_filter:
+            query = apply_id_comparator(query, Cycle.teamId, team_filter["id"])
 
     return query
 
@@ -4711,15 +4996,15 @@ def resolve_cycles(
         CycleConnection: Paginated list of cycles
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(Cycle)
@@ -4736,11 +5021,11 @@ def resolve_cycles(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -4748,17 +5033,17 @@ def resolve_cycles(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Cycle.id > cursor_id)
+                and_(order_column == cursor_field_value, Cycle.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -4766,7 +5051,7 @@ def resolve_cycles(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Cycle.id < cursor_id)
+                and_(order_column == cursor_field_value, Cycle.id < cursor_id),
             )
         )
 
@@ -4818,15 +5103,15 @@ def resolve_documents(
         DocumentConnection: Paginated list of documents
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(Document)
@@ -4843,11 +5128,11 @@ def resolve_documents(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -4855,17 +5140,17 @@ def resolve_documents(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Document.id > cursor_id)
+                and_(order_column == cursor_field_value, Document.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -4873,7 +5158,7 @@ def resolve_documents(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Document.id < cursor_id)
+                and_(order_column == cursor_field_value, Document.id < cursor_id),
             )
         )
 
@@ -4908,7 +5193,7 @@ def resolve_searchDocuments(
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
     snippetSize: Optional[float] = None,
-    teamId: Optional[str] = None
+    teamId: Optional[str] = None,
 ):
     """
     Search documents.
@@ -4931,33 +5216,35 @@ def resolve_searchDocuments(
         DocumentSearchPayload: Search results with edges, nodes, pageInfo, totalCount, and archivePayload
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query for documents
     base_query = session.query(Document)
 
     # Apply search term filter (search in title and content)
     if term:
-        search_pattern = f'%{term}%'
+        search_pattern = f"%{term}%"
         search_conditions = [
             Document.title.like(search_pattern),
-            Document.content.like(search_pattern)
+            Document.content.like(search_pattern),
         ]
 
         # If includeComments is true, search in comments too
         if includeComments:
             # Subquery to find document IDs that have matching comments
-            comment_subquery = session.query(Comment.documentId).filter(
-                Comment.body.like(search_pattern)
-            ).distinct()
+            comment_subquery = (
+                session.query(Comment.documentId)
+                .filter(Comment.body.like(search_pattern))
+                .distinct()
+            )
 
             # Add condition to include documents with matching comments
             search_conditions.append(Document.id.in_(comment_subquery))
@@ -4978,11 +5265,11 @@ def resolve_searchDocuments(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -4990,17 +5277,17 @@ def resolve_searchDocuments(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, Document.id > cursor_id)
+                and_(order_column == cursor_field_value, Document.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -5008,7 +5295,7 @@ def resolve_searchDocuments(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, Document.id < cursor_id)
+                and_(order_column == cursor_field_value, Document.id < cursor_id),
             )
         )
 
@@ -5032,7 +5319,7 @@ def resolve_searchDocuments(
     # DocumentSearchResult nodes are the Document objects with metadata
     # The metadata field will be empty for now
     nodes = []
-    for doc in pagination_result['nodes']:
+    for doc in pagination_result["nodes"]:
         # Each node is a Document with an additional metadata field
         # In a real implementation, metadata might include search relevance scores, snippets, etc.
         # For now, we'll let the GraphQL layer handle the Document fields
@@ -5040,18 +5327,15 @@ def resolve_searchDocuments(
         nodes.append(doc)
 
     # Build archivePayload (empty for now as we don't have archived entities)
-    archive_payload = {
-        'success': True,
-        'lastSyncId': 0.0
-    }
+    archive_payload = {"success": True, "lastSyncId": 0.0}
 
     # Build and return the DocumentSearchPayload
     return {
-        'nodes': nodes,
-        'edges': pagination_result['edges'],
-        'pageInfo': pagination_result['pageInfo'],
-        'totalCount': float(total_count),
-        'archivePayload': archive_payload
+        "nodes": nodes,
+        "edges": pagination_result["edges"],
+        "pageInfo": pagination_result["pageInfo"],
+        "totalCount": float(total_count),
+        "archivePayload": archive_payload,
     }
 
 
@@ -5071,7 +5355,7 @@ def resolve_cycle(obj, info, id: str):
     Raises:
         Exception: If the cycle is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the cycle by id
     cycle = session.query(Cycle).filter(Cycle.id == id).first()
@@ -5098,10 +5382,12 @@ def resolve_teamMembership(obj, info, id: str):
     Raises:
         Exception: If the team membership is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the team membership by id
-    team_membership = session.query(TeamMembership).filter(TeamMembership.id == id).first()
+    team_membership = (
+        session.query(TeamMembership).filter(TeamMembership.id == id).first()
+    )
 
     if not team_membership:
         raise Exception(f"TeamMembership with id '{id}' not found")
@@ -5118,7 +5404,7 @@ def resolve_teamMemberships(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all team memberships.
@@ -5137,15 +5423,15 @@ def resolve_teamMemberships(
         TeamMembershipConnection: Paginated list of team memberships
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(TeamMembership)
@@ -5157,11 +5443,11 @@ def resolve_teamMemberships(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -5169,17 +5455,17 @@ def resolve_teamMemberships(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, TeamMembership.id > cursor_id)
+                and_(order_column == cursor_field_value, TeamMembership.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -5187,7 +5473,7 @@ def resolve_teamMemberships(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, TeamMembership.id < cursor_id)
+                and_(order_column == cursor_field_value, TeamMembership.id < cursor_id),
             )
         )
 
@@ -5220,17 +5506,19 @@ def resolve_initiativeRelation(obj, info, id: str):
         id: The initiative relation id to look up
 
     Returns:
-        ProjectRelation: The project relation with the specified id
+        InitiativeRelation: The initiative relation with the specified id
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
-    # Query for the project relation by id
-    project_relation = session.query(ProjectRelation).filter(ProjectRelation.id == id).first()
+    # Query for the initiative relation by id
+    initiative_relation = (
+        session.query(InitiativeRelation).filter(InitiativeRelation.id == id).first()
+    )
 
-    if not project_relation:
-        raise Exception(f"ProjectRelation with id '{id}' not found")
+    if not initiative_relation:
+        raise Exception(f"InitiativeRelation with id '{id}' not found")
 
-    return project_relation
+    return initiative_relation
 
 
 @query.field("initiativeRelations")
@@ -5242,7 +5530,7 @@ def resolve_initiativeRelations(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     All initiative relationships.
@@ -5261,15 +5549,17 @@ def resolve_initiativeRelations(
         dict: InitiativeRelationConnection with edges, nodes, and pageInfo
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine order field
-    order_field = orderBy if orderBy else 'createdAt'
-    if order_field not in ['createdAt', 'updatedAt']:
-        raise Exception(f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'")
+    order_field = orderBy if orderBy else "createdAt"
+    if order_field not in ["createdAt", "updatedAt"]:
+        raise Exception(
+            f"Invalid orderBy field: {order_field}. Must be 'createdAt' or 'updatedAt'"
+        )
 
     # Build base query
     base_query = session.query(InitiativeRelation)
@@ -5281,11 +5571,11 @@ def resolve_initiativeRelations(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -5293,17 +5583,20 @@ def resolve_initiativeRelations(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, InitiativeRelation.id > cursor_id)
+                and_(
+                    order_column == cursor_field_value,
+                    InitiativeRelation.id > cursor_id,
+                ),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -5311,7 +5604,10 @@ def resolve_initiativeRelations(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, InitiativeRelation.id < cursor_id)
+                and_(
+                    order_column == cursor_field_value,
+                    InitiativeRelation.id < cursor_id,
+                ),
             )
         )
 
@@ -5319,9 +5615,13 @@ def resolve_initiativeRelations(
     order_column = getattr(InitiativeRelation, order_field)
     if last or before:
         # For backward pagination, reverse the order
-        base_query = base_query.order_by(order_column.desc(), InitiativeRelation.id.desc())
+        base_query = base_query.order_by(
+            order_column.desc(), InitiativeRelation.id.desc()
+        )
     else:
-        base_query = base_query.order_by(order_column.asc(), InitiativeRelation.id.asc())
+        base_query = base_query.order_by(
+            order_column.asc(), InitiativeRelation.id.asc()
+        )
 
     # Determine limit
     limit = first if first else (last if last else 50)
@@ -5349,15 +5649,18 @@ def resolve_initiativeToProject(obj, info, id: str):
     Raises:
         Exception: If the initiativeToProject is not found
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the initiativeToProject by id
-    initiative_to_project = session.query(InitiativeToProject).filter(InitiativeToProject.id == id).first()
+    initiative_to_project = (
+        session.query(InitiativeToProject).filter(InitiativeToProject.id == id).first()
+    )
 
     if not initiative_to_project:
         raise Exception(f"InitiativeToProject with id '{id}' not found")
 
     return initiative_to_project
+
 
 @query.field("initiativeToProjects")
 def resolve_initiativeToProjects(
@@ -5368,7 +5671,7 @@ def resolve_initiativeToProjects(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all initiativeToProject entities with pagination.
@@ -5387,15 +5690,15 @@ def resolve_initiativeToProjects(
         InitiativeToProjectConnection: Paginated list of initiativeToProject entities
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(InitiativeToProject)
@@ -5407,11 +5710,11 @@ def resolve_initiativeToProjects(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -5419,17 +5722,20 @@ def resolve_initiativeToProjects(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, InitiativeToProject.id > cursor_id)
+                and_(
+                    order_column == cursor_field_value,
+                    InitiativeToProject.id > cursor_id,
+                ),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -5437,7 +5743,10 @@ def resolve_initiativeToProjects(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, InitiativeToProject.id < cursor_id)
+                and_(
+                    order_column == cursor_field_value,
+                    InitiativeToProject.id < cursor_id,
+                ),
             )
         )
 
@@ -5445,9 +5754,13 @@ def resolve_initiativeToProjects(
     order_column = getattr(InitiativeToProject, order_field)
     if last or before:
         # For backward pagination, reverse the order
-        base_query = base_query.order_by(order_column.desc(), InitiativeToProject.id.desc())
+        base_query = base_query.order_by(
+            order_column.desc(), InitiativeToProject.id.desc()
+        )
     else:
-        base_query = base_query.order_by(order_column.asc(), InitiativeToProject.id.asc())
+        base_query = base_query.order_by(
+            order_column.asc(), InitiativeToProject.id.asc()
+        )
 
     # Determine limit
     limit = first if first else (last if last else 50)
@@ -5462,6 +5775,7 @@ def resolve_initiativeToProjects(
 # ============================================================================
 # InitiativeToProject Mutations
 # ============================================================================
+
 
 @mutation.field("initiativeToProjectCreate")
 def resolve_initiativeToProjectCreate(obj, info, **kwargs):
@@ -5478,15 +5792,15 @@ def resolve_initiativeToProjectCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Extract input fields
-        initiative_to_project_id = input_data.get('id') or str(uuid.uuid4())
-        initiative_id = input_data['initiativeId']  # Required
-        project_id = input_data['projectId']  # Required
-        sort_order = input_data.get('sortOrder', 0.0)  # Optional, default to 0.0
+        initiative_to_project_id = input_data.get("id") or str(uuid.uuid4())
+        initiative_id = input_data["initiativeId"]  # Required
+        project_id = input_data["projectId"]  # Required
+        sort_order = input_data.get("sortOrder", 0.0)  # Optional, default to 0.0
 
         # Generate timestamps
         now = datetime.now(timezone.utc)
@@ -5499,14 +5813,17 @@ def resolve_initiativeToProjectCreate(obj, info, **kwargs):
             sortOrder=str(sort_order),  # Convert to string as per ORM schema
             createdAt=now,
             updatedAt=now,
-            archivedAt=None
+            archivedAt=None,
         )
 
-        # Add to session and commit
         session.add(initiative_to_project)
 
-        # Return the created entity (Ariadne will handle wrapping in InitiativeToProjectPayload)
-        return initiative_to_project
+        # Return the proper InitiativeToProjectPayload structure
+        return {
+            "success": True,
+            "lastSyncId": 0.0,
+            "initiativeToProject": initiative_to_project,
+        }
 
     except KeyError as e:
         raise Exception(f"Missing required field: {str(e)}")
@@ -5528,9 +5845,9 @@ def resolve_initiativeToProjectUpdate(obj, info, **kwargs):
         The updated InitiativeToProject entity
     """
 
-    session: Session = info.context['session']
-    entity_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    entity_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     if not entity_id:
         raise Exception("Missing required field: id")
@@ -5543,17 +5860,15 @@ def resolve_initiativeToProjectUpdate(obj, info, **kwargs):
             raise Exception(f"InitiativeToProject with id '{entity_id}' not found")
 
         # Update fields from input
-        if 'sortOrder' in input_data:
+        if "sortOrder" in input_data:
             # Convert to string as per ORM schema
-            entity.sortOrder = str(input_data['sortOrder'])
+            entity.sortOrder = str(input_data["sortOrder"])
 
         # Update the updatedAt timestamp
         entity.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated entity (Ariadne will handle wrapping in InitiativeToProjectPayload)
-        return entity
+        # Return the proper InitiativeToProjectPayload structure
+        return {"success": True, "lastSyncId": 0.0, "initiativeToProject": entity}
 
     except Exception as e:
         raise Exception(f"Failed to update initiativeToProject: {str(e)}")
@@ -5573,8 +5888,8 @@ def resolve_initiativeToProjectDelete(obj, info, **kwargs):
         DeletePayload with success status and entityId
     """
 
-    session: Session = info.context['session']
-    entity_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    entity_id = kwargs.get("id")
 
     if not entity_id:
         raise Exception("Missing required field: id")
@@ -5590,13 +5905,11 @@ def resolve_initiativeToProjectDelete(obj, info, **kwargs):
         entity.archivedAt = datetime.now(timezone.utc)
         entity.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
         # Return DeletePayload structure
         return {
-            'success': True,
-            'entityId': entity_id,
-            'lastSyncId': 0.0  # Placeholder value - adjust based on your sync logic
+            "success": True,
+            "entityId": entity_id,
+            "lastSyncId": 0.0,  # Placeholder value - adjust based on your sync logic
         }
 
     except Exception as e:
@@ -5616,7 +5929,7 @@ def resolve_externalUser(obj, info, id: str):
     Returns:
         ExternalUser: The external user with the specified id
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Query for the external user by id
     external_user = session.query(ExternalUser).filter(ExternalUser.id == id).first()
@@ -5636,7 +5949,7 @@ def resolve_externalUsers(
     first: Optional[int] = None,
     includeArchived: bool = False,
     last: Optional[int] = None,
-    orderBy: Optional[str] = None
+    orderBy: Optional[str] = None,
 ):
     """
     Query all external users for the organization.
@@ -5655,15 +5968,15 @@ def resolve_externalUsers(
         ExternalUserConnection: Paginated list of external users
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     # Validate pagination parameters
     validate_pagination_params(after, before, first, last)
 
     # Determine the order field
-    order_field = 'createdAt'
-    if orderBy == 'updatedAt':
-        order_field = 'updatedAt'
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
 
     # Build base query
     base_query = session.query(ExternalUser)
@@ -5675,11 +5988,11 @@ def resolve_externalUsers(
     # Apply cursor-based pagination
     if after:
         cursor_data = decode_cursor(after)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for forward pagination
@@ -5687,17 +6000,17 @@ def resolve_externalUsers(
         base_query = base_query.filter(
             or_(
                 order_column > cursor_field_value,
-                and_(order_column == cursor_field_value, ExternalUser.id > cursor_id)
+                and_(order_column == cursor_field_value, ExternalUser.id > cursor_id),
             )
         )
 
     if before:
         cursor_data = decode_cursor(before)
-        cursor_field_value = cursor_data['field']
-        cursor_id = cursor_data['id']
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
 
         # Convert cursor field value to datetime if needed
-        if order_field in ['createdAt', 'updatedAt']:
+        if order_field in ["createdAt", "updatedAt"]:
             cursor_field_value = datetime.fromisoformat(cursor_field_value)
 
         # Apply cursor filter for backward pagination
@@ -5705,7 +6018,7 @@ def resolve_externalUsers(
         base_query = base_query.filter(
             or_(
                 order_column < cursor_field_value,
-                and_(order_column == cursor_field_value, ExternalUser.id < cursor_id)
+                and_(order_column == cursor_field_value, ExternalUser.id < cursor_id),
             )
         )
 
@@ -5726,9 +6039,11 @@ def resolve_externalUsers(
     # Use the centralized pagination helper
     return apply_pagination(items, after, before, first, last, order_field)
 
+
 # =============================================================================
 # MUTATIONS - Comment
 # =============================================================================
+
 
 @mutation.field("commentCreate")
 def resolve_commentCreate(obj, info, **kwargs):
@@ -5745,22 +6060,22 @@ def resolve_commentCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Extract input fields
-        comment_id = input_data.get('id') or str(uuid.uuid4())
-        body = input_data.get('body', '')
-        body_data = input_data.get('bodyData', '{}')
-        created_at = input_data.get('createdAt') or datetime.now(timezone.utc)
-        issue_id = input_data.get('issueId')
-        parent_id = input_data.get('parentId')
-        document_content_id = input_data.get('documentContentId')
-        initiative_update_id = input_data.get('initiativeUpdateId')
-        post_id = input_data.get('postId')
-        project_update_id = input_data.get('projectUpdateId')
-        quoted_text = input_data.get('quotedText')
+        comment_id = input_data.get("id") or str(uuid.uuid4())
+        body = input_data.get("body", "")
+        body_data = input_data.get("bodyData", "{}")
+        created_at = input_data.get("createdAt") or datetime.now(timezone.utc)
+        issue_id = input_data.get("issueId")
+        parent_id = input_data.get("parentId")
+        document_content_id = input_data.get("documentContentId")
+        initiative_update_id = input_data.get("initiativeUpdateId")
+        post_id = input_data.get("postId")
+        project_update_id = input_data.get("projectUpdateId")
+        quoted_text = input_data.get("quotedText")
 
         # Fields not yet supported by ORM but in GraphQL schema
         # createAsUser, createOnSyncedSlackThread, displayIconUrl,
@@ -5788,16 +6103,14 @@ def resolve_commentCreate(obj, info, **kwargs):
         )
 
         # Handle subscribers if provided
-        subscriber_ids = input_data.get('subscriberIds', [])
+        subscriber_ids = input_data.get("subscriberIds", [])
         if subscriber_ids:
             # Fetch subscriber users
             subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
             comment.subscribers = subscribers
 
-        # Add to session and commit
         session.add(comment)
 
-        # Return the created comment (Ariadne will handle wrapping in CommentPayload)
         return comment
 
     except Exception as e:
@@ -5818,9 +6131,9 @@ def resolve_commentResolve(obj, info, **kwargs):
         The updated Comment entity
     """
 
-    session: Session = info.context['session']
-    comment_id = kwargs.get('id')
-    resolving_comment_id = kwargs.get('resolvingCommentId')
+    session: Session = info.context["session"]
+    comment_id = kwargs.get("id")
+    resolving_comment_id = kwargs.get("resolvingCommentId")
 
     try:
         # Fetch the comment to resolve
@@ -5837,13 +6150,12 @@ def resolve_commentResolve(obj, info, **kwargs):
         # If a resolving comment is provided, we might want to set the resolvingUser
         # based on that comment's user (if available in the model)
         if resolving_comment_id:
-            resolving_comment = session.query(Comment).filter_by(id=resolving_comment_id).first()
-            if resolving_comment and hasattr(resolving_comment, 'userId'):
+            resolving_comment = (
+                session.query(Comment).filter_by(id=resolving_comment_id).first()
+            )
+            if resolving_comment and hasattr(resolving_comment, "userId"):
                 comment.resolvingUserId = resolving_comment.userId
 
-        # Commit the changes
-
-        # Return the resolved comment
         return comment
 
     except Exception as e:
@@ -5864,8 +6176,8 @@ def resolve_commentUnresolve(obj, info, **kwargs):
         The updated Comment entity
     """
 
-    session: Session = info.context['session']
-    comment_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    comment_id = kwargs.get("id")
 
     try:
         # Fetch the comment to unresolve
@@ -5880,9 +6192,6 @@ def resolve_commentUnresolve(obj, info, **kwargs):
         comment.resolvingUserId = None
         comment.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the unresolved comment
         return comment
 
     except Exception as e:
@@ -5903,9 +6212,9 @@ def resolve_commentUpdate(obj, info, **kwargs):
         The updated Comment entity
     """
 
-    session: Session = info.context['session']
-    comment_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    comment_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Fetch the comment to update
@@ -5915,42 +6224,41 @@ def resolve_commentUpdate(obj, info, **kwargs):
             raise Exception(f"Comment with id {comment_id} not found")
 
         # Update fields if provided in input
-        if 'body' in input_data:
-            comment.body = input_data['body']
+        if "body" in input_data:
+            comment.body = input_data["body"]
 
-        if 'bodyData' in input_data:
-            comment.bodyData = input_data['bodyData']
+        if "bodyData" in input_data:
+            comment.bodyData = input_data["bodyData"]
 
-        if 'quotedText' in input_data:
-            comment.quotedText = input_data['quotedText']
+        if "quotedText" in input_data:
+            comment.quotedText = input_data["quotedText"]
 
-        if 'resolvingCommentId' in input_data:
-            comment.resolvingCommentId = input_data['resolvingCommentId']
+        if "resolvingCommentId" in input_data:
+            comment.resolvingCommentId = input_data["resolvingCommentId"]
 
-        if 'resolvingUserId' in input_data:
-            comment.resolvingUserId = input_data['resolvingUserId']
+        if "resolvingUserId" in input_data:
+            comment.resolvingUserId = input_data["resolvingUserId"]
 
         # Handle subscribers if provided
-        if 'subscriberIds' in input_data:
-            subscriber_ids = input_data['subscriberIds']
+        if "subscriberIds" in input_data:
+            subscriber_ids = input_data["subscriberIds"]
             if subscriber_ids:
                 # Fetch subscriber users
-                subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
+                subscribers = (
+                    session.query(User).filter(User.id.in_(subscriber_ids)).all()
+                )
                 comment.subscribers = subscribers
             else:
                 # Clear subscribers if empty list provided
                 comment.subscribers = []
 
         # Update editedAt timestamp if body was modified
-        if 'body' in input_data or 'bodyData' in input_data:
+        if "body" in input_data or "bodyData" in input_data:
             comment.editedAt = datetime.now(timezone.utc)
 
         # Always update updatedAt
         comment.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated comment
         return comment
 
     except Exception as e:
@@ -5971,8 +6279,8 @@ def resolve_commentDelete(obj, info, **kwargs):
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    comment_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    comment_id = kwargs.get("id")
 
     try:
         # Fetch the comment to delete
@@ -5985,13 +6293,11 @@ def resolve_commentDelete(obj, info, **kwargs):
         comment.archivedAt = datetime.now(timezone.utc)
         comment.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DeletePayload structure
         return {
-            'entityId': comment_id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entityId": comment_id,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -6001,6 +6307,7 @@ def resolve_commentDelete(obj, info, **kwargs):
 # ============================================================================
 # Attachment Mutations
 # ============================================================================
+
 
 @mutation.field("attachmentCreate")
 def resolve_attachmentCreate(obj, info, **kwargs):
@@ -6015,43 +6322,47 @@ def resolve_attachmentCreate(obj, info, **kwargs):
     Returns:
         The created or updated Attachment entity
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input data
-        input_data = kwargs.get('input', {})
+        input_data = kwargs.get("input", {})
 
         # Validate required fields
-        if not input_data.get('issueId'):
+        if not input_data.get("issueId"):
             raise Exception("Field 'issueId' is required")
-        if not input_data.get('title'):
+        if not input_data.get("title"):
             raise Exception("Field 'title' is required")
-        if not input_data.get('url'):
+        if not input_data.get("url"):
             raise Exception("Field 'url' is required")
 
         # Check if attachment already exists with same url and issueId
         # As per spec: "updates existing if the same `url` and `issueId` is used"
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == input_data['url'],
-                Attachment.issueId == input_data['issueId']
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(
+                and_(
+                    Attachment.url == input_data["url"],
+                    Attachment.issueId == input_data["issueId"],
+                )
             )
-        ).first()
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
 
             # Update fields
-            attachment.title = input_data['title']
-            if 'subtitle' in input_data:
-                attachment.subtitle = input_data.get('subtitle')
-            if 'iconUrl' in input_data:
-                attachment.iconUrl = input_data.get('iconUrl')
-            if 'groupBySource' in input_data:
-                attachment.groupBySource = input_data['groupBySource']
-            if 'metadata' in input_data:
-                attachment.metadata_ = input_data.get('metadata', {})
+            attachment.title = input_data["title"]
+            if "subtitle" in input_data:
+                attachment.subtitle = input_data.get("subtitle")
+            if "iconUrl" in input_data:
+                attachment.iconUrl = input_data.get("iconUrl")
+            if "groupBySource" in input_data:
+                attachment.groupBySource = input_data["groupBySource"]
+            if "metadata" in input_data:
+                attachment.metadata_ = input_data.get("metadata", {})
 
             # Update timestamp
             attachment.updatedAt = datetime.utcnow()
@@ -6061,20 +6372,20 @@ def resolve_attachmentCreate(obj, info, **kwargs):
             import uuid
 
             # Generate ID if not provided
-            attachment_id = input_data.get('id', str(uuid.uuid4()))
+            attachment_id = input_data.get("id", str(uuid.uuid4()))
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': input_data['issueId'],
-                'url': input_data['url'],
-                'title': input_data['title'],
-                'subtitle': input_data.get('subtitle'),
-                'iconUrl': input_data.get('iconUrl'),
-                'groupBySource': input_data.get('groupBySource', False),
-                'metadata_': input_data.get('metadata', {}),
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": input_data["issueId"],
+                "url": input_data["url"],
+                "title": input_data["title"],
+                "subtitle": input_data.get("subtitle"),
+                "iconUrl": input_data.get("iconUrl"),
+                "groupBySource": input_data.get("groupBySource", False),
+                "metadata_": input_data.get("metadata", {}),
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Create the attachment entity
@@ -6082,26 +6393,28 @@ def resolve_attachmentCreate(obj, info, **kwargs):
             session.add(attachment)
 
         # Handle linked comment creation if commentBody or commentBodyData is provided
-        comment_body = input_data.get('commentBody')
-        comment_body_data = input_data.get('commentBodyData')
+        comment_body = input_data.get("commentBody")
+        comment_body_data = input_data.get("commentBodyData")
 
         if comment_body or comment_body_data:
             import uuid
 
             # Create a linked comment
             comment_data = {
-                'id': str(uuid.uuid4()),
-                'issueId': input_data['issueId'],
-                'body': comment_body or '',
-                'bodyData': json.dumps(comment_body_data) if comment_body_data else comment_body or '',
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": str(uuid.uuid4()),
+                "issueId": input_data["issueId"],
+                "body": comment_body or "",
+                "bodyData": json.dumps(comment_body_data)
+                if comment_body_data
+                else comment_body or "",
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle createAsUser - this would set externalUserId
             # This is a special OAuth parameter that's not directly stored in attachment
             # In a real implementation, you would create an ExternalUser record
-            create_as_user = input_data.get('createAsUser')
+            create_as_user = input_data.get("createAsUser")
             if create_as_user:
                 # For now, we'll skip this complex logic
                 # In production, you'd create or find an ExternalUser with name=createAsUser
@@ -6110,10 +6423,6 @@ def resolve_attachmentCreate(obj, info, **kwargs):
             comment = Comment(**comment_data)
             session.add(comment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
-        # Ariadne will handle converting this to AttachmentPayload
         return attachment
 
     except Exception as e:
@@ -6134,8 +6443,8 @@ def resolve_attachmentDelete(obj, info, **kwargs):
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    attachment_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    attachment_id = kwargs.get("id")
 
     try:
         # Fetch the attachment to delete
@@ -6148,13 +6457,11 @@ def resolve_attachmentDelete(obj, info, **kwargs):
         attachment.archivedAt = datetime.now(timezone.utc)
         attachment.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DeletePayload structure
         return {
-            'entityId': attachment_id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entityId": attachment_id,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -6184,14 +6491,14 @@ def resolve_attachmentLinkDiscord(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        channel_id = kwargs.get('channelId')
-        message_id = kwargs.get('messageId')
-        url = kwargs.get('url')
-        issue_id = kwargs.get('issueId')
+        channel_id = kwargs.get("channelId")
+        message_id = kwargs.get("messageId")
+        url = kwargs.get("url")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not channel_id:
@@ -6209,76 +6516,72 @@ def resolve_attachmentLinkDiscord(obj, info, **kwargs):
             raise Exception(f"Issue with id {issue_id} not found")
 
         # Check if attachment with same URL and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for Discord
             source_metadata = {
-                'type': 'discord',
-                'channelId': channel_id,
-                'messageId': message_id
+                "type": "discord",
+                "channelId": channel_id,
+                "messageId": message_id,
             }
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'Discord message {message_id}'),
-                'sourceType': 'discord',
-                'source': source_metadata,
-                'groupBySource': True,  # Discord messages should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get("title", f"Discord message {message_id}"),
+                "sourceType": "discord",
+                "source": source_metadata,
+                "groupBySource": True,  # Discord messages should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -6303,12 +6606,12 @@ def resolve_attachmentLinkFront(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        conversation_id = kwargs.get('conversationId')
-        issue_id = kwargs.get('issueId')
+        conversation_id = kwargs.get("conversationId")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not conversation_id:
@@ -6326,67 +6629,63 @@ def resolve_attachmentLinkFront(obj, info, **kwargs):
         url = f"https://app.frontapp.com/open/{conversation_id}"
 
         # Check if attachment with same conversation ID and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for Front
-            source_metadata = {
-                'type': 'front',
-                'conversationId': conversation_id
-            }
+            source_metadata = {"type": "front", "conversationId": conversation_id}
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'Front conversation {conversation_id}'),
-                'sourceType': 'front',
-                'source': source_metadata,
-                'groupBySource': True,  # Front conversations should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get("title", f"Front conversation {conversation_id}"),
+                "sourceType": "front",
+                "source": source_metadata,
+                "groupBySource": True,  # Front conversations should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
@@ -6395,20 +6694,8 @@ def resolve_attachmentLinkFront(obj, info, **kwargs):
         # Flush to get the attachment ID
         session.flush()
 
-        # Create the FrontAttachmentPayload
-        payload_id = str(uuid.uuid4())
-        payload = FrontAttachmentPayload(
-            id=payload_id,
-            attachmentId=attachment.id,
-            lastSyncId=0.0,  # Default sync ID
-            success=True
-        )
-        session.add(payload)
-
-        # Commit the transaction
-
-        # Return the payload with the attachment relationship loaded
-        return payload
+        # Return the proper FrontAttachmentPayload structure
+        return {"success": True, "lastSyncId": 0.0, "attachment": attachment}
 
     except Exception as e:
         raise Exception(f"Failed to link Front attachment: {str(e)}")
@@ -6432,12 +6719,12 @@ def resolve_attachmentLinkGitHubIssue(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        url = kwargs.get('url')
-        issue_id = kwargs.get('issueId')
+        url = kwargs.get("url")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not url:
@@ -6451,78 +6738,71 @@ def resolve_attachmentLinkGitHubIssue(obj, info, **kwargs):
             raise Exception(f"Issue with id {issue_id} not found")
 
         # Check if attachment with same URL and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for GitHub
-            source_metadata = {
-                'type': 'github',
-                'url': url
-            }
+            source_metadata = {"type": "github", "url": url}
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'GitHub Issue: {url.split("/")[-1] if "/" in url else url}'),
-                'sourceType': 'github',
-                'source': source_metadata,
-                'groupBySource': True,  # GitHub issues should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get(
+                    "title",
+                    f"GitHub Issue: {url.split('/')[-1] if '/' in url else url}",
+                ),
+                "sourceType": "github",
+                "source": source_metadata,
+                "groupBySource": True,  # GitHub issues should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -6551,12 +6831,12 @@ def resolve_attachmentLinkGitHubPR(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        url = kwargs.get('url')
-        issue_id = kwargs.get('issueId')
+        url = kwargs.get("url")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not url:
@@ -6570,91 +6850,83 @@ def resolve_attachmentLinkGitHubPR(obj, info, **kwargs):
             raise Exception(f"Issue with id {issue_id} not found")
 
         # Check if attachment with same URL and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for GitHub PR
-            source_metadata = {
-                'type': 'github',
-                'url': url
-            }
+            source_metadata = {"type": "github", "url": url}
 
             # Add linkKind to source if provided
-            link_kind = kwargs.get('linkKind')
+            link_kind = kwargs.get("linkKind")
             if link_kind:
-                source_metadata['linkKind'] = link_kind
+                source_metadata["linkKind"] = link_kind
 
             # Add deprecated fields to source if provided (for backwards compatibility)
-            if kwargs.get('number'):
-                source_metadata['number'] = kwargs['number']
-            if kwargs.get('owner'):
-                source_metadata['owner'] = kwargs['owner']
-            if kwargs.get('repo'):
-                source_metadata['repo'] = kwargs['repo']
+            if kwargs.get("number"):
+                source_metadata["number"] = kwargs["number"]
+            if kwargs.get("owner"):
+                source_metadata["owner"] = kwargs["owner"]
+            if kwargs.get("repo"):
+                source_metadata["repo"] = kwargs["repo"]
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'GitHub PR: {url.split("/")[-1] if "/" in url else url}'),
-                'sourceType': 'github',
-                'source': source_metadata,
-                'groupBySource': True,  # GitHub PRs should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get(
+                    "title", f"GitHub PR: {url.split('/')[-1] if '/' in url else url}"
+                ),
+                "sourceType": "github",
+                "source": source_metadata,
+                "groupBySource": True,  # GitHub PRs should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -6681,14 +6953,14 @@ def resolve_attachmentLinkGitLabMR(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        url = kwargs.get('url')
-        issue_id = kwargs.get('issueId')
-        number = kwargs.get('number')
-        project_path = kwargs.get('projectPathWithNamespace')
+        url = kwargs.get("url")
+        issue_id = kwargs.get("issueId")
+        number = kwargs.get("number")
+        project_path = kwargs.get("projectPathWithNamespace")
 
         # Validate required fields
         if not url:
@@ -6706,88 +6978,81 @@ def resolve_attachmentLinkGitLabMR(obj, info, **kwargs):
             raise Exception(f"Issue with id {issue_id} not found")
 
         # Check if attachment with same URL and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
 
             # Update source metadata with GitLab MR details
             if attachment.source:
-                attachment.source['number'] = number
-                attachment.source['projectPathWithNamespace'] = project_path
+                attachment.source["number"] = number
+                attachment.source["projectPathWithNamespace"] = project_path
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for GitLab MR
             source_metadata = {
-                'type': 'gitlab',
-                'url': url,
-                'number': number,
-                'projectPathWithNamespace': project_path
+                "type": "gitlab",
+                "url": url,
+                "number": number,
+                "projectPathWithNamespace": project_path,
             }
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'GitLab MR !{number}'),
-                'sourceType': 'gitlab',
-                'source': source_metadata,
-                'groupBySource': True,  # GitLab MRs should be grouped
-                'metadata_': {
-                    'number': number,
-                    'projectPathWithNamespace': project_path
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get("title", f"GitLab MR !{number}"),
+                "sourceType": "gitlab",
+                "source": source_metadata,
+                "groupBySource": True,  # GitLab MRs should be grouped
+                "metadata_": {
+                    "number": number,
+                    "projectPathWithNamespace": project_path,
                 },
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -6813,12 +7078,12 @@ def resolve_attachmentLinkIntercom(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        conversation_id = kwargs.get('conversationId')
-        issue_id = kwargs.get('issueId')
+        conversation_id = kwargs.get("conversationId")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not conversation_id:
@@ -6837,89 +7102,81 @@ def resolve_attachmentLinkIntercom(obj, info, **kwargs):
         url = f"https://app.intercom.com/conversations/{conversation_id}"
 
         # If partId is provided, append it to the URL
-        part_id = kwargs.get('partId')
+        part_id = kwargs.get("partId")
         if part_id:
             url = f"{url}#part-{part_id}"
 
         # Check if attachment with same conversation ID and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
 
             # Update source metadata with Intercom details if partId is provided
             if attachment.source and part_id:
-                attachment.source['partId'] = part_id
+                attachment.source["partId"] = part_id
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for Intercom
-            source_metadata = {
-                'type': 'intercom',
-                'conversationId': conversation_id
-            }
+            source_metadata = {"type": "intercom", "conversationId": conversation_id}
             if part_id:
-                source_metadata['partId'] = part_id
+                source_metadata["partId"] = part_id
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'Intercom conversation {conversation_id}'),
-                'sourceType': 'intercom',
-                'source': source_metadata,
-                'groupBySource': True,  # Intercom conversations should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get(
+                    "title", f"Intercom conversation {conversation_id}"
+                ),
+                "sourceType": "intercom",
+                "source": source_metadata,
+                "groupBySource": True,  # Intercom conversations should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -6945,12 +7202,12 @@ def resolve_attachmentLinkJiraIssue(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        jira_issue_id = kwargs.get('jiraIssueId')
-        issue_id = kwargs.get('issueId')
+        jira_issue_id = kwargs.get("jiraIssueId")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not jira_issue_id:
@@ -6965,7 +7222,7 @@ def resolve_attachmentLinkJiraIssue(obj, info, **kwargs):
 
         # Generate a URL for the Jira issue
         # Use the provided URL fallback if available, otherwise construct a generic URL
-        url = kwargs.get('url')
+        url = kwargs.get("url")
         if not url:
             # If no URL provided, create a placeholder URL using the Jira issue ID
             # In a real implementation, this might use the Jira workspace URL from organization settings
@@ -6973,87 +7230,79 @@ def resolve_attachmentLinkJiraIssue(obj, info, **kwargs):
 
         # Check if attachment with same Jira issue ID and issueId already exists
         # We check using the source metadata to identify Jira attachments
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.issueId == issue_id,
-                Attachment.sourceType == 'jira'
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(
+                and_(Attachment.issueId == issue_id, Attachment.sourceType == "jira")
             )
-        ).all()
+            .all()
+        )
 
         # Filter for matching jiraIssueId in source metadata
         matching_attachment = None
         for att in existing_attachment:
-            if att.source and att.source.get('jiraIssueId') == jira_issue_id:
+            if att.source and att.source.get("jiraIssueId") == jira_issue_id:
                 matching_attachment = att
                 break
 
         if matching_attachment:
             # Update existing attachment
             attachment = matching_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
-            if kwargs.get('url'):
-                attachment.url = kwargs['url']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
+            if kwargs.get("url"):
+                attachment.url = kwargs["url"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for Jira
-            source_metadata = {
-                'type': 'jira',
-                'jiraIssueId': jira_issue_id
-            }
+            source_metadata = {"type": "jira", "jiraIssueId": jira_issue_id}
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'Jira Issue: {jira_issue_id}'),
-                'sourceType': 'jira',
-                'source': source_metadata,
-                'groupBySource': True,  # Jira issues should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get("title", f"Jira Issue: {jira_issue_id}"),
+                "sourceType": "jira",
+                "source": source_metadata,
+                "groupBySource": True,  # Jira issues should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -7081,12 +7330,12 @@ def resolve_attachmentLinkSalesforce(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        url = kwargs.get('url')
-        issue_id = kwargs.get('issueId')
+        url = kwargs.get("url")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not url:
@@ -7100,82 +7349,77 @@ def resolve_attachmentLinkSalesforce(obj, info, **kwargs):
             raise Exception(f"Issue with id {issue_id} not found")
 
         # Check if attachment with same URL and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for Salesforce
-            source_metadata = {
-                'type': 'salesforce'
-            }
+            source_metadata = {"type": "salesforce"}
 
             # Extract case ID from URL if possible (for better grouping)
             # Salesforce URLs typically have a case ID in the path
             # Example: https://domain.lightning.force.com/lightning/r/Case/5003000000XXXXX/view
             import re
-            case_id_match = re.search(r'/Case/([a-zA-Z0-9]+)', url)
+
+            case_id_match = re.search(r"/Case/([a-zA-Z0-9]+)", url)
             if case_id_match:
-                source_metadata['caseId'] = case_id_match.group(1)
+                source_metadata["caseId"] = case_id_match.group(1)
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', 'Salesforce Case'),
-                'sourceType': 'salesforce',
-                'source': source_metadata,
-                'groupBySource': True,  # Salesforce cases should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get("title", "Salesforce Case"),
+                "sourceType": "salesforce",
+                "source": source_metadata,
+                "groupBySource": True,  # Salesforce cases should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -7207,12 +7451,12 @@ def resolve_attachmentLinkSlack(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        url = kwargs.get('url')
-        issue_id = kwargs.get('issueId')
+        url = kwargs.get("url")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not url:
@@ -7226,93 +7470,88 @@ def resolve_attachmentLinkSlack(obj, info, **kwargs):
             raise Exception(f"Issue with id {issue_id} not found")
 
         # Check if attachment with same URL and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for Slack
-            source_metadata = {
-                'type': 'slack'
-            }
+            source_metadata = {"type": "slack"}
 
             # Extract workspace and message info from URL if possible
             # Slack URLs typically look like: https://workspace.slack.com/archives/CHANNEL_ID/pTIMESTAMP
             import re
-            workspace_match = re.search(r'https://([^.]+)\.slack\.com', url)
+
+            workspace_match = re.search(r"https://([^.]+)\.slack\.com", url)
             if workspace_match:
-                source_metadata['workspace'] = workspace_match.group(1)
+                source_metadata["workspace"] = workspace_match.group(1)
 
-            channel_match = re.search(r'/archives/([^/]+)', url)
+            channel_match = re.search(r"/archives/([^/]+)", url)
             if channel_match:
-                source_metadata['channelId'] = channel_match.group(1)
+                source_metadata["channelId"] = channel_match.group(1)
 
-            message_match = re.search(r'/p(\d+)', url)
+            message_match = re.search(r"/p(\d+)", url)
             if message_match:
-                source_metadata['messageTs'] = message_match.group(1)
+                source_metadata["messageTs"] = message_match.group(1)
 
             # Add syncToCommentThread flag if provided
-            if kwargs.get('syncToCommentThread') is not None:
-                source_metadata['syncToCommentThread'] = kwargs['syncToCommentThread']
+            if kwargs.get("syncToCommentThread") is not None:
+                source_metadata["syncToCommentThread"] = kwargs["syncToCommentThread"]
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', 'Slack Message'),
-                'sourceType': 'slack',
-                'source': source_metadata,
-                'groupBySource': True,  # Slack messages should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get("title", "Slack Message"),
+                "sourceType": "slack",
+                "source": source_metadata,
+                "groupBySource": True,  # Slack messages should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -7340,12 +7579,12 @@ def resolve_attachmentLinkURL(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        url = kwargs.get('url')
-        issue_id = kwargs.get('issueId')
+        url = kwargs.get("url")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not url:
@@ -7359,74 +7598,70 @@ def resolve_attachmentLinkURL(obj, info, **kwargs):
             raise Exception(f"Issue with id {issue_id} not found")
 
         # Check if attachment with same URL and issueId already exists
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.url == url,
-                Attachment.issueId == issue_id
-            )
-        ).first()
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(and_(Attachment.url == url, Attachment.issueId == issue_id))
+            .first()
+        )
 
         if existing_attachment:
             # Update existing attachment
             attachment = existing_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for generic URL
-            source_metadata = {
-                'type': 'url'
-            }
+            source_metadata = {"type": "url"}
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', url),  # Default to URL if no title provided
-                'sourceType': 'url',
-                'source': source_metadata,
-                'groupBySource': False,  # Generic URLs are not grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get(
+                    "title", url
+                ),  # Default to URL if no title provided
+                "sourceType": "url",
+                "source": source_metadata,
+                "groupBySource": False,  # Generic URLs are not grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment entity
         return attachment
 
     except Exception as e:
@@ -7452,12 +7687,12 @@ def resolve_attachmentLinkZendesk(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        ticket_id = kwargs.get('ticketId')
-        issue_id = kwargs.get('issueId')
+        ticket_id = kwargs.get("ticketId")
+        issue_id = kwargs.get("issueId")
 
         # Validate required fields
         if not ticket_id:
@@ -7472,7 +7707,7 @@ def resolve_attachmentLinkZendesk(obj, info, **kwargs):
 
         # Generate a URL for the Zendesk ticket
         # Use the provided URL if available, otherwise construct a generic URL
-        url = kwargs.get('url')
+        url = kwargs.get("url")
         if not url:
             # If no URL provided, create a placeholder URL using the ticket ID
             # In a real implementation, this might use the Zendesk workspace URL from organization settings
@@ -7480,87 +7715,79 @@ def resolve_attachmentLinkZendesk(obj, info, **kwargs):
 
         # Check if attachment with same Zendesk ticket ID and issueId already exists
         # We check using the source metadata to identify Zendesk attachments
-        existing_attachment = session.query(Attachment).filter(
-            and_(
-                Attachment.issueId == issue_id,
-                Attachment.sourceType == 'zendesk'
+        existing_attachment = (
+            session.query(Attachment)
+            .filter(
+                and_(Attachment.issueId == issue_id, Attachment.sourceType == "zendesk")
             )
-        ).all()
+            .all()
+        )
 
         # Filter for matching ticketId in source metadata
         matching_attachment = None
         for att in existing_attachment:
-            if att.source and att.source.get('ticketId') == ticket_id:
+            if att.source and att.source.get("ticketId") == ticket_id:
                 matching_attachment = att
                 break
 
         if matching_attachment:
             # Update existing attachment
             attachment = matching_attachment
-            if kwargs.get('title'):
-                attachment.title = kwargs['title']
-            if kwargs.get('url'):
-                attachment.url = kwargs['url']
+            if kwargs.get("title"):
+                attachment.title = kwargs["title"]
+            if kwargs.get("url"):
+                attachment.url = kwargs["url"]
             attachment.updatedAt = datetime.utcnow()
         else:
             # Generate ID if not provided
-            attachment_id = kwargs.get('id', str(uuid.uuid4()))
+            attachment_id = kwargs.get("id", str(uuid.uuid4()))
 
             # Build source metadata for Zendesk
-            source_metadata = {
-                'type': 'zendesk',
-                'ticketId': ticket_id
-            }
+            source_metadata = {"type": "zendesk", "ticketId": ticket_id}
 
             # Build attachment data
             attachment_data = {
-                'id': attachment_id,
-                'issueId': issue_id,
-                'url': url,
-                'title': kwargs.get('title', f'Zendesk Ticket: {ticket_id}'),
-                'sourceType': 'zendesk',
-                'source': source_metadata,
-                'groupBySource': True,  # Zendesk tickets should be grouped
-                'metadata_': {},
-                'createdAt': datetime.utcnow(),
-                'updatedAt': datetime.utcnow(),
+                "id": attachment_id,
+                "issueId": issue_id,
+                "url": url,
+                "title": kwargs.get("title", f"Zendesk Ticket: {ticket_id}"),
+                "sourceType": "zendesk",
+                "source": source_metadata,
+                "groupBySource": True,  # Zendesk tickets should be grouped
+                "metadata_": {},
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow(),
             }
 
             # Handle displayIconUrl
-            if kwargs.get('displayIconUrl'):
-                attachment_data['iconUrl'] = kwargs['displayIconUrl']
+            if kwargs.get("displayIconUrl"):
+                attachment_data["iconUrl"] = kwargs["displayIconUrl"]
 
             # Handle createAsUser - create or find ExternalUser
-            create_as_user = kwargs.get('createAsUser')
+            create_as_user = kwargs.get("createAsUser")
             if create_as_user:
                 # Find or create external user
-                external_user = session.query(ExternalUser).filter_by(
-                    name=create_as_user
-                ).first()
+                external_user = (
+                    session.query(ExternalUser).filter_by(name=create_as_user).first()
+                )
 
                 if not external_user:
                     external_user = ExternalUser(
                         id=str(uuid.uuid4()),
                         name=create_as_user,
-                        avatarUrl=kwargs.get('displayIconUrl'),
+                        avatarUrl=kwargs.get("displayIconUrl"),
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(external_user)
                     session.flush()  # Ensure external_user.id is available
 
-                attachment_data['externalUserCreatorId'] = external_user.id
+                attachment_data["externalUserCreatorId"] = external_user.id
 
             # Create the attachment entity
             attachment = Attachment(**attachment_data)
             session.add(attachment)
 
-        # Commit the transaction
-
-        # Return the attachment directly
-        # Note: The AttachmentPayload type wraps the attachment,
-        # but in GraphQL resolvers we can return the attachment entity directly
-        # and the GraphQL framework will handle the payload wrapping
         return attachment
 
     except Exception as e:
@@ -7582,11 +7809,11 @@ def resolve_attachmentSyncToSlack(obj, info, **kwargs):
         The updated Attachment entity
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required field
-        attachment_id = kwargs.get('id')
+        attachment_id = kwargs.get("id")
 
         # Validate required field
         if not attachment_id:
@@ -7598,21 +7825,20 @@ def resolve_attachmentSyncToSlack(obj, info, **kwargs):
             raise Exception(f"Attachment with id {attachment_id} not found")
 
         # Verify this is a Slack attachment
-        if attachment.sourceType != 'slack':
-            raise Exception(f"Attachment {attachment_id} is not a Slack attachment (sourceType: {attachment.sourceType})")
+        if attachment.sourceType != "slack":
+            raise Exception(
+                f"Attachment {attachment_id} is not a Slack attachment (sourceType: {attachment.sourceType})"
+            )
 
         # Update the source metadata to enable thread syncing
         # This sets a flag in the source metadata to indicate that thread syncing should be enabled
         source_metadata = attachment.source or {}
-        source_metadata['syncToCommentThread'] = True
+        source_metadata["syncToCommentThread"] = True
         attachment.source = source_metadata
 
         # Update the timestamp
         attachment.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
-        # Return the attachment directly
         return attachment
 
     except Exception as e:
@@ -7639,12 +7865,12 @@ def resolve_attachmentUpdate(obj, info, **kwargs):
         The updated Attachment entity
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract required fields
-        attachment_id = kwargs.get('id')
-        input_data = kwargs.get('input')
+        attachment_id = kwargs.get("id")
+        input_data = kwargs.get("input")
 
         # Validate required fields
         if not attachment_id:
@@ -7658,26 +7884,23 @@ def resolve_attachmentUpdate(obj, info, **kwargs):
             raise Exception(f"Attachment with id {attachment_id} not found")
 
         # Update title (required in input)
-        if 'title' not in input_data:
+        if "title" not in input_data:
             raise Exception("Field 'title' is required in input")
-        attachment.title = input_data['title']
+        attachment.title = input_data["title"]
 
         # Update optional fields if provided
-        if 'subtitle' in input_data:
-            attachment.subtitle = input_data['subtitle']
+        if "subtitle" in input_data:
+            attachment.subtitle = input_data["subtitle"]
 
-        if 'iconUrl' in input_data:
-            attachment.iconUrl = input_data['iconUrl']
+        if "iconUrl" in input_data:
+            attachment.iconUrl = input_data["iconUrl"]
 
-        if 'metadata' in input_data:
-            attachment.metadata_ = input_data['metadata']
+        if "metadata" in input_data:
+            attachment.metadata_ = input_data["metadata"]
 
         # Update the timestamp
         attachment.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
-        # Return the attachment directly
         return attachment
 
     except Exception as e:
@@ -7687,6 +7910,7 @@ def resolve_attachmentUpdate(obj, info, **kwargs):
 # ============================================================================
 # Cycle Mutations
 # ============================================================================
+
 
 @mutation.field("cycleCreate")
 def resolve_cycleCreate(obj, info, **kwargs):
@@ -7703,17 +7927,19 @@ def resolve_cycleCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Extract required fields
-        ends_at = input_data.get('endsAt')
-        starts_at = input_data.get('startsAt')
-        team_id = input_data.get('teamId')
+        ends_at = input_data.get("endsAt")
+        starts_at = input_data.get("startsAt")
+        team_id = input_data.get("teamId")
 
         if not all([ends_at, starts_at, team_id]):
-            raise Exception("Missing required fields: endsAt, startsAt, and teamId are required")
+            raise Exception(
+                "Missing required fields: endsAt, startsAt, and teamId are required"
+            )
 
         # Verify the team exists
         team = session.query(Team).filter_by(id=team_id).first()
@@ -7721,10 +7947,15 @@ def resolve_cycleCreate(obj, info, **kwargs):
             raise Exception(f"Team with id {team_id} not found")
 
         # Generate ID if not provided
-        cycle_id = input_data.get('id', str(uuid.uuid4()))
+        cycle_id = input_data.get("id", str(uuid.uuid4()))
 
         # Get the next cycle number for the team
-        max_number_result = session.query(Cycle).filter_by(teamId=team_id).order_by(Cycle.number.desc()).first()
+        max_number_result = (
+            session.query(Cycle)
+            .filter_by(teamId=team_id)
+            .order_by(Cycle.number.desc())
+            .first()
+        )
         next_number = (max_number_result.number + 1) if max_number_result else 1.0
 
         # Determine if the cycle is active, future, or past
@@ -7739,9 +7970,9 @@ def resolve_cycleCreate(obj, info, **kwargs):
             teamId=team_id,
             endsAt=ends_at,
             startsAt=starts_at,
-            completedAt=input_data.get('completedAt'),
-            description=input_data.get('description'),
-            name=input_data.get('name'),
+            completedAt=input_data.get("completedAt"),
+            description=input_data.get("description"),
+            name=input_data.get("name"),
             # Set required fields with defaults
             createdAt=now,
             updatedAt=now,
@@ -7760,13 +7991,11 @@ def resolve_cycleCreate(obj, info, **kwargs):
             scopeHistory=[],
             # Initialize empty JSON objects
             currentProgress={},
-            progressHistory={}
+            progressHistory={},
         )
 
-        # Add and commit
         session.add(new_cycle)
 
-        # Return CyclePayload structure
         return new_cycle
 
     except Exception as e:
@@ -7787,8 +8016,8 @@ def resolve_cycleArchive(obj, info, **kwargs):
         Dict containing CycleArchivePayload with entity, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    cycle_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    cycle_id = kwargs.get("id")
 
     try:
         # Fetch the cycle to archive
@@ -7801,13 +8030,11 @@ def resolve_cycleArchive(obj, info, **kwargs):
         cycle.archivedAt = datetime.now(timezone.utc)
         cycle.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return CycleArchivePayload structure
         return {
-            'entity': cycle,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entity": cycle,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -7831,13 +8058,13 @@ def resolve_cycleShiftAll(obj, info, **kwargs):
         The updated cycle entity (CyclePayload)
     """
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Extract required fields
-        cycle_id = input_data.get('id')
-        days_to_shift = input_data.get('daysToShift')
+        cycle_id = input_data.get("id")
+        days_to_shift = input_data.get("daysToShift")
 
         if cycle_id is None or days_to_shift is None:
             raise Exception("Missing required fields: id and daysToShift are required")
@@ -7849,10 +8076,15 @@ def resolve_cycleShiftAll(obj, info, **kwargs):
             raise Exception(f"Cycle with id {cycle_id} not found")
 
         # Get all cycles for the same team that start at or after the starting cycle
-        cycles_to_shift = session.query(Cycle).filter(
-            Cycle.teamId == starting_cycle.teamId,
-            Cycle.startsAt >= starting_cycle.startsAt
-        ).order_by(Cycle.startsAt).all()
+        cycles_to_shift = (
+            session.query(Cycle)
+            .filter(
+                Cycle.teamId == starting_cycle.teamId,
+                Cycle.startsAt >= starting_cycle.startsAt,
+            )
+            .order_by(Cycle.startsAt)
+            .all()
+        )
 
         # Shift each cycle by the specified number of days
         shift_delta = timedelta(days=days_to_shift)
@@ -7863,9 +8095,6 @@ def resolve_cycleShiftAll(obj, info, **kwargs):
             cycle.endsAt = cycle.endsAt + shift_delta
             cycle.updatedAt = now
 
-        # Commit the changes
-
-        # Return the starting cycle as the result
         return starting_cycle
 
     except Exception as e:
@@ -7888,8 +8117,8 @@ def resolve_cycleStartUpcomingCycleToday(obj, info, **kwargs):
         The updated cycle entity (CyclePayload)
     """
 
-    session: Session = info.context['session']
-    cycle_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    cycle_id = kwargs.get("id")
 
     try:
         if not cycle_id:
@@ -7903,17 +8132,26 @@ def resolve_cycleStartUpcomingCycleToday(obj, info, **kwargs):
 
         # Calculate midnight today in UTC
         now = datetime.now(timezone.utc)
-        midnight_today = datetime(now.year, now.month, now.day, 0, 0, 0, tzinfo=timezone.utc)
+        midnight_today = datetime(
+            now.year, now.month, now.day, 0, 0, 0, tzinfo=timezone.utc
+        )
 
         # Calculate the number of days to shift
         # This is the difference between midnight today and the current start time
-        days_to_shift = (midnight_today - upcoming_cycle.startsAt).total_seconds() / 86400
+        days_to_shift = (
+            midnight_today - upcoming_cycle.startsAt
+        ).total_seconds() / 86400
 
         # Get all cycles for the same team that start at or after the upcoming cycle
-        cycles_to_shift = session.query(Cycle).filter(
-            Cycle.teamId == upcoming_cycle.teamId,
-            Cycle.startsAt >= upcoming_cycle.startsAt
-        ).order_by(Cycle.startsAt).all()
+        cycles_to_shift = (
+            session.query(Cycle)
+            .filter(
+                Cycle.teamId == upcoming_cycle.teamId,
+                Cycle.startsAt >= upcoming_cycle.startsAt,
+            )
+            .order_by(Cycle.startsAt)
+            .all()
+        )
 
         # Shift each cycle by the calculated number of days
         shift_delta = timedelta(days=days_to_shift)
@@ -7923,9 +8161,6 @@ def resolve_cycleStartUpcomingCycleToday(obj, info, **kwargs):
             cycle.endsAt = cycle.endsAt + shift_delta
             cycle.updatedAt = now
 
-        # Commit the changes
-
-        # Return the upcoming cycle as the result
         return upcoming_cycle
 
     except Exception as e:
@@ -7948,9 +8183,9 @@ def resolve_cycleUpdate(obj, info, **kwargs):
         The updated cycle entity (CyclePayload)
     """
 
-    session: Session = info.context['session']
-    cycle_id = kwargs.get('id')
-    input_data = kwargs.get('input')
+    session: Session = info.context["session"]
+    cycle_id = kwargs.get("id")
+    input_data = kwargs.get("input")
 
     try:
         # Validate required arguments
@@ -7967,27 +8202,24 @@ def resolve_cycleUpdate(obj, info, **kwargs):
             raise Exception(f"Cycle with id {cycle_id} not found")
 
         # Update fields from input (all fields are optional in CycleUpdateInput)
-        if 'completedAt' in input_data:
-            cycle.completedAt = input_data['completedAt']
+        if "completedAt" in input_data:
+            cycle.completedAt = input_data["completedAt"]
 
-        if 'description' in input_data:
-            cycle.description = input_data['description']
+        if "description" in input_data:
+            cycle.description = input_data["description"]
 
-        if 'endsAt' in input_data:
-            cycle.endsAt = input_data['endsAt']
+        if "endsAt" in input_data:
+            cycle.endsAt = input_data["endsAt"]
 
-        if 'name' in input_data:
-            cycle.name = input_data['name']
+        if "name" in input_data:
+            cycle.name = input_data["name"]
 
-        if 'startsAt' in input_data:
-            cycle.startsAt = input_data['startsAt']
+        if "startsAt" in input_data:
+            cycle.startsAt = input_data["startsAt"]
 
         # Update the updatedAt timestamp
         cycle.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated cycle
         return cycle
 
     except Exception as e:
@@ -7997,6 +8229,7 @@ def resolve_cycleUpdate(obj, info, **kwargs):
 # ============================================================================
 # Document Mutations
 # ============================================================================
+
 
 @mutation.field("documentCreate")
 def resolve_documentCreate(obj, info, **kwargs):
@@ -8013,23 +8246,23 @@ def resolve_documentCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Extract input fields
-        document_id = input_data.get('id') or str(uuid.uuid4())
-        title = input_data['title']  # Required field
-        color = input_data.get('color')
-        content = input_data.get('content')
-        content_data = input_data.get('contentData')
-        icon = input_data.get('icon')
-        initiative_id = input_data.get('initiativeId')
-        last_applied_template_id = input_data.get('lastAppliedTemplateId')
-        project_id = input_data.get('projectId')
-        resource_folder_id = input_data.get('resourceFolderId')
-        sort_order = input_data.get('sortOrder', 0.0)
-        team_id = input_data.get('teamId')
+        document_id = input_data.get("id") or str(uuid.uuid4())
+        title = input_data["title"]  # Required field
+        color = input_data.get("color")
+        content = input_data.get("content")
+        content_data = input_data.get("contentData")
+        icon = input_data.get("icon")
+        initiative_id = input_data.get("initiativeId")
+        last_applied_template_id = input_data.get("lastAppliedTemplateId")
+        project_id = input_data.get("projectId")
+        resource_folder_id = input_data.get("resourceFolderId")
+        sort_order = input_data.get("sortOrder", 0.0)
+        team_id = input_data.get("teamId")
 
         # Generate timestamps
         now = datetime.now(timezone.utc)
@@ -8062,16 +8295,14 @@ def resolve_documentCreate(obj, info, **kwargs):
         )
 
         # Handle subscribers if provided
-        subscriber_ids = input_data.get('subscriberIds', [])
+        subscriber_ids = input_data.get("subscriberIds", [])
         if subscriber_ids:
             # Fetch subscriber users
             subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
             document.subscribers = subscribers
 
-        # Add to session and commit
         session.add(document)
 
-        # Return the created document
         return document
 
     except Exception as e:
@@ -8092,9 +8323,9 @@ def resolve_documentUpdate(obj, info, **kwargs):
         Document entity
     """
 
-    session: Session = info.context['session']
-    document_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    document_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Fetch the document to update
@@ -8104,48 +8335,48 @@ def resolve_documentUpdate(obj, info, **kwargs):
             raise Exception(f"Document with id {document_id} not found")
 
         # Update fields if provided in input
-        if 'color' in input_data:
-            document.color = input_data['color']
+        if "color" in input_data:
+            document.color = input_data["color"]
 
-        if 'content' in input_data:
-            document.content = input_data['content']
+        if "content" in input_data:
+            document.content = input_data["content"]
 
-        if 'contentData' in input_data:
-            document.contentState = input_data['contentData']
+        if "contentData" in input_data:
+            document.contentState = input_data["contentData"]
 
-        if 'hiddenAt' in input_data:
-            document.hiddenAt = input_data['hiddenAt']
+        if "hiddenAt" in input_data:
+            document.hiddenAt = input_data["hiddenAt"]
 
-        if 'icon' in input_data:
-            document.icon = input_data['icon']
+        if "icon" in input_data:
+            document.icon = input_data["icon"]
 
-        if 'initiativeId' in input_data:
-            document.initiativeId = input_data['initiativeId']
+        if "initiativeId" in input_data:
+            document.initiativeId = input_data["initiativeId"]
 
-        if 'lastAppliedTemplateId' in input_data:
-            document.lastAppliedTemplateId = input_data['lastAppliedTemplateId']
+        if "lastAppliedTemplateId" in input_data:
+            document.lastAppliedTemplateId = input_data["lastAppliedTemplateId"]
 
-        if 'projectId' in input_data:
-            document.projectId = input_data['projectId']
+        if "projectId" in input_data:
+            document.projectId = input_data["projectId"]
 
-        if 'resourceFolderId' in input_data:
-            document.resourceFolderId = input_data['resourceFolderId']
+        if "resourceFolderId" in input_data:
+            document.resourceFolderId = input_data["resourceFolderId"]
 
-        if 'sortOrder' in input_data:
-            document.sortOrder = input_data['sortOrder']
+        if "sortOrder" in input_data:
+            document.sortOrder = input_data["sortOrder"]
 
-        if 'teamId' in input_data:
-            document.teamId = input_data['teamId']
+        if "teamId" in input_data:
+            document.teamId = input_data["teamId"]
 
-        if 'title' in input_data:
-            document.title = input_data['title']
+        if "title" in input_data:
+            document.title = input_data["title"]
 
-        if 'trashed' in input_data:
-            document.trashed = input_data['trashed']
+        if "trashed" in input_data:
+            document.trashed = input_data["trashed"]
 
         # Handle subscribers if provided
-        if 'subscriberIds' in input_data:
-            subscriber_ids = input_data['subscriberIds']
+        if "subscriberIds" in input_data:
+            subscriber_ids = input_data["subscriberIds"]
             # Fetch subscriber users
             subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
             document.subscribers = subscribers
@@ -8153,9 +8384,6 @@ def resolve_documentUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         document.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated document
         return document
 
     except Exception as e:
@@ -8176,8 +8404,8 @@ def resolve_documentDelete(obj, info, **kwargs):
         Dict containing DocumentArchivePayload with entity, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    document_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    document_id = kwargs.get("id")
 
     try:
         # Fetch the document to delete
@@ -8190,13 +8418,11 @@ def resolve_documentDelete(obj, info, **kwargs):
         document.archivedAt = datetime.now(timezone.utc)
         document.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DocumentArchivePayload structure
         return {
-            'entity': document,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entity": document,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8217,8 +8443,8 @@ def resolve_documentUnarchive(obj, info, **kwargs):
         Dict containing DocumentArchivePayload with entity, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    document_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    document_id = kwargs.get("id")
 
     try:
         # Fetch the document to restore
@@ -8231,13 +8457,11 @@ def resolve_documentUnarchive(obj, info, **kwargs):
         document.archivedAt = None
         document.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DocumentArchivePayload structure
         return {
-            'entity': document,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entity": document,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8259,15 +8483,15 @@ def resolve_initiativeCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Generate ID if not provided
-        initiative_id = input_data.get('id') or str(uuid.uuid4())
+        initiative_id = input_data.get("id") or str(uuid.uuid4())
 
         # Validate required fields
-        if not input_data.get('name'):
+        if not input_data.get("name"):
             raise Exception("Initiative name is required")
 
         # Get current timestamp
@@ -8276,34 +8500,33 @@ def resolve_initiativeCreate(obj, info, **kwargs):
         # Create the initiative with required fields
         initiative = Initiative(
             id=initiative_id,
-            name=input_data['name'],
+            name=input_data["name"],
             createdAt=now,
             updatedAt=now,
             # Optional fields from input
-            color=input_data.get('color'),
-            content=input_data.get('content'),
-            description=input_data.get('description'),
-            icon=input_data.get('icon'),
-            ownerId=input_data.get('ownerId'),
-            sortOrder=input_data.get('sortOrder', 0.0),
-            status=input_data.get('status', 'Planned'),
-            targetDate=input_data.get('targetDate'),
-            targetDateResolution=input_data.get('targetDateResolution'),
+            color=input_data.get("color"),
+            content=input_data.get("content"),
+            description=input_data.get("description"),
+            icon=input_data.get("icon"),
+            ownerId=input_data.get("ownerId"),
+            sortOrder=input_data.get("sortOrder", 0.0),
+            status=input_data.get("status", "Planned"),
+            targetDate=input_data.get("targetDate"),
+            targetDateResolution=input_data.get("targetDateResolution"),
             # Required fields with defaults
             slugId=f"initiative-{initiative_id[:8]}",  # Generate a slug
-            frequencyResolution='Weekly',  # Default frequency resolution
+            frequencyResolution="Weekly",  # Default frequency resolution
             url=f"/initiative/{initiative_id}",  # Generate URL
-            trashed=False
+            trashed=False,
         )
 
-        # Add to session and commit
         session.add(initiative)
 
         # Return InitiativePayload structure
         return {
-            'initiative': initiative,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "initiative": initiative,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8324,9 +8547,9 @@ def resolve_initiativeUpdate(obj, info, **kwargs):
         Dict containing InitiativePayload with initiative, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    initiative_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    initiative_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Fetch the initiative to update
@@ -8336,49 +8559,49 @@ def resolve_initiativeUpdate(obj, info, **kwargs):
             raise Exception(f"Initiative with id {initiative_id} not found")
 
         # Update fields from input - only update fields that are provided
-        if 'color' in input_data:
-            initiative.color = input_data['color']
-        if 'content' in input_data:
-            initiative.content = input_data['content']
-        if 'description' in input_data:
-            initiative.description = input_data['description']
-        if 'frequencyResolution' in input_data:
-            initiative.frequencyResolution = input_data['frequencyResolution']
-        if 'icon' in input_data:
-            initiative.icon = input_data['icon']
-        if 'name' in input_data:
-            initiative.name = input_data['name']
-        if 'ownerId' in input_data:
-            initiative.ownerId = input_data['ownerId']
-        if 'sortOrder' in input_data:
-            initiative.sortOrder = input_data['sortOrder']
-        if 'status' in input_data:
-            initiative.status = input_data['status']
-        if 'targetDate' in input_data:
-            initiative.targetDate = input_data['targetDate']
-        if 'targetDateResolution' in input_data:
-            initiative.targetDateResolution = input_data['targetDateResolution']
-        if 'trashed' in input_data:
-            initiative.trashed = input_data['trashed']
-        if 'updateReminderFrequency' in input_data:
-            initiative.updateReminderFrequency = input_data['updateReminderFrequency']
-        if 'updateReminderFrequencyInWeeks' in input_data:
-            initiative.updateReminderFrequencyInWeeks = input_data['updateReminderFrequencyInWeeks']
-        if 'updateRemindersDay' in input_data:
-            initiative.updateRemindersDay = input_data['updateRemindersDay']
-        if 'updateRemindersHour' in input_data:
-            initiative.updateRemindersHour = input_data['updateRemindersHour']
+        if "color" in input_data:
+            initiative.color = input_data["color"]
+        if "content" in input_data:
+            initiative.content = input_data["content"]
+        if "description" in input_data:
+            initiative.description = input_data["description"]
+        if "frequencyResolution" in input_data:
+            initiative.frequencyResolution = input_data["frequencyResolution"]
+        if "icon" in input_data:
+            initiative.icon = input_data["icon"]
+        if "name" in input_data:
+            initiative.name = input_data["name"]
+        if "ownerId" in input_data:
+            initiative.ownerId = input_data["ownerId"]
+        if "sortOrder" in input_data:
+            initiative.sortOrder = input_data["sortOrder"]
+        if "status" in input_data:
+            initiative.status = input_data["status"]
+        if "targetDate" in input_data:
+            initiative.targetDate = input_data["targetDate"]
+        if "targetDateResolution" in input_data:
+            initiative.targetDateResolution = input_data["targetDateResolution"]
+        if "trashed" in input_data:
+            initiative.trashed = input_data["trashed"]
+        if "updateReminderFrequency" in input_data:
+            initiative.updateReminderFrequency = input_data["updateReminderFrequency"]
+        if "updateReminderFrequencyInWeeks" in input_data:
+            initiative.updateReminderFrequencyInWeeks = input_data[
+                "updateReminderFrequencyInWeeks"
+            ]
+        if "updateRemindersDay" in input_data:
+            initiative.updateRemindersDay = input_data["updateRemindersDay"]
+        if "updateRemindersHour" in input_data:
+            initiative.updateRemindersHour = input_data["updateRemindersHour"]
 
         # Update the updatedAt timestamp
         initiative.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return InitiativePayload structure
         return {
-            'initiative': initiative,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "initiative": initiative,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8399,8 +8622,8 @@ def resolve_initiativeArchive(obj, info, **kwargs):
         Dict containing InitiativeArchivePayload with entity, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    initiative_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    initiative_id = kwargs.get("id")
 
     try:
         # Fetch the initiative to archive
@@ -8413,13 +8636,11 @@ def resolve_initiativeArchive(obj, info, **kwargs):
         initiative.archivedAt = datetime.now(timezone.utc)
         initiative.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return InitiativeArchivePayload structure
         return {
-            'entity': initiative,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entity": initiative,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8440,8 +8661,8 @@ def resolve_initiativeUnarchive(obj, info, **kwargs):
         Dict containing InitiativeArchivePayload with entity, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    initiative_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    initiative_id = kwargs.get("id")
 
     try:
         # Fetch the initiative to unarchive
@@ -8454,13 +8675,11 @@ def resolve_initiativeUnarchive(obj, info, **kwargs):
         initiative.archivedAt = None
         initiative.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return InitiativeArchivePayload structure
         return {
-            'entity': initiative,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entity": initiative,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8481,8 +8700,8 @@ def resolve_initiativeDelete(obj, info, **kwargs):
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    initiative_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    initiative_id = kwargs.get("id")
 
     try:
         # Fetch the initiative to delete
@@ -8496,13 +8715,11 @@ def resolve_initiativeDelete(obj, info, **kwargs):
         initiative.archivedAt = datetime.now(timezone.utc)
         initiative.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DeletePayload structure
         return {
-            'entityId': initiative_id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entityId": initiative_id,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8510,6 +8727,7 @@ def resolve_initiativeDelete(obj, info, **kwargs):
 
 
 # InitiativeRelation mutation resolvers
+
 
 @mutation.field("initiativeRelationCreate")
 def resolve_initiativeRelationCreate(obj, info, **kwargs):
@@ -8526,19 +8744,19 @@ def resolve_initiativeRelationCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input")
 
     if not input_data:
         raise Exception("Input data is required")
 
     try:
         # Generate ID if not provided
-        entity_id = input_data.get('id', str(uuid.uuid4()))
+        entity_id = input_data.get("id", str(uuid.uuid4()))
 
         # Extract required fields
-        initiative_id = input_data.get('initiativeId')
-        related_initiative_id = input_data.get('relatedInitiativeId')
+        initiative_id = input_data.get("initiativeId")
+        related_initiative_id = input_data.get("relatedInitiativeId")
 
         if not initiative_id:
             raise Exception("initiativeId is required")
@@ -8546,14 +8764,16 @@ def resolve_initiativeRelationCreate(obj, info, **kwargs):
             raise Exception("relatedInitiativeId is required")
 
         # Extract optional fields
-        sort_order = input_data.get('sortOrder', 0.0)
+        sort_order = input_data.get("sortOrder", 0.0)
 
         # Verify that both initiatives exist
         initiative = session.query(Initiative).filter_by(id=initiative_id).first()
         if not initiative:
             raise Exception(f"Initiative with id {initiative_id} not found")
 
-        related_initiative = session.query(Initiative).filter_by(id=related_initiative_id).first()
+        related_initiative = (
+            session.query(Initiative).filter_by(id=related_initiative_id).first()
+        )
         if not related_initiative:
             raise Exception(f"Initiative with id {related_initiative_id} not found")
 
@@ -8566,16 +8786,16 @@ def resolve_initiativeRelationCreate(obj, info, **kwargs):
             sortOrder=sort_order,
             createdAt=now,
             updatedAt=now,
-            archivedAt=None
+            archivedAt=None,
         )
 
         session.add(initiative_relation)
 
         # Return InitiativeRelationPayload structure
         return {
-            'initiativeRelation': initiative_relation,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "initiativeRelation": initiative_relation,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8596,12 +8816,14 @@ def resolve_initiativeRelationDelete(obj, info, **kwargs):
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    relation_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    relation_id = kwargs.get("id")
 
     try:
         # Fetch the initiative relation to delete
-        initiative_relation = session.query(InitiativeRelation).filter_by(id=relation_id).first()
+        initiative_relation = (
+            session.query(InitiativeRelation).filter_by(id=relation_id).first()
+        )
 
         if not initiative_relation:
             raise Exception(f"InitiativeRelation with id {relation_id} not found")
@@ -8610,13 +8832,11 @@ def resolve_initiativeRelationDelete(obj, info, **kwargs):
         initiative_relation.archivedAt = datetime.now(timezone.utc)
         initiative_relation.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DeletePayload structure
         return {
-            'entityId': relation_id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entityId": relation_id,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8634,12 +8854,12 @@ def resolve_initiativeRelationUpdate(obj, info, **kwargs):
         **kwargs: Contains 'id' (initiative relation ID) and 'input' (InitiativeRelationUpdateInput)
 
     Returns:
-        Dict containing DeletePayload with entityId, success, and lastSyncId
+        Dict containing InitiativeRelationPayload with entityId, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    relation_id = kwargs.get('id')
-    input_data = kwargs.get('input')
+    session: Session = info.context["session"]
+    relation_id = kwargs.get("id")
+    input_data = kwargs.get("input")
 
     if not relation_id:
         raise Exception("ID is required")
@@ -8649,25 +8869,25 @@ def resolve_initiativeRelationUpdate(obj, info, **kwargs):
 
     try:
         # Fetch the initiative relation to update
-        initiative_relation = session.query(InitiativeRelation).filter_by(id=relation_id).first()
+        initiative_relation = (
+            session.query(InitiativeRelation).filter_by(id=relation_id).first()
+        )
 
         if not initiative_relation:
             raise Exception(f"InitiativeRelation with id {relation_id} not found")
 
         # Update sortOrder if provided
-        if 'sortOrder' in input_data:
-            initiative_relation.sortOrder = input_data['sortOrder']
+        if "sortOrder" in input_data:
+            initiative_relation.sortOrder = input_data["sortOrder"]
 
         # Update the updatedAt timestamp
         initiative_relation.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return DeletePayload structure (as specified in the mutation signature)
+        # Return InitiativeRelationPayload structure
         return {
-            'entityId': relation_id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "initiativeRelation": initiative_relation,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -8688,9 +8908,9 @@ def resolve_issueAddLabel(obj, info, **kwargs):
         The updated issue (IssuePayload!)
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    label_id = kwargs.get('labelId')
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    label_id = kwargs.get("labelId")
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -8726,9 +8946,6 @@ def resolve_issueAddLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated issue
         return issue
 
     except Exception as e:
@@ -8749,9 +8966,9 @@ def resolve_issueRemoveLabel(obj, info, **kwargs):
         The updated issue (IssuePayload!)
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    label_id = kwargs.get('labelId')
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    label_id = kwargs.get("labelId")
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -8787,9 +9004,6 @@ def resolve_issueRemoveLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated issue
         return issue
 
     except Exception as e:
@@ -8810,9 +9024,9 @@ def resolve_issueArchive(obj, info, **kwargs):
         IssueArchivePayload with success status and the archived entity
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    trash = kwargs.get('trash', False)
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    trash = kwargs.get("trash", False)
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -8828,25 +9042,11 @@ def resolve_issueArchive(obj, info, **kwargs):
         if issue.archivedAt is None:
             issue.archivedAt = datetime.now(timezone.utc)
 
-        # If trash is True, we could also set additional fields or perform hard delete
-        # For now, we'll treat trash the same as archive (soft delete)
-        # If you want hard delete for trash=True, uncomment the following:
-        # if trash:
-        #     session.delete(issue)
-        #     session.commit()
-        #     return {
-        #         'success': True,
-        #         'entity': None,  # Entity is None when deleted
-        #         'lastSyncId': 0.0
-        #     }
-
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'entity': issue,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "entity": issue,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -8865,8 +9065,8 @@ def resolve_issueUnarchive(obj, info, **kwargs):
     Returns:
         IssueArchivePayload with success status and the unarchived entity
     """
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -8881,13 +9081,11 @@ def resolve_issueUnarchive(obj, info, **kwargs):
         # Unarchive: clear the archivedAt timestamp
         issue.archivedAt = None
 
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'entity': issue,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "entity": issue,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -8908,10 +9106,10 @@ def resolve_issueUnsubscribe(obj, info, **kwargs):
     Returns:
         IssuePayload with success status and the updated issue
     """
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    user_email = kwargs.get('userEmail')
-    user_id = kwargs.get('userId')
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    user_email = kwargs.get("userEmail")
+    user_id = kwargs.get("userId")
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -8937,23 +9135,23 @@ def resolve_issueUnsubscribe(obj, info, **kwargs):
                 raise Exception(f"User with email {user_email} not found")
         else:
             # Default to current authenticated user from context
-            current_user_id = info.context.get('user_id')
+            current_user_id = info.context.get("user_id")
             if current_user_id:
                 user = session.query(User).filter_by(id=current_user_id).first()
             if not user:
-                raise Exception("No user specified and no authenticated user in context")
+                raise Exception(
+                    "No user specified and no authenticated user in context"
+                )
 
         # Remove the user from the issue's subscribers if they are subscribed
         if user in issue.subscribers:
             issue.subscribers.remove(user)
 
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'issue': issue,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "issue": issue,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -8974,9 +9172,9 @@ def resolve_issueDelete(obj, info, **kwargs):
         IssueArchivePayload with success status and the deleted/archived entity
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    permanently_delete = kwargs.get('permanentlyDelete', False)
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    permanently_delete = kwargs.get("permanentlyDelete", False)
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -8993,28 +9191,18 @@ def resolve_issueDelete(obj, info, **kwargs):
             session.delete(issue)
 
             # Return success with null entity (as per spec: "Null if entity was deleted")
-            return {
-                'success': True,
-                'entity': None,
-                'lastSyncId': 0.0
-            }
+            return {"success": True, "entity": None, "lastSyncId": 0.0}
         else:
             # Soft delete: set archivedAt timestamp (trash with 30-day grace period)
             if issue.archivedAt is None:
                 issue.archivedAt = datetime.now(timezone.utc)
 
             # Mark as trashed
-            if hasattr(issue, 'trashed'):
+            if hasattr(issue, "trashed"):
                 issue.trashed = True
 
-            # Commit the changes
-
             # Return the payload with the trashed entity
-            return {
-                'success': True,
-                'entity': issue,
-                'lastSyncId': 0.0
-            }
+            return {"success": True, "entity": issue, "lastSyncId": 0.0}
 
     except Exception as e:
         raise Exception(f"Failed to delete issue: {str(e)}")
@@ -9039,9 +9227,9 @@ def resolve_issueUpdate(obj, info, **kwargs):
             - lastSyncId: Float (sync operation identifier)
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Validate required parameters
@@ -9057,8 +9245,8 @@ def resolve_issueUpdate(obj, info, **kwargs):
         now = datetime.now(timezone.utc)
 
         # Handle label updates (addedLabelIds and removedLabelIds)
-        if 'addedLabelIds' in input_data:
-            added_labels = input_data['addedLabelIds']
+        if "addedLabelIds" in input_data:
+            added_labels = input_data["addedLabelIds"]
             current_labels = issue.labelIds if issue.labelIds else []
             # Add new labels that aren't already present
             for label_id in added_labels:
@@ -9066,114 +9254,116 @@ def resolve_issueUpdate(obj, info, **kwargs):
                     current_labels.append(label_id)
             issue.labelIds = current_labels
 
-        if 'removedLabelIds' in input_data:
-            removed_labels = input_data['removedLabelIds']
+        if "removedLabelIds" in input_data:
+            removed_labels = input_data["removedLabelIds"]
             current_labels = issue.labelIds if issue.labelIds else []
             # Remove labels
-            issue.labelIds = [lid for lid in current_labels if lid not in removed_labels]
+            issue.labelIds = [
+                lid for lid in current_labels if lid not in removed_labels
+            ]
 
         # Handle labelIds (direct replacement)
-        if 'labelIds' in input_data:
-            issue.labelIds = input_data['labelIds']
+        if "labelIds" in input_data:
+            issue.labelIds = input_data["labelIds"]
 
         # Handle subscriberIds (direct replacement)
-        if 'subscriberIds' in input_data:
+        if "subscriberIds" in input_data:
             # This would need to update the association table
             # For now, we'll skip this as it requires relationship handling
             pass
 
         # Update simple fields
-        if 'assigneeId' in input_data:
-            issue.assigneeId = input_data['assigneeId']
+        if "assigneeId" in input_data:
+            issue.assigneeId = input_data["assigneeId"]
 
-        if 'autoClosedByParentClosing' in input_data:
-            issue.autoClosedByParentClosing = input_data['autoClosedByParentClosing']
+        if "autoClosedByParentClosing" in input_data:
+            issue.autoClosedByParentClosing = input_data["autoClosedByParentClosing"]
 
-        if 'boardOrder' in input_data:
-            issue.boardOrder = float(input_data['boardOrder'])
+        if "boardOrder" in input_data:
+            issue.boardOrder = float(input_data["boardOrder"])
 
-        if 'cycleId' in input_data:
-            issue.cycleId = input_data['cycleId']
+        if "cycleId" in input_data:
+            issue.cycleId = input_data["cycleId"]
 
-        if 'delegateId' in input_data:
-            issue.delegateId = input_data['delegateId']
+        if "delegateId" in input_data:
+            issue.delegateId = input_data["delegateId"]
 
-        if 'description' in input_data:
-            issue.description = input_data['description']
+        if "description" in input_data:
+            issue.description = input_data["description"]
 
-        if 'descriptionData' in input_data:
-            issue.descriptionData = input_data['descriptionData']
+        if "descriptionData" in input_data:
+            issue.descriptionData = input_data["descriptionData"]
 
-        if 'dueDate' in input_data:
-            issue.dueDate = input_data['dueDate']
+        if "dueDate" in input_data:
+            issue.dueDate = input_data["dueDate"]
 
-        if 'estimate' in input_data:
-            issue.estimate = float(input_data['estimate']) if input_data['estimate'] is not None else None
+        if "estimate" in input_data:
+            issue.estimate = (
+                float(input_data["estimate"])
+                if input_data["estimate"] is not None
+                else None
+            )
 
-        if 'lastAppliedTemplateId' in input_data:
-            issue.lastAppliedTemplateId = input_data['lastAppliedTemplateId']
+        if "lastAppliedTemplateId" in input_data:
+            issue.lastAppliedTemplateId = input_data["lastAppliedTemplateId"]
 
-        if 'parentId' in input_data:
-            issue.parentId = input_data['parentId']
+        if "parentId" in input_data:
+            issue.parentId = input_data["parentId"]
 
-        if 'priority' in input_data:
-            issue.priority = float(input_data['priority'])
+        if "priority" in input_data:
+            issue.priority = float(input_data["priority"])
 
-        if 'prioritySortOrder' in input_data:
-            issue.prioritySortOrder = float(input_data['prioritySortOrder'])
+        if "prioritySortOrder" in input_data:
+            issue.prioritySortOrder = float(input_data["prioritySortOrder"])
 
-        if 'projectId' in input_data:
-            issue.projectId = input_data['projectId']
+        if "projectId" in input_data:
+            issue.projectId = input_data["projectId"]
 
-        if 'projectMilestoneId' in input_data:
-            issue.projectMilestoneId = input_data['projectMilestoneId']
+        if "projectMilestoneId" in input_data:
+            issue.projectMilestoneId = input_data["projectMilestoneId"]
 
-        if 'slaBreachesAt' in input_data:
-            issue.slaBreachesAt = input_data['slaBreachesAt']
+        if "slaBreachesAt" in input_data:
+            issue.slaBreachesAt = input_data["slaBreachesAt"]
 
-        if 'slaStartedAt' in input_data:
-            issue.slaStartedAt = input_data['slaStartedAt']
+        if "slaStartedAt" in input_data:
+            issue.slaStartedAt = input_data["slaStartedAt"]
 
-        if 'slaType' in input_data:
-            issue.slaType = input_data['slaType']
+        if "slaType" in input_data:
+            issue.slaType = input_data["slaType"]
 
-        if 'snoozedById' in input_data:
-            issue.snoozedById = input_data['snoozedById']
+        if "snoozedById" in input_data:
+            issue.snoozedById = input_data["snoozedById"]
 
-        if 'snoozedUntilAt' in input_data:
-            issue.snoozedUntilAt = input_data['snoozedUntilAt']
+        if "snoozedUntilAt" in input_data:
+            issue.snoozedUntilAt = input_data["snoozedUntilAt"]
 
-        if 'sortOrder' in input_data:
-            issue.sortOrder = float(input_data['sortOrder'])
+        if "sortOrder" in input_data:
+            issue.sortOrder = float(input_data["sortOrder"])
 
-        if 'stateId' in input_data:
-            issue.stateId = input_data['stateId']
+        if "stateId" in input_data:
+            issue.stateId = input_data["stateId"]
 
-        if 'subIssueSortOrder' in input_data:
-            issue.subIssueSortOrder = float(input_data['subIssueSortOrder']) if input_data['subIssueSortOrder'] is not None else None
+        if "subIssueSortOrder" in input_data:
+            issue.subIssueSortOrder = (
+                float(input_data["subIssueSortOrder"])
+                if input_data["subIssueSortOrder"] is not None
+                else None
+            )
 
-        if 'teamId' in input_data:
-            issue.teamId = input_data['teamId']
+        if "teamId" in input_data:
+            issue.teamId = input_data["teamId"]
 
-        if 'title' in input_data:
-            issue.title = input_data['title']
+        if "title" in input_data:
+            issue.title = input_data["title"]
 
-        if 'trashed' in input_data:
-            issue.trashed = input_data['trashed']
+        if "trashed" in input_data:
+            issue.trashed = input_data["trashed"]
 
         # Always update the updatedAt timestamp
         issue.updatedAt = now
 
-        # Commit the transaction
-
-        # Refresh the issue to get any database-generated values
-
         # Return the payload
-        return {
-            'issue': issue,
-            'success': True,
-            'lastSyncId': float(now.timestamp())
-        }
+        return {"issue": issue, "success": True, "lastSyncId": float(now.timestamp())}
 
     except ValueError as e:
         raise Exception(f"Invalid input for issue update: {str(e)}")
@@ -9199,58 +9389,57 @@ def resolve_issueCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Generate ID if not provided
-        issue_id = input_data.get('id') or str(uuid.uuid4())
+        issue_id = input_data.get("id") or str(uuid.uuid4())
 
         # Extract required fields
-        team_id = input_data['teamId']  # Required field
+        team_id = input_data["teamId"]  # Required field
 
         # Extract optional fields
-        title = input_data.get('title', '')
-        assignee_id = input_data.get('assigneeId')
-        cycle_id = input_data.get('cycleId')
-        delegate_id = input_data.get('delegateId')
-        parent_id = input_data.get('parentId')
-        project_id = input_data.get('projectId')
-        project_milestone_id = input_data.get('projectMilestoneId')
-        state_id = input_data.get('stateId')
-        description = input_data.get('description')
-        description_data = input_data.get('descriptionData')
-        last_applied_template_id = input_data.get('lastAppliedTemplateId')
-        source_comment_id = input_data.get('sourceCommentId')
-        reference_comment_id = input_data.get('referenceCommentId')
+        title = input_data.get("title", "")
+        assignee_id = input_data.get("assigneeId")
+        cycle_id = input_data.get("cycleId")
+        delegate_id = input_data.get("delegateId")
+        parent_id = input_data.get("parentId")
+        project_id = input_data.get("projectId")
+        project_milestone_id = input_data.get("projectMilestoneId")
+        state_id = input_data.get("stateId")
+        description = input_data.get("description")
+        description_data = input_data.get("descriptionData")
+        last_applied_template_id = input_data.get("lastAppliedTemplateId")
+        source_comment_id = input_data.get("sourceCommentId")
+        reference_comment_id = input_data.get("referenceCommentId")
 
         # Date fields
         now = datetime.now(timezone.utc)
-        created_at = input_data.get('createdAt', now)
-        completed_at = input_data.get('completedAt')
-        due_date = input_data.get('dueDate')
+        created_at = input_data.get("createdAt", now)
+        completed_at = input_data.get("completedAt")
+        due_date = input_data.get("dueDate")
 
         # Numeric fields
-        estimate = input_data.get('estimate')
-        priority = input_data.get('priority', 0)  # Default to no priority
-        board_order = input_data.get('boardOrder', 0.0)
-        sort_order = input_data.get('sortOrder', 0.0)
-        sub_issue_sort_order = input_data.get('subIssueSortOrder')
-        priority_sort_order = input_data.get('prioritySortOrder', 0.0)
+        estimate = input_data.get("estimate")
+        priority = input_data.get("priority", 0)  # Default to no priority
+        board_order = input_data.get("boardOrder", 0.0)
+        sort_order = input_data.get("sortOrder", 0.0)
+        sub_issue_sort_order = input_data.get("subIssueSortOrder")
+        priority_sort_order = input_data.get("prioritySortOrder", 0.0)
 
         # Array fields
-        label_ids = input_data.get('labelIds', [])
-        subscriber_ids = input_data.get('subscriberIds', [])
+        label_ids = input_data.get("labelIds", [])
+        subscriber_ids = input_data.get("subscriberIds", [])
 
         # SLA fields
-        sla_type = input_data.get('slaType')
-        sla_breaches_at = input_data.get('slaBreachesAt')
-        sla_started_at = input_data.get('slaStartedAt')
+        sla_type = input_data.get("slaType")
+        sla_breaches_at = input_data.get("slaBreachesAt")
+        sla_started_at = input_data.get("slaStartedAt")
 
         # Special fields
-        create_as_user = input_data.get('createAsUser')  # External user display name
-        display_icon_url = input_data.get('displayIconUrl')  # External user avatar
-        preserve_sort_order = input_data.get('preserveSortOrderOnCreate', False)
+        create_as_user = input_data.get("createAsUser")  # External user display name
+        preserve_sort_order = input_data.get("preserveSortOrderOnCreate", False)
 
         # Create the Issue entity
         issue = Issue(
@@ -9276,38 +9465,32 @@ def resolve_issueCreate(obj, info, **kwargs):
             priority=float(priority),
             boardOrder=float(board_order),
             sortOrder=float(sort_order),
-            subIssueSortOrder=float(sub_issue_sort_order) if sub_issue_sort_order is not None else None,
+            subIssueSortOrder=float(sub_issue_sort_order)
+            if sub_issue_sort_order is not None
+            else None,
             prioritySortOrder=float(priority_sort_order),
             labelIds=label_ids,
             slaType=sla_type,
             slaBreachesAt=sla_breaches_at,
             slaStartedAt=sla_started_at,
             # Default values for required fields that are system-generated
-            branchName='',  # Will be generated based on title
+            branchName="",  # Will be generated based on title
             customerTicketCount=0,
-            identifier='',  # Will be generated based on team + number
+            identifier="",  # Will be generated based on team + number
             number=0.0,  # Will be auto-incremented by the system
-            priorityLabel='',  # Will be derived from priority value
+            priorityLabel="",  # Will be derived from priority value
             reactionData={},
             previousIdentifiers=[],
-            url='',  # Will be generated from identifier
+            url="",  # Will be generated from identifier
             archivedAt=None,
-            trashed=False
+            trashed=False,
         )
 
         # Add to session
         session.add(issue)
 
-        # Commit the transaction
-
-        # Refresh to get any database-generated values
-
         # Return the payload
-        return {
-            'issue': issue,
-            'success': True,
-            'lastSyncId': float(now.timestamp())
-        }
+        return {"issue": issue, "success": True, "lastSyncId": float(now.timestamp())}
 
     except KeyError as e:
         raise Exception(f"Missing required field in issue create: {str(e)}")
@@ -9320,6 +9503,7 @@ def resolve_issueCreate(obj, info, **kwargs):
 # ================================================================================
 # IssueBatch Mutation Resolvers
 # ================================================================================
+
 
 @mutation.field("issueBatchCreate")
 def resolve_issueBatchCreate(obj, info, **kwargs):
@@ -9340,12 +9524,12 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Extract the list of issue inputs
-        issues_input = input_data.get('issues', [])
+        issues_input = input_data.get("issues", [])
 
         if not issues_input:
             raise ValueError("At least one issue must be provided in the batch")
@@ -9356,48 +9540,46 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
         # Create each issue in the batch
         for issue_input in issues_input:
             # Generate ID if not provided
-            issue_id = issue_input.get('id') or str(uuid.uuid4())
+            issue_id = issue_input.get("id") or str(uuid.uuid4())
 
             # Extract required fields
-            team_id = issue_input['teamId']  # Required
-            title = issue_input.get('title', '')  # Default to empty if not provided
+            team_id = issue_input["teamId"]  # Required
+            title = issue_input.get("title", "")  # Default to empty if not provided
 
             # Extract optional fields with defaults
-            assignee_id = issue_input.get('assigneeId')
-            cycle_id = issue_input.get('cycleId')
-            delegate_id = issue_input.get('delegateId')
-            parent_id = issue_input.get('parentId')
-            project_id = issue_input.get('projectId')
-            project_milestone_id = issue_input.get('projectMilestoneId')
-            state_id = issue_input.get('stateId')
-            description = issue_input.get('description')
-            description_data = issue_input.get('descriptionData')
+            assignee_id = issue_input.get("assigneeId")
+            cycle_id = issue_input.get("cycleId")
+            delegate_id = issue_input.get("delegateId")
+            parent_id = issue_input.get("parentId")
+            project_id = issue_input.get("projectId")
+            project_milestone_id = issue_input.get("projectMilestoneId")
+            state_id = issue_input.get("stateId")
+            description = issue_input.get("description")
+            description_data = issue_input.get("descriptionData")
 
             # Date fields
-            created_at = issue_input.get('createdAt', now)
-            completed_at = issue_input.get('completedAt')
-            due_date = issue_input.get('dueDate')
+            created_at = issue_input.get("createdAt", now)
+            completed_at = issue_input.get("completedAt")
+            due_date = issue_input.get("dueDate")
 
             # Numeric fields
-            estimate = issue_input.get('estimate')
-            priority = issue_input.get('priority', 0)  # Default to no priority
-            board_order = issue_input.get('boardOrder', 0.0)
-            sort_order = issue_input.get('sortOrder', 0.0)
-            sub_issue_sort_order = issue_input.get('subIssueSortOrder')
-            priority_sort_order = issue_input.get('prioritySortOrder', 0.0)
+            estimate = issue_input.get("estimate")
+            priority = issue_input.get("priority", 0)  # Default to no priority
+            board_order = issue_input.get("boardOrder", 0.0)
+            sort_order = issue_input.get("sortOrder", 0.0)
+            sub_issue_sort_order = issue_input.get("subIssueSortOrder")
+            priority_sort_order = issue_input.get("prioritySortOrder", 0.0)
 
             # Array fields
-            label_ids = issue_input.get('labelIds', [])
-            subscriber_ids = issue_input.get('subscriberIds', [])
+            label_ids = issue_input.get("labelIds", [])
 
             # SLA fields
-            sla_type = issue_input.get('slaType')
-            sla_breaches_at = issue_input.get('slaBreachesAt')
-            sla_started_at = issue_input.get('slaStartedAt')
+            sla_type = issue_input.get("slaType")
+            sla_breaches_at = issue_input.get("slaBreachesAt")
+            sla_started_at = issue_input.get("slaStartedAt")
 
             # Comment references
-            source_comment_id = issue_input.get('sourceCommentId')
-            reference_comment_id = issue_input.get('referenceCommentId')
+            source_comment_id = issue_input.get("sourceCommentId")
 
             # Create the Issue entity
             issue = Issue(
@@ -9421,7 +9603,9 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
                 priority=float(priority),
                 boardOrder=float(board_order),
                 sortOrder=float(sort_order),
-                subIssueSortOrder=float(sub_issue_sort_order) if sub_issue_sort_order is not None else None,
+                subIssueSortOrder=float(sub_issue_sort_order)
+                if sub_issue_sort_order is not None
+                else None,
                 prioritySortOrder=float(priority_sort_order),
                 labelIds=label_ids,
                 slaType=sla_type,
@@ -9429,16 +9613,20 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
                 slaStartedAt=sla_started_at,
                 sourceCommentId=source_comment_id,
                 # Default values for required fields
-                branchName=issue_input.get('branchName', ''),
+                branchName=issue_input.get("branchName", ""),
                 customerTicketCount=0,
-                identifier=issue_input.get('identifier', ''),  # This should be generated by the system
-                number=issue_input.get('number', 0.0),  # This should be generated by the system
-                priorityLabel=issue_input.get('priorityLabel', ''),
+                identifier=issue_input.get(
+                    "identifier", ""
+                ),  # This should be generated by the system
+                number=issue_input.get(
+                    "number", 0.0
+                ),  # This should be generated by the system
+                priorityLabel=issue_input.get("priorityLabel", ""),
                 reactionData={},
                 previousIdentifiers=[],
-                url=issue_input.get('url', ''),
+                url=issue_input.get("url", ""),
                 archivedAt=None,
-                trashed=False
+                trashed=False,
             )
 
             # Add to session
@@ -9447,9 +9635,9 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
 
         # Return the payload
         return {
-            'issues': created_issues,
-            'success': True,
-            'lastSyncId': float(datetime.now(timezone.utc).timestamp())
+            "issues": created_issues,
+            "success": True,
+            "lastSyncId": float(datetime.now(timezone.utc).timestamp()),
         }
 
     except KeyError as e:
@@ -9479,9 +9667,9 @@ def resolve_issueBatchUpdate(obj, info, **kwargs):
             - lastSyncId: Float (sync operation identifier)
     """
 
-    session: Session = info.context['session']
-    ids = kwargs.get('ids', [])
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    ids = kwargs.get("ids", [])
+    input_data = kwargs.get("input", {})
 
     try:
         # Validate input
@@ -9508,8 +9696,8 @@ def resolve_issueBatchUpdate(obj, info, **kwargs):
         # Update each issue with the provided fields
         for issue in issues:
             # Handle label updates (addedLabelIds and removedLabelIds)
-            if 'addedLabelIds' in input_data:
-                added_labels = input_data['addedLabelIds']
+            if "addedLabelIds" in input_data:
+                added_labels = input_data["addedLabelIds"]
                 current_labels = issue.labelIds if issue.labelIds else []
                 # Add new labels that aren't already present
                 for label_id in added_labels:
@@ -9517,110 +9705,122 @@ def resolve_issueBatchUpdate(obj, info, **kwargs):
                         current_labels.append(label_id)
                 issue.labelIds = current_labels
 
-            if 'removedLabelIds' in input_data:
-                removed_labels = input_data['removedLabelIds']
+            if "removedLabelIds" in input_data:
+                removed_labels = input_data["removedLabelIds"]
                 current_labels = issue.labelIds if issue.labelIds else []
                 # Remove labels
-                issue.labelIds = [lid for lid in current_labels if lid not in removed_labels]
+                issue.labelIds = [
+                    lid for lid in current_labels if lid not in removed_labels
+                ]
 
             # Handle labelIds (direct replacement)
-            if 'labelIds' in input_data:
-                issue.labelIds = input_data['labelIds']
+            if "labelIds" in input_data:
+                issue.labelIds = input_data["labelIds"]
 
             # Handle subscriberIds (direct replacement)
-            if 'subscriberIds' in input_data:
+            if "subscriberIds" in input_data:
                 # This would need to update the association table
                 # For now, we'll skip this as it requires relationship handling
                 pass
 
             # Update simple fields
-            if 'assigneeId' in input_data:
-                issue.assigneeId = input_data['assigneeId']
+            if "assigneeId" in input_data:
+                issue.assigneeId = input_data["assigneeId"]
 
-            if 'autoClosedByParentClosing' in input_data:
-                issue.autoClosedByParentClosing = input_data['autoClosedByParentClosing']
+            if "autoClosedByParentClosing" in input_data:
+                issue.autoClosedByParentClosing = input_data[
+                    "autoClosedByParentClosing"
+                ]
 
-            if 'boardOrder' in input_data:
-                issue.boardOrder = float(input_data['boardOrder'])
+            if "boardOrder" in input_data:
+                issue.boardOrder = float(input_data["boardOrder"])
 
-            if 'cycleId' in input_data:
-                issue.cycleId = input_data['cycleId']
+            if "cycleId" in input_data:
+                issue.cycleId = input_data["cycleId"]
 
-            if 'delegateId' in input_data:
-                issue.delegateId = input_data['delegateId']
+            if "delegateId" in input_data:
+                issue.delegateId = input_data["delegateId"]
 
-            if 'description' in input_data:
-                issue.description = input_data['description']
+            if "description" in input_data:
+                issue.description = input_data["description"]
 
-            if 'descriptionData' in input_data:
-                issue.descriptionData = input_data['descriptionData']
+            if "descriptionData" in input_data:
+                issue.descriptionData = input_data["descriptionData"]
 
-            if 'dueDate' in input_data:
-                issue.dueDate = input_data['dueDate']
+            if "dueDate" in input_data:
+                issue.dueDate = input_data["dueDate"]
 
-            if 'estimate' in input_data:
-                issue.estimate = float(input_data['estimate']) if input_data['estimate'] is not None else None
+            if "estimate" in input_data:
+                issue.estimate = (
+                    float(input_data["estimate"])
+                    if input_data["estimate"] is not None
+                    else None
+                )
 
-            if 'lastAppliedTemplateId' in input_data:
+            if "lastAppliedTemplateId" in input_data:
                 # This field exists in the Issue model
-                issue.lastAppliedTemplateId = input_data['lastAppliedTemplateId']
+                issue.lastAppliedTemplateId = input_data["lastAppliedTemplateId"]
 
-            if 'parentId' in input_data:
-                issue.parentId = input_data['parentId']
+            if "parentId" in input_data:
+                issue.parentId = input_data["parentId"]
 
-            if 'priority' in input_data:
-                issue.priority = float(input_data['priority'])
+            if "priority" in input_data:
+                issue.priority = float(input_data["priority"])
 
-            if 'prioritySortOrder' in input_data:
-                issue.prioritySortOrder = float(input_data['prioritySortOrder'])
+            if "prioritySortOrder" in input_data:
+                issue.prioritySortOrder = float(input_data["prioritySortOrder"])
 
-            if 'projectId' in input_data:
-                issue.projectId = input_data['projectId']
+            if "projectId" in input_data:
+                issue.projectId = input_data["projectId"]
 
-            if 'projectMilestoneId' in input_data:
-                issue.projectMilestoneId = input_data['projectMilestoneId']
+            if "projectMilestoneId" in input_data:
+                issue.projectMilestoneId = input_data["projectMilestoneId"]
 
-            if 'slaBreachesAt' in input_data:
-                issue.slaBreachesAt = input_data['slaBreachesAt']
+            if "slaBreachesAt" in input_data:
+                issue.slaBreachesAt = input_data["slaBreachesAt"]
 
-            if 'slaStartedAt' in input_data:
-                issue.slaStartedAt = input_data['slaStartedAt']
+            if "slaStartedAt" in input_data:
+                issue.slaStartedAt = input_data["slaStartedAt"]
 
-            if 'slaType' in input_data:
-                issue.slaType = input_data['slaType']
+            if "slaType" in input_data:
+                issue.slaType = input_data["slaType"]
 
-            if 'snoozedById' in input_data:
-                issue.snoozedById = input_data['snoozedById']
+            if "snoozedById" in input_data:
+                issue.snoozedById = input_data["snoozedById"]
 
-            if 'snoozedUntilAt' in input_data:
-                issue.snoozedUntilAt = input_data['snoozedUntilAt']
+            if "snoozedUntilAt" in input_data:
+                issue.snoozedUntilAt = input_data["snoozedUntilAt"]
 
-            if 'sortOrder' in input_data:
-                issue.sortOrder = float(input_data['sortOrder'])
+            if "sortOrder" in input_data:
+                issue.sortOrder = float(input_data["sortOrder"])
 
-            if 'stateId' in input_data:
-                issue.stateId = input_data['stateId']
+            if "stateId" in input_data:
+                issue.stateId = input_data["stateId"]
 
-            if 'subIssueSortOrder' in input_data:
-                issue.subIssueSortOrder = float(input_data['subIssueSortOrder']) if input_data['subIssueSortOrder'] is not None else None
+            if "subIssueSortOrder" in input_data:
+                issue.subIssueSortOrder = (
+                    float(input_data["subIssueSortOrder"])
+                    if input_data["subIssueSortOrder"] is not None
+                    else None
+                )
 
-            if 'teamId' in input_data:
-                issue.teamId = input_data['teamId']
+            if "teamId" in input_data:
+                issue.teamId = input_data["teamId"]
 
-            if 'title' in input_data:
-                issue.title = input_data['title']
+            if "title" in input_data:
+                issue.title = input_data["title"]
 
-            if 'trashed' in input_data:
-                issue.trashed = input_data['trashed']
+            if "trashed" in input_data:
+                issue.trashed = input_data["trashed"]
 
             # Always update the updatedAt timestamp
             issue.updatedAt = now
 
         # Return the payload
         return {
-            'issues': issues,
-            'success': True,
-            'lastSyncId': float(datetime.now(timezone.utc).timestamp())
+            "issues": issues,
+            "success": True,
+            "lastSyncId": float(datetime.now(timezone.utc).timestamp()),
         }
 
     except ValueError as e:
@@ -9648,9 +9848,9 @@ def resolve_issueDescriptionUpdateFromFront(obj, info, **kwargs):
             - lastSyncId: Float (sync operation identifier)
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    description = kwargs.get('description')
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    description = kwargs.get("description")
 
     try:
         # Validate required arguments
@@ -9673,16 +9873,8 @@ def resolve_issueDescriptionUpdateFromFront(obj, info, **kwargs):
         now = datetime.now(timezone.utc)
         issue.updatedAt = now
 
-        # Commit the transaction
-
-        # Refresh the issue to get updated state
-
         # Return the payload
-        return {
-            'issue': issue,
-            'success': True,
-            'lastSyncId': float(now.timestamp())
-        }
+        return {"issue": issue, "success": True, "lastSyncId": float(now.timestamp())}
 
     except ValueError as e:
         raise Exception(f"Invalid input for issue description update: {str(e)}")
@@ -9705,8 +9897,8 @@ def resolve_issueExternalSyncDisable(obj, info, **kwargs):
         The Issue entity that the attachment belonged to
     """
 
-    session: Session = info.context['session']
-    attachment_id = kwargs.get('attachmentId')
+    session: Session = info.context["session"]
+    attachment_id = kwargs.get("attachmentId")
 
     try:
         # Validate required argument
@@ -9735,11 +9927,6 @@ def resolve_issueExternalSyncDisable(obj, info, **kwargs):
         # Update the issue's timestamp as well since its sync status changed
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Refresh the issue to get updated state
-
-        # Return the issue
         return issue
 
     except ValueError as e:
@@ -9751,6 +9938,7 @@ def resolve_issueExternalSyncDisable(obj, info, **kwargs):
 # ================================================================================
 # IssueImport Mutation Resolvers
 # ================================================================================
+
 
 @mutation.field("issueImportCreateAsana")
 def resolve_issueImportCreateAsana(obj, info, **kwargs):
@@ -9775,12 +9963,12 @@ def resolve_issueImportCreateAsana(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Validate required arguments
-        asana_team_name = kwargs.get('asanaTeamName')
-        asana_token = kwargs.get('asanaToken')
+        asana_team_name = kwargs.get("asanaTeamName")
+        asana_token = kwargs.get("asanaToken")
 
         if not asana_team_name:
             raise ValueError("asanaTeamName is required")
@@ -9788,40 +9976,38 @@ def resolve_issueImportCreateAsana(obj, info, **kwargs):
             raise ValueError("asanaToken is required")
 
         # Get optional arguments
-        import_id = kwargs.get('id') or str(uuid.uuid4())
-        include_closed = kwargs.get('includeClosedIssues', False)
-        instant_process = kwargs.get('instantProcess', False)
-        team_id = kwargs.get('teamId')
-        team_name = kwargs.get('teamName')
+        import_id = kwargs.get("id") or str(uuid.uuid4())
+        include_closed = kwargs.get("includeClosedIssues", False)
+        instant_process = kwargs.get("instantProcess", False)
+        team_id = kwargs.get("teamId")
+        team_name = kwargs.get("teamName")
 
         # Create the import job
         now = datetime.now(timezone.utc)
 
         # Prepare service metadata
         service_metadata = {
-            'asanaTeamName': asana_team_name,
-            'includeClosedIssues': include_closed,
-            'instantProcess': instant_process,
+            "asanaTeamName": asana_team_name,
+            "includeClosedIssues": include_closed,
+            "instantProcess": instant_process,
         }
         if team_id:
-            service_metadata['teamId'] = team_id
+            service_metadata["teamId"] = team_id
 
         issue_import = IssueImport(
             id=import_id,
             createdAt=now,
             updatedAt=now,
-            service='asana',
-            displayName=f'Asana Import - {asana_team_name}',
-            status='pending',
+            service="asana",
+            displayName=f"Asana Import - {asana_team_name}",
+            status="pending",
             progress=0.0,
             serviceMetadata=service_metadata,
-            teamName=team_name
+            teamName=team_name,
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -9854,12 +10040,12 @@ def resolve_issueImportCreateClubhouse(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Validate required arguments
-        clubhouse_group_name = kwargs.get('clubhouseGroupName')
-        clubhouse_token = kwargs.get('clubhouseToken')
+        clubhouse_group_name = kwargs.get("clubhouseGroupName")
+        clubhouse_token = kwargs.get("clubhouseToken")
 
         if not clubhouse_group_name:
             raise ValueError("clubhouseGroupName is required")
@@ -9867,40 +10053,37 @@ def resolve_issueImportCreateClubhouse(obj, info, **kwargs):
             raise ValueError("clubhouseToken is required")
 
         # Get optional arguments
-        import_id = kwargs.get('id') or str(uuid.uuid4())
-        include_closed = kwargs.get('includeClosedIssues', False)
-        instant_process = kwargs.get('instantProcess', False)
-        team_id = kwargs.get('teamId')
-        team_name = kwargs.get('teamName')
+        import_id = kwargs.get("id") or str(uuid.uuid4())
+        include_closed = kwargs.get("includeClosedIssues", False)
+        instant_process = kwargs.get("instantProcess", False)
+        team_id = kwargs.get("teamId")
+        team_name = kwargs.get("teamName")
 
         # Create the import job
         now = datetime.now(timezone.utc)
 
         # Prepare service metadata
         service_metadata = {
-            'clubhouseGroupName': clubhouse_group_name,
-            'includeClosedIssues': include_closed,
-            'instantProcess': instant_process,
+            "clubhouseGroupName": clubhouse_group_name,
+            "includeClosedIssues": include_closed,
+            "instantProcess": instant_process,
         }
         if team_id:
-            service_metadata['teamId'] = team_id
+            service_metadata["teamId"] = team_id
 
         issue_import = IssueImport(
             id=import_id,
             createdAt=now,
             updatedAt=now,
-            service='clubhouse',
-            displayName=f'Shortcut Import - {clubhouse_group_name}',
-            status='pending',
+            service="clubhouse",
+            displayName=f"Shortcut Import - {clubhouse_group_name}",
+            status="pending",
             progress=0.0,
             serviceMetadata=service_metadata,
-            teamName=team_name
+            teamName=team_name,
         )
 
-        # Add to session and commit
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -9932,20 +10115,20 @@ def resolve_issueImportCreateCSVJira(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Validate required arguments
-        csv_url = kwargs.get('csvUrl')
+        csv_url = kwargs.get("csvUrl")
         if not csv_url:
             raise ValueError("csvUrl is required")
 
         # Get optional arguments
-        jira_email = kwargs.get('jiraEmail')
-        jira_hostname = kwargs.get('jiraHostname')
-        jira_token = kwargs.get('jiraToken')
-        team_id = kwargs.get('teamId')
-        team_name = kwargs.get('teamName')
+        jira_email = kwargs.get("jiraEmail")
+        jira_hostname = kwargs.get("jiraHostname")
+        jira_token = kwargs.get("jiraToken")
+        team_id = kwargs.get("teamId")
+        team_name = kwargs.get("teamName")
 
         # Generate ID
         import_id = str(uuid.uuid4())
@@ -9955,39 +10138,36 @@ def resolve_issueImportCreateCSVJira(obj, info, **kwargs):
 
         # Prepare service metadata
         service_metadata = {
-            'csvUrl': csv_url,
+            "csvUrl": csv_url,
         }
         if jira_email:
-            service_metadata['jiraEmail'] = jira_email
+            service_metadata["jiraEmail"] = jira_email
         if jira_hostname:
-            service_metadata['jiraHostname'] = jira_hostname
+            service_metadata["jiraHostname"] = jira_hostname
         if jira_token:
-            service_metadata['jiraToken'] = jira_token
+            service_metadata["jiraToken"] = jira_token
         if team_id:
-            service_metadata['teamId'] = team_id
+            service_metadata["teamId"] = team_id
 
         # Determine display name based on available info
-        display_name = 'Jira CSV Import'
+        display_name = "Jira CSV Import"
         if jira_hostname:
-            display_name = f'Jira CSV Import - {jira_hostname}'
+            display_name = f"Jira CSV Import - {jira_hostname}"
 
         issue_import = IssueImport(
             id=import_id,
             createdAt=now,
             updatedAt=now,
-            service='jira',
+            service="jira",
             displayName=display_name,
-            status='pending',
+            status="pending",
             progress=0.0,
             csvFileUrl=csv_url,
             serviceMetadata=service_metadata,
-            teamName=team_name
+            teamName=team_name,
         )
 
-        # Add to session and commit
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10021,16 +10201,16 @@ def resolve_issueImportCreateGithub(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Get optional arguments
-        github_labels = kwargs.get('githubLabels', [])
-        github_repo_ids = kwargs.get('githubRepoIds', [])
-        include_closed = kwargs.get('includeClosedIssues', False)
-        instant_process = kwargs.get('instantProcess', False)
-        team_id = kwargs.get('teamId')
-        team_name = kwargs.get('teamName')
+        github_labels = kwargs.get("githubLabels", [])
+        github_repo_ids = kwargs.get("githubRepoIds", [])
+        include_closed = kwargs.get("includeClosedIssues", False)
+        instant_process = kwargs.get("instantProcess", False)
+        team_id = kwargs.get("teamId")
+        team_name = kwargs.get("teamName")
 
         # Generate ID
         import_id = str(uuid.uuid4())
@@ -10040,38 +10220,36 @@ def resolve_issueImportCreateGithub(obj, info, **kwargs):
 
         # Prepare service metadata
         service_metadata = {
-            'includeClosedIssues': include_closed,
-            'instantProcess': instant_process,
+            "includeClosedIssues": include_closed,
+            "instantProcess": instant_process,
         }
         if github_labels:
-            service_metadata['githubLabels'] = github_labels
+            service_metadata["githubLabels"] = github_labels
         if github_repo_ids:
-            service_metadata['githubRepoIds'] = github_repo_ids
+            service_metadata["githubRepoIds"] = github_repo_ids
         if team_id:
-            service_metadata['teamId'] = team_id
+            service_metadata["teamId"] = team_id
 
         # Determine display name based on available info
-        display_name = 'GitHub Import'
+        display_name = "GitHub Import"
         if github_repo_ids:
             repo_count = len(github_repo_ids)
-            display_name = f'GitHub Import - {repo_count} repositor{"y" if repo_count == 1 else "ies"}'
+            display_name = f"GitHub Import - {repo_count} repositor{'y' if repo_count == 1 else 'ies'}"
 
         issue_import = IssueImport(
             id=import_id,
             createdAt=now,
             updatedAt=now,
-            service='github',
+            service="github",
             displayName=display_name,
-            status='pending',
+            status="pending",
             progress=0.0,
             serviceMetadata=service_metadata,
-            teamName=team_name
+            teamName=team_name,
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10107,14 +10285,14 @@ def resolve_issueImportCreateJira(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Validate required arguments
-        jira_email = kwargs.get('jiraEmail')
-        jira_hostname = kwargs.get('jiraHostname')
-        jira_project = kwargs.get('jiraProject')
-        jira_token = kwargs.get('jiraToken')
+        jira_email = kwargs.get("jiraEmail")
+        jira_hostname = kwargs.get("jiraHostname")
+        jira_project = kwargs.get("jiraProject")
+        jira_token = kwargs.get("jiraToken")
 
         if not jira_email:
             raise ValueError("jiraEmail is required")
@@ -10126,45 +10304,43 @@ def resolve_issueImportCreateJira(obj, info, **kwargs):
             raise ValueError("jiraToken is required")
 
         # Get optional arguments
-        import_id = kwargs.get('id') or str(uuid.uuid4())
-        include_closed = kwargs.get('includeClosedIssues', False)
-        instant_process = kwargs.get('instantProcess', False)
-        jql = kwargs.get('jql')
-        team_id = kwargs.get('teamId')
-        team_name = kwargs.get('teamName')
+        import_id = kwargs.get("id") or str(uuid.uuid4())
+        include_closed = kwargs.get("includeClosedIssues", False)
+        instant_process = kwargs.get("instantProcess", False)
+        jql = kwargs.get("jql")
+        team_id = kwargs.get("teamId")
+        team_name = kwargs.get("teamName")
 
         # Create the import job
         now = datetime.now(timezone.utc)
 
         # Prepare service metadata
         service_metadata = {
-            'jiraEmail': jira_email,
-            'jiraHostname': jira_hostname,
-            'jiraProject': jira_project,
-            'includeClosedIssues': include_closed,
-            'instantProcess': instant_process,
+            "jiraEmail": jira_email,
+            "jiraHostname": jira_hostname,
+            "jiraProject": jira_project,
+            "includeClosedIssues": include_closed,
+            "instantProcess": instant_process,
         }
         if jql:
-            service_metadata['jql'] = jql
+            service_metadata["jql"] = jql
         if team_id:
-            service_metadata['teamId'] = team_id
+            service_metadata["teamId"] = team_id
 
         issue_import = IssueImport(
             id=import_id,
             createdAt=now,
             updatedAt=now,
-            service='jira',
-            displayName=f'Jira Import - {jira_project}',
-            status='pending',
+            service="jira",
+            displayName=f"Jira Import - {jira_project}",
+            status="pending",
             progress=0.0,
             serviceMetadata=service_metadata,
-            teamName=team_name
+            teamName=team_name,
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10191,41 +10367,38 @@ def resolve_issueImportCreateLinearV2(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Validate required arguments
-        source_org_id = kwargs.get('linearSourceOrganizationId')
+        source_org_id = kwargs.get("linearSourceOrganizationId")
 
         if not source_org_id:
             raise ValueError("linearSourceOrganizationId is required")
 
         # Get optional arguments
-        import_id = kwargs.get('id') or str(uuid.uuid4())
+        import_id = kwargs.get("id") or str(uuid.uuid4())
 
         # Create the import job
         now = datetime.now(timezone.utc)
 
         # Prepare service metadata
         service_metadata = {
-            'linearSourceOrganizationId': source_org_id,
+            "linearSourceOrganizationId": source_org_id,
         }
 
         issue_import = IssueImport(
             id=import_id,
             createdAt=now,
             updatedAt=now,
-            service='linearV2',
-            displayName=f'Linear Import - {source_org_id}',
-            status='pending',
+            service="linearV2",
+            displayName=f"Linear Import - {source_org_id}",
+            status="pending",
             progress=0.0,
             serviceMetadata=service_metadata,
         )
 
-        # Add to session and commit
         session.add(issue_import)
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10251,12 +10424,12 @@ def resolve_issueImportProcess(obj, info, **kwargs):
         IssueImport entity representing the import job being processed
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Validate required arguments
-        issue_import_id = kwargs.get('issueImportId')
-        mapping = kwargs.get('mapping')
+        issue_import_id = kwargs.get("issueImportId")
+        mapping = kwargs.get("mapping")
 
         if not issue_import_id:
             raise ValueError("issueImportId is required")
@@ -10271,13 +10444,9 @@ def resolve_issueImportProcess(obj, info, **kwargs):
 
         # Update the import job with the mapping configuration
         issue_import.mapping = mapping
-        issue_import.status = 'processing'
+        issue_import.status = "processing"
         issue_import.updatedAt = datetime.now(timezone.utc)
         issue_import.progress = 0.0
-
-        # Commit the changes
-
-        # Refresh to get the latest state
 
         return issue_import
 
@@ -10301,9 +10470,9 @@ def resolve_issueReminder(obj, info, **kwargs):
         IssuePayload with success status and the updated issue entity
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    reminder_at = kwargs.get('reminderAt')
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    reminder_at = kwargs.get("reminderAt")
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -10321,15 +10490,11 @@ def resolve_issueReminder(obj, info, **kwargs):
         issue.reminderAt = reminder_at
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Refresh to get the latest state
-
         # Return the payload
         return {
-            'success': True,
-            'issue': issue,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "issue": issue,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -10351,10 +10516,10 @@ def resolve_issueSubscribe(obj, info, **kwargs):
         The updated issue (IssuePayload!)
     """
 
-    session: Session = info.context['session']
-    issue_id = kwargs.get('id')
-    user_email = kwargs.get('userEmail')
-    user_id = kwargs.get('userId')
+    session: Session = info.context["session"]
+    issue_id = kwargs.get("id")
+    user_email = kwargs.get("userEmail")
+    user_id = kwargs.get("userId")
 
     if not issue_id:
         raise Exception("Issue ID is required")
@@ -10396,10 +10561,6 @@ def resolve_issueSubscribe(obj, info, **kwargs):
         # Update the updatedAt timestamp
         issue.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Refresh to get the latest state
-
         # Return the updated issue
         return issue
 
@@ -10422,20 +10583,20 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
-    replace_team_labels = kwargs.get('replaceTeamLabels', False)
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
+    replace_team_labels = kwargs.get("replaceTeamLabels", False)
 
     try:
         # Extract input fields
-        label_id = input_data.get('id') or str(uuid.uuid4())
-        name = input_data.get('name')
-        color = input_data.get('color', '#000000')  # Default to black if not provided
-        description = input_data.get('description')
-        is_group = input_data.get('isGroup', False)
-        parent_id = input_data.get('parentId')
-        retired_at = input_data.get('retiredAt')
-        team_id = input_data.get('teamId')
+        label_id = input_data.get("id") or str(uuid.uuid4())
+        name = input_data.get("name")
+        color = input_data.get("color", "#000000")  # Default to black if not provided
+        description = input_data.get("description")
+        is_group = input_data.get("isGroup", False)
+        parent_id = input_data.get("parentId")
+        retired_at = input_data.get("retiredAt")
+        team_id = input_data.get("teamId")
 
         # Validate required fields
         if not name:
@@ -10452,13 +10613,17 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
             organization_id = team.organizationId
         else:
             # For workspace-level labels, get organization from authenticated user
-            user_id = info.context.get('user_id')
+            user_id = info.context.get("user_id")
             if not user_id:
-                raise Exception("No authenticated user found. Please provide authentication credentials.")
+                raise Exception(
+                    "No authenticated user found. Please provide authentication credentials."
+                )
 
             user = session.query(User).filter(User.id == user_id).first()
             if not user:
-                raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+                raise Exception(
+                    f"Authenticated user with id '{user_id}' not found in database"
+                )
 
             organization_id = user.organizationId
             if not organization_id:
@@ -10482,7 +10647,7 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
             updatedAt=now,
         )
 
-        # Add to session and commit
+        # Add to session
         session.add(issue_label)
 
         # Handle replaceTeamLabels if requested
@@ -10490,11 +10655,15 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
         # with this newly created workspace label
         if replace_team_labels and not team_id:
             # Find all team-specific labels with the same name
-            team_labels = session.query(IssueLabel).filter(
-                IssueLabel.name == name,
-                IssueLabel.teamId.isnot(None),
-                IssueLabel.organizationId == organization_id
-            ).all()
+            team_labels = (
+                session.query(IssueLabel)
+                .filter(
+                    IssueLabel.name == name,
+                    IssueLabel.teamId.isnot(None),
+                    IssueLabel.organizationId == organization_id,
+                )
+                .all()
+            )
 
             # Update issues using those labels to use the new workspace label instead
             for team_label in team_labels:
@@ -10530,10 +10699,10 @@ def resolve_issueLabelUpdate(obj, info, **kwargs):
         IssueLabel: The updated IssueLabel entity
     """
 
-    session: Session = info.context['session']
-    label_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
-    replace_team_labels = kwargs.get('replaceTeamLabels', False)
+    session: Session = info.context["session"]
+    label_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
+    replace_team_labels = kwargs.get("replaceTeamLabels", False)
 
     try:
         # Validate required field
@@ -10550,40 +10719,42 @@ def resolve_issueLabelUpdate(obj, info, **kwargs):
         original_team_id = issue_label.teamId
 
         # Update fields if provided in input
-        if 'color' in input_data:
-            issue_label.color = input_data['color']
+        if "color" in input_data:
+            issue_label.color = input_data["color"]
 
-        if 'description' in input_data:
-            issue_label.description = input_data['description']
+        if "description" in input_data:
+            issue_label.description = input_data["description"]
 
-        if 'isGroup' in input_data:
-            issue_label.isGroup = input_data['isGroup']
+        if "isGroup" in input_data:
+            issue_label.isGroup = input_data["isGroup"]
 
-        if 'name' in input_data:
-            issue_label.name = input_data['name']
+        if "name" in input_data:
+            issue_label.name = input_data["name"]
 
-        if 'parentId' in input_data:
-            issue_label.parentId = input_data['parentId']
+        if "parentId" in input_data:
+            issue_label.parentId = input_data["parentId"]
 
-        if 'retiredAt' in input_data:
-            issue_label.retiredAt = input_data['retiredAt']
+        if "retiredAt" in input_data:
+            issue_label.retiredAt = input_data["retiredAt"]
 
         # Update timestamp
         now = datetime.now(timezone.utc)
         issue_label.updatedAt = now
 
-        # Commit the update
-
         # Handle replaceTeamLabels if requested
         # This replaces all team-specific labels with the same name with this updated workspace label
         if replace_team_labels and issue_label.teamId is None:
             # Find all team-specific labels with the same name
-            team_labels = session.query(IssueLabel).filter(
-                IssueLabel.name == issue_label.name,
-                IssueLabel.teamId.isnot(None),
-                IssueLabel.organizationId == issue_label.organizationId,
-                IssueLabel.id != issue_label.id  # Exclude the current label
-            ).all()
+            team_labels = (
+                session.query(IssueLabel)
+                .filter(
+                    IssueLabel.name == issue_label.name,
+                    IssueLabel.teamId.isnot(None),
+                    IssueLabel.organizationId == issue_label.organizationId,
+                    IssueLabel.id != issue_label.id,  # Exclude the current label
+                )
+                .all()
+            )
 
             # Update issues using those labels to use the workspace label instead
             for team_label in team_labels:
@@ -10619,8 +10790,8 @@ def resolve_issueLabelDelete(obj, info, **kwargs):
         Dict: DeletePayload with success status and entityId
     """
 
-    session: Session = info.context['session']
-    label_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    label_id = kwargs.get("id")
 
     try:
         # Validate required field
@@ -10637,13 +10808,11 @@ def resolve_issueLabelDelete(obj, info, **kwargs):
         issue_label.archivedAt = now
         issue_label.updatedAt = now
 
-        # Commit the transaction
-
         # Return DeletePayload
         return {
-            'success': True,
-            'entityId': label_id,
-            'lastSyncId': 0.0  # This would be managed by Linear's sync system
+            "success": True,
+            "entityId": label_id,
+            "lastSyncId": 0.0,  # This would be managed by Linear's sync system
         }
 
     except Exception as e:
@@ -10653,6 +10822,7 @@ def resolve_issueLabelDelete(obj, info, **kwargs):
 # ============================================================================
 # IssueRelation Mutations
 # ============================================================================
+
 
 @mutation.field("issueRelationCreate")
 def resolve_issueRelationCreate(obj, info, **kwargs):
@@ -10669,16 +10839,16 @@ def resolve_issueRelationCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
-    override_created_at = kwargs.get('overrideCreatedAt')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
+    override_created_at = kwargs.get("overrideCreatedAt")
 
     try:
         # Extract input fields
-        issue_relation_id = input_data.get('id') or str(uuid.uuid4())
-        issue_id = input_data['issueId']  # Required
-        related_issue_id = input_data['relatedIssueId']  # Required
-        relation_type = input_data['type']  # Required
+        issue_relation_id = input_data.get("id") or str(uuid.uuid4())
+        issue_id = input_data["issueId"]  # Required
+        related_issue_id = input_data["relatedIssueId"]  # Required
+        relation_type = input_data["type"]  # Required
 
         # Generate timestamps
         now = override_created_at if override_created_at else datetime.now(timezone.utc)
@@ -10691,14 +10861,13 @@ def resolve_issueRelationCreate(obj, info, **kwargs):
             type=relation_type,
             createdAt=now,
             updatedAt=now,
-            archivedAt=None
+            archivedAt=None,
         )
 
-        # Add to session and commit
         session.add(issue_relation)
 
-        # Return the created entity (Ariadne will handle wrapping in IssueRelationPayload)
-        return issue_relation
+        # Return the proper IssueRelationPayload structure
+        return {"success": True, "lastSyncId": 0.0, "issueRelation": issue_relation}
 
     except KeyError as e:
         raise Exception(f"Missing required field: {str(e)}")
@@ -10720,9 +10889,9 @@ def resolve_issueRelationUpdate(obj, info, **kwargs):
         The updated IssueRelation entity
     """
 
-    session: Session = info.context['session']
-    relation_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    relation_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     if not relation_id:
         raise Exception("Missing required field: id")
@@ -10735,22 +10904,20 @@ def resolve_issueRelationUpdate(obj, info, **kwargs):
             raise Exception(f"IssueRelation with id '{relation_id}' not found")
 
         # Update fields if provided in input
-        if 'issueId' in input_data:
-            issue_relation.issueId = input_data['issueId']
+        if "issueId" in input_data:
+            issue_relation.issueId = input_data["issueId"]
 
-        if 'relatedIssueId' in input_data:
-            issue_relation.relatedIssueId = input_data['relatedIssueId']
+        if "relatedIssueId" in input_data:
+            issue_relation.relatedIssueId = input_data["relatedIssueId"]
 
-        if 'type' in input_data:
-            issue_relation.type = input_data['type']
+        if "type" in input_data:
+            issue_relation.type = input_data["type"]
 
         # Always update the updatedAt timestamp
         issue_relation.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated entity (Ariadne will handle wrapping in IssueRelationPayload)
-        return issue_relation
+        # Return the proper IssueRelationPayload structure
+        return {"success": True, "lastSyncId": 0.0, "issueRelation": issue_relation}
 
     except Exception as e:
         raise Exception(f"Failed to update issue relation: {str(e)}")
@@ -10770,26 +10937,18 @@ def resolve_issueRelationDelete(obj, info, **kwargs):
         DeletePayload with success status and entityId
     """
 
-    session: Session = info.context['session']
-    relation_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    relation_id = kwargs.get("id")
 
     if not relation_id:
-        return {
-            'success': False,
-            'entityId': '',
-            'lastSyncId': 0.0
-        }
+        return {"success": False, "entityId": "", "lastSyncId": 0.0}
 
     try:
         # Query for the issue relation
         issue_relation = session.query(IssueRelation).filter_by(id=relation_id).first()
 
         if not issue_relation:
-            return {
-                'success': False,
-                'entityId': relation_id,
-                'lastSyncId': 0.0
-            }
+            return {"success": False, "entityId": relation_id, "lastSyncId": 0.0}
 
         # Soft delete by setting archivedAt timestamp
         issue_relation.archivedAt = datetime.now(timezone.utc)
@@ -10797,9 +10956,9 @@ def resolve_issueRelationDelete(obj, info, **kwargs):
 
         # Return success payload
         return {
-            'success': True,
-            'entityId': relation_id,
-            'lastSyncId': 0.0  # This would typically be incremented from a sync counter
+            "success": True,
+            "entityId": relation_id,
+            "lastSyncId": 0.0,  # This would typically be incremented from a sync counter
         }
 
     except Exception as e:
@@ -10819,13 +10978,11 @@ def resolve_userPromoteAdmin(obj, info, **kwargs):
     Returns:
         UserAdminPayload with success status
     """
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
 
     if not user_id:
-        return {
-            'success': False
-        }
+        return {"success": False}
 
     try:
         # Query for the user
@@ -10838,9 +10995,7 @@ def resolve_userPromoteAdmin(obj, info, **kwargs):
         user.admin = True
 
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to promote user to admin: {str(e)}")
@@ -10859,13 +11014,11 @@ def resolve_userDemoteAdmin(obj, info, **kwargs):
     Returns:
         UserAdminPayload with success status
     """
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
 
     if not user_id:
-        return {
-            'success': False
-        }
+        return {"success": False}
 
     try:
         # Query for the user
@@ -10878,9 +11031,7 @@ def resolve_userDemoteAdmin(obj, info, **kwargs):
         user.admin = False
 
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to demote user admin: {str(e)}")
@@ -10899,13 +11050,11 @@ def resolve_userDemoteMember(obj, info, **kwargs):
     Returns:
         UserAdminPayload with success status
     """
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
 
     if not user_id:
-        return {
-            'success': False
-        }
+        return {"success": False}
 
     try:
         # Query for the user
@@ -10918,9 +11067,7 @@ def resolve_userDemoteMember(obj, info, **kwargs):
         user.guest = True
 
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to demote user to member/guest: {str(e)}")
@@ -10939,13 +11086,11 @@ def resolve_userPromoteMember(obj, info, **kwargs):
     Returns:
         UserAdminPayload with success status
     """
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
 
     if not user_id:
-        return {
-            'success': False
-        }
+        return {"success": False}
 
     try:
         # Query for the user
@@ -10958,9 +11103,7 @@ def resolve_userPromoteMember(obj, info, **kwargs):
         user.guest = False
 
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to promote user to member: {str(e)}")
@@ -10979,13 +11122,11 @@ def resolve_userSuspend(obj, info, **kwargs):
     Returns:
         UserAdminPayload with success status
     """
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
 
     if not user_id:
-        return {
-            'success': False
-        }
+        return {"success": False}
 
     try:
         # Query for the user
@@ -10998,9 +11139,7 @@ def resolve_userSuspend(obj, info, **kwargs):
         user.active = False
 
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to suspend user: {str(e)}")
@@ -11019,13 +11158,11 @@ def resolve_userUnsuspend(obj, info, **kwargs):
     Returns:
         UserAdminPayload with success status
     """
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
 
     if not user_id:
-        return {
-            'success': False
-        }
+        return {"success": False}
 
     try:
         # Query for the user
@@ -11038,9 +11175,7 @@ def resolve_userUnsuspend(obj, info, **kwargs):
         user.active = True
 
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to unsuspend user: {str(e)}")
@@ -11059,13 +11194,11 @@ def resolve_userUnlinkFromIdentityProvider(obj, info, **kwargs):
     Returns:
         UserAdminPayload with success status
     """
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
 
     if not user_id:
-        return {
-            'success': False
-        }
+        return {"success": False}
 
     try:
         # Query for the user
@@ -11084,9 +11217,7 @@ def resolve_userUnlinkFromIdentityProvider(obj, info, **kwargs):
         user.discordUserId = None
 
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to unlink user from identity provider: {str(e)}")
@@ -11107,9 +11238,9 @@ def resolve_userDiscordConnect(obj, info, **kwargs):
     Returns:
         UserPayload with the updated user object
     """
-    session: Session = info.context['session']
-    code = kwargs.get('code')
-    redirect_uri = kwargs.get('redirectUri')
+    session: Session = info.context["session"]
+    code = kwargs.get("code")
+    redirect_uri = kwargs.get("redirectUri")
 
     if not code:
         raise Exception("Discord OAuth code is required")
@@ -11129,7 +11260,7 @@ def resolve_userDiscordConnect(obj, info, **kwargs):
         # - GET https://discord.com/api/users/@me (to get Discord user info)
 
         # Get the current user from context (assuming authentication middleware sets this)
-        current_user_id = info.context.get('user_id')
+        current_user_id = info.context.get("user_id")
 
         if not current_user_id:
             raise Exception("User must be authenticated to connect Discord account")
@@ -11146,18 +11277,19 @@ def resolve_userDiscordConnect(obj, info, **kwargs):
         discord_user_id = f"discord_{code[:16]}"
 
         # Check if Discord account is already connected to another user
-        existing_user = session.query(User).filter_by(discordUserId=discord_user_id).first()
+        existing_user = (
+            session.query(User).filter_by(discordUserId=discord_user_id).first()
+        )
         if existing_user and existing_user.id != user.id:
-            raise Exception("This Discord account is already connected to another Linear account")
+            raise Exception(
+                "This Discord account is already connected to another Linear account"
+            )
 
         # Connect the Discord account to the user
         user.discordUserId = discord_user_id
 
         # Return the updated user in a UserPayload format
-        return {
-            'success': True,
-            'user': user
-        }
+        return {"success": True, "user": user}
 
     except Exception as e:
         raise Exception(f"Failed to connect Discord account: {str(e)}")
@@ -11177,15 +11309,15 @@ def resolve_userExternalUserDisconnect(obj, info, **kwargs):
     Returns:
         UserPayload with the updated user object
     """
-    session: Session = info.context['session']
-    service = kwargs.get('service')
+    session: Session = info.context["session"]
+    service = kwargs.get("service")
 
     if not service:
         raise Exception("Service name is required")
 
     try:
         # Get the current user from context (assuming authentication middleware sets this)
-        current_user_id = info.context.get('user_id')
+        current_user_id = info.context.get("user_id")
 
         if not current_user_id:
             raise Exception("User must be authenticated to disconnect external account")
@@ -11200,22 +11332,21 @@ def resolve_userExternalUserDisconnect(obj, info, **kwargs):
         service_lower = service.lower()
 
         # Disconnect the appropriate external service
-        if service_lower == 'github':
+        if service_lower == "github":
             if not user.gitHubUserId:
                 raise Exception("GitHub account is not connected to this user")
             user.gitHubUserId = None
-        elif service_lower == 'discord':
+        elif service_lower == "discord":
             if not user.discordUserId:
                 raise Exception("Discord account is not connected to this user")
             user.discordUserId = None
         else:
-            raise Exception(f"Unknown external service: {service}. Supported services: github, discord")
+            raise Exception(
+                f"Unknown external service: {service}. Supported services: github, discord"
+            )
 
         # Return the updated user in a UserPayload format
-        return {
-            'success': True,
-            'user': user
-        }
+        return {"success": True, "user": user}
 
     except Exception as e:
         raise Exception(f"Failed to disconnect external account: {str(e)}")
@@ -11240,27 +11371,26 @@ def resolve_userFlagUpdate(obj, info, **kwargs):
             - flag: String - The flag key which was updated
             - value: Int - The flag value after update
     """
-    session = info.context['session']
+    session = info.context["session"]
 
     try:
         # Get the current user from context (assuming authentication middleware sets this)
-        current_user_id = info.context.get('user_id')
+        current_user_id = info.context.get("user_id")
 
         if not current_user_id:
             raise Exception("User must be authenticated to update flags")
 
         # Extract arguments
-        flag = kwargs.get('flag')
-        operation = kwargs.get('operation')
+        flag = kwargs.get("flag")
+        operation = kwargs.get("operation")
 
         if not flag or not operation:
             raise Exception("Both 'flag' and 'operation' arguments are required")
 
         # Query for existing flag or create new one
-        user_flag = session.query(UserFlag).filter_by(
-            userId=current_user_id,
-            flag=flag
-        ).first()
+        user_flag = (
+            session.query(UserFlag).filter_by(userId=current_user_id, flag=flag).first()
+        )
 
         # Generate a new sync ID (incrementing timestamp)
         new_sync_id = datetime.utcnow().timestamp()
@@ -11274,18 +11404,18 @@ def resolve_userFlagUpdate(obj, info, **kwargs):
                 value=0,
                 lastSyncId=new_sync_id,
                 createdAt=datetime.utcnow(),
-                updatedAt=datetime.utcnow()
+                updatedAt=datetime.utcnow(),
             )
             session.add(user_flag)
 
         # Apply the operation
-        if operation == 'incr':
+        if operation == "incr":
             user_flag.value += 1
-        elif operation == 'decr':
+        elif operation == "decr":
             user_flag.value = max(0, user_flag.value - 1)  # Don't go below 0
-        elif operation == 'clear':
+        elif operation == "clear":
             user_flag.value = 0
-        elif operation == 'lock':
+        elif operation == "lock":
             # Lock operation sets value to a high number (commonly used to prevent further changes)
             user_flag.value = 999999
         else:
@@ -11297,10 +11427,10 @@ def resolve_userFlagUpdate(obj, info, **kwargs):
 
         # Return the payload
         return {
-            'success': True,
-            'lastSyncId': user_flag.lastSyncId,
-            'flag': user_flag.flag,
-            'value': user_flag.value
+            "success": True,
+            "lastSyncId": user_flag.lastSyncId,
+            "flag": user_flag.flag,
+            "value": user_flag.value,
         }
 
     except Exception as e:
@@ -11323,17 +11453,17 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
             - success: Boolean! - Whether the operation was successful
             - lastSyncId: Float! - The identifier of the last sync operation
     """
-    session = info.context['session']
+    session = info.context["session"]
 
     try:
         # Get the current user from context
-        current_user_id = info.context.get('user_id')
+        current_user_id = info.context.get("user_id")
 
         if not current_user_id:
             raise Exception("User must be authenticated to reset flags")
 
         # Extract the flags argument (optional)
-        flags_to_reset = kwargs.get('flags')
+        flags_to_reset = kwargs.get("flags")
 
         # Generate a new sync ID
         new_sync_id = datetime.utcnow().timestamp()
@@ -11342,10 +11472,11 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
             # Reset specific flags
             for flag in flags_to_reset:
                 # Query for existing flag
-                user_flag = session.query(UserFlag).filter_by(
-                    userId=current_user_id,
-                    flag=flag
-                ).first()
+                user_flag = (
+                    session.query(UserFlag)
+                    .filter_by(userId=current_user_id, flag=flag)
+                    .first()
+                )
 
                 if user_flag is None:
                     # Create new flag entry with default value
@@ -11356,7 +11487,7 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
                         value=0,
                         lastSyncId=new_sync_id,
                         createdAt=datetime.utcnow(),
-                        updatedAt=datetime.utcnow()
+                        updatedAt=datetime.utcnow(),
                     )
                     session.add(user_flag)
                 else:
@@ -11373,20 +11504,9 @@ def resolve_userSettingsFlagsReset(obj, info, **kwargs):
                 user_flag.lastSyncId = new_sync_id
                 user_flag.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
         # Create and return the payload
-        payload = UserSettingsFlagsResetPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=new_sync_id,
-            success=True
-        )
-        session.add(payload)
-
-        return {
-            'success': True,
-            'lastSyncId': new_sync_id
-        }
+        # Return the proper UserSettingsFlagsResetPayload structure
+        return {"success": True, "lastSyncId": new_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to reset user flags: {str(e)}")
@@ -11404,12 +11524,12 @@ def resolve_userSettingsUpdate(obj, info, **kwargs):
     Returns:
         UserSettingsPayload! with the updated UserSettings entity
     """
-    session = info.context['session']
+    session = info.context["session"]
 
     try:
         # Extract arguments
-        settings_id = kwargs.get('id')
-        input_data = kwargs.get('input', {})
+        settings_id = kwargs.get("id")
+        input_data = kwargs.get("input", {})
 
         if not settings_id:
             raise Exception("User settings ID is required")
@@ -11422,49 +11542,58 @@ def resolve_userSettingsUpdate(obj, info, **kwargs):
 
         # Update fields from input
         # Handle optional fields - only update if provided in input
-        if 'feedSummarySchedule' in input_data:
-            user_settings.feedSummarySchedule = input_data['feedSummarySchedule']
+        if "feedSummarySchedule" in input_data:
+            user_settings.feedSummarySchedule = input_data["feedSummarySchedule"]
 
-        if 'notificationCategoryPreferences' in input_data:
-            user_settings.notificationCategoryPreferences = input_data['notificationCategoryPreferences']
+        if "notificationCategoryPreferences" in input_data:
+            user_settings.notificationCategoryPreferences = input_data[
+                "notificationCategoryPreferences"
+            ]
 
-        if 'notificationChannelPreferences' in input_data:
-            user_settings.notificationChannelPreferences = input_data['notificationChannelPreferences']
+        if "notificationChannelPreferences" in input_data:
+            user_settings.notificationChannelPreferences = input_data[
+                "notificationChannelPreferences"
+            ]
 
-        if 'notificationDeliveryPreferences' in input_data:
-            user_settings.notificationDeliveryPreferences = input_data['notificationDeliveryPreferences']
+        if "notificationDeliveryPreferences" in input_data:
+            user_settings.notificationDeliveryPreferences = input_data[
+                "notificationDeliveryPreferences"
+            ]
 
-        if 'settings' in input_data:
-            user_settings.settings = input_data['settings']
+        if "settings" in input_data:
+            user_settings.settings = input_data["settings"]
 
-        if 'subscribedToChangelog' in input_data:
-            user_settings.subscribedToChangelog = input_data['subscribedToChangelog']
+        if "subscribedToChangelog" in input_data:
+            user_settings.subscribedToChangelog = input_data["subscribedToChangelog"]
 
-        if 'subscribedToDPA' in input_data:
-            user_settings.subscribedToDPA = input_data['subscribedToDPA']
+        if "subscribedToDPA" in input_data:
+            user_settings.subscribedToDPA = input_data["subscribedToDPA"]
 
-        if 'subscribedToGeneralMarketingCommunications' in input_data:
-            user_settings.subscribedToGeneralMarketingCommunications = input_data['subscribedToGeneralMarketingCommunications']
+        if "subscribedToGeneralMarketingCommunications" in input_data:
+            user_settings.subscribedToGeneralMarketingCommunications = input_data[
+                "subscribedToGeneralMarketingCommunications"
+            ]
 
-        if 'subscribedToInviteAccepted' in input_data:
-            user_settings.subscribedToInviteAccepted = input_data['subscribedToInviteAccepted']
+        if "subscribedToInviteAccepted" in input_data:
+            user_settings.subscribedToInviteAccepted = input_data[
+                "subscribedToInviteAccepted"
+            ]
 
-        if 'subscribedToPrivacyLegalUpdates' in input_data:
-            user_settings.subscribedToPrivacyLegalUpdates = input_data['subscribedToPrivacyLegalUpdates']
+        if "subscribedToPrivacyLegalUpdates" in input_data:
+            user_settings.subscribedToPrivacyLegalUpdates = input_data[
+                "subscribedToPrivacyLegalUpdates"
+            ]
 
-        if 'unsubscribedFrom' in input_data:
+        if "unsubscribedFrom" in input_data:
             # This field is deprecated but still supported
-            user_settings.unsubscribedFrom = input_data['unsubscribedFrom']
+            user_settings.unsubscribedFrom = input_data["unsubscribedFrom"]
 
-        if 'usageWarningHistory' in input_data:
-            user_settings.usageWarningHistory = input_data['usageWarningHistory']
+        if "usageWarningHistory" in input_data:
+            user_settings.usageWarningHistory = input_data["usageWarningHistory"]
 
         # Update the updatedAt timestamp
         user_settings.updatedAt = datetime.utcnow()
 
-        # Commit the transaction
-
-        # Return the updated user settings
         return user_settings
 
     except Exception as e:
@@ -11489,9 +11618,9 @@ def resolve_userUpdate(obj, info, **kwargs):
             - user: User - The updated user object
     """
 
-    session: Session = info.context['session']
-    user_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    user_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Validate required parameters
@@ -11499,10 +11628,12 @@ def resolve_userUpdate(obj, info, **kwargs):
             raise ValueError("User ID is required")
 
         # Handle 'me' as a special identifier for the current user
-        if user_id == 'me':
-            current_user_id = info.context.get('user_id')
+        if user_id == "me":
+            current_user_id = info.context.get("user_id")
             if not current_user_id:
-                raise ValueError("Cannot use 'me' identifier: user is not authenticated")
+                raise ValueError(
+                    "Cannot use 'me' identifier: user is not authenticated"
+                )
             user_id = current_user_id
 
         # Query for the user to update
@@ -11512,42 +11643,35 @@ def resolve_userUpdate(obj, info, **kwargs):
             raise ValueError(f"User not found with ID: {user_id}")
 
         # Update optional fields from UserUpdateInput
-        if 'avatarUrl' in input_data:
-            user.avatarUrl = input_data['avatarUrl']
+        if "avatarUrl" in input_data:
+            user.avatarUrl = input_data["avatarUrl"]
 
-        if 'description' in input_data:
-            user.description = input_data['description']
+        if "description" in input_data:
+            user.description = input_data["description"]
 
-        if 'displayName' in input_data:
-            user.displayName = input_data['displayName']
+        if "displayName" in input_data:
+            user.displayName = input_data["displayName"]
 
-        if 'name' in input_data:
-            user.name = input_data['name']
+        if "name" in input_data:
+            user.name = input_data["name"]
 
-        if 'statusEmoji' in input_data:
-            user.statusEmoji = input_data['statusEmoji']
+        if "statusEmoji" in input_data:
+            user.statusEmoji = input_data["statusEmoji"]
 
-        if 'statusLabel' in input_data:
-            user.statusLabel = input_data['statusLabel']
+        if "statusLabel" in input_data:
+            user.statusLabel = input_data["statusLabel"]
 
-        if 'statusUntilAt' in input_data:
-            user.statusUntilAt = input_data['statusUntilAt']
+        if "statusUntilAt" in input_data:
+            user.statusUntilAt = input_data["statusUntilAt"]
 
-        if 'timezone' in input_data:
-            user.timezone = input_data['timezone']
+        if "timezone" in input_data:
+            user.timezone = input_data["timezone"]
 
         # Always update the updatedAt timestamp
         user.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Refresh the user to get any database-generated values
-
         # Return the UserPayload
-        return {
-            'success': True,
-            'user': user
-        }
+        return {"success": True, "user": user}
 
     except ValueError as e:
         raise Exception(f"Invalid input for user update: {str(e)}")
@@ -11568,8 +11692,8 @@ def resolve_notificationArchive(obj, info, **kwargs):
         NotificationArchivePayload with success status and the archived entity
     """
 
-    session: Session = info.context['session']
-    notification_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    notification_id = kwargs.get("id")
 
     if not notification_id:
         raise Exception("Notification ID is required")
@@ -11585,13 +11709,11 @@ def resolve_notificationArchive(obj, info, **kwargs):
         if notification.archivedAt is None:
             notification.archivedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'entity': notification,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "entity": notification,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -11611,8 +11733,8 @@ def resolve_notificationUnarchive(obj, info, **kwargs):
         NotificationArchivePayload with success status and the unarchived entity
     """
 
-    session: Session = info.context['session']
-    notification_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    notification_id = kwargs.get("id")
 
     if not notification_id:
         raise Exception("Notification ID is required")
@@ -11627,13 +11749,11 @@ def resolve_notificationUnarchive(obj, info, **kwargs):
         # Unarchive: clear archivedAt timestamp
         notification.archivedAt = None
 
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'entity': notification,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "entity": notification,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -11654,9 +11774,9 @@ def resolve_notificationUpdate(obj, info, **kwargs):
         NotificationPayload with success status and the updated entity
     """
 
-    session: Session = info.context['session']
-    notification_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    notification_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     if not notification_id:
         raise Exception("Notification ID is required")
@@ -11672,28 +11792,26 @@ def resolve_notificationUpdate(obj, info, **kwargs):
             raise Exception(f"Notification with id {notification_id} not found")
 
         # Update fields from input
-        if 'readAt' in input_data:
-            notification.readAt = input_data['readAt']
+        if "readAt" in input_data:
+            notification.readAt = input_data["readAt"]
 
-        if 'snoozedUntilAt' in input_data:
-            notification.snoozedUntilAt = input_data['snoozedUntilAt']
+        if "snoozedUntilAt" in input_data:
+            notification.snoozedUntilAt = input_data["snoozedUntilAt"]
 
-        if 'initiativeUpdateId' in input_data:
-            notification.initiativeUpdateId = input_data['initiativeUpdateId']
+        if "initiativeUpdateId" in input_data:
+            notification.initiativeUpdateId = input_data["initiativeUpdateId"]
 
-        if 'projectUpdateId' in input_data:
-            notification.projectUpdateId = input_data['projectUpdateId']
+        if "projectUpdateId" in input_data:
+            notification.projectUpdateId = input_data["projectUpdateId"]
 
         # Update the updatedAt timestamp
         notification.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'notification': notification,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "notification": notification,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -11713,21 +11831,21 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input")
 
     if not input_data:
         raise Exception("Input is required")
 
     try:
         # Extract entity identifiers from input
-        notification_id = input_data.get('id')
-        issue_id = input_data.get('issueId')
-        initiative_id = input_data.get('initiativeId')
-        initiative_update_id = input_data.get('initiativeUpdateId')
-        project_id = input_data.get('projectId')
-        project_update_id = input_data.get('projectUpdateId')
-        oauth_client_approval_id = input_data.get('oauthClientApprovalId')
+        notification_id = input_data.get("id")
+        issue_id = input_data.get("issueId")
+        initiative_id = input_data.get("initiativeId")
+        initiative_update_id = input_data.get("initiativeUpdateId")
+        project_id = input_data.get("projectId")
+        project_update_id = input_data.get("projectUpdateId")
+        oauth_client_approval_id = input_data.get("oauthClientApprovalId")
 
         # Build the query based on which entity ID was provided
         query = session.query(Notification)
@@ -11739,13 +11857,17 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
         elif initiative_id:
             query = query.filter(Notification.initiativeId == initiative_id)
         elif initiative_update_id:
-            query = query.filter(Notification.initiativeUpdateId == initiative_update_id)
+            query = query.filter(
+                Notification.initiativeUpdateId == initiative_update_id
+            )
         elif project_id:
             query = query.filter(Notification.projectId == project_id)
         elif project_update_id:
             query = query.filter(Notification.projectUpdateId == project_update_id)
         elif oauth_client_approval_id:
-            query = query.filter(Notification.oauthClientApprovalId == oauth_client_approval_id)
+            query = query.filter(
+                Notification.oauthClientApprovalId == oauth_client_approval_id
+            )
         else:
             raise Exception("At least one entity identifier must be provided")
 
@@ -11754,11 +11876,7 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
 
         if not notifications:
             # No notifications found, but still return success
-            return {
-                'success': True,
-                'notifications': [],
-                'lastSyncId': 0.0
-            }
+            return {"success": True, "notifications": [], "lastSyncId": 0.0}
 
         # Archive all matching notifications by setting archivedAt timestamp
         now = datetime.now(timezone.utc)
@@ -11766,13 +11884,11 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
             if notification.archivedAt is None:
                 notification.archivedAt = now
 
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'notifications': notifications,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "notifications": notifications,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -11783,8 +11899,11 @@ def resolve_notificationArchiveAll(obj, info, **kwargs):
 # NotificationCategoryChannelSubscription Mutations
 # ============================================================================
 
+
 @mutation.field("notificationCategoryChannelSubscriptionUpdate")
-def resolve_notificationCategoryChannelSubscriptionUpdate(obj, info, category, channel, subscribe):
+def resolve_notificationCategoryChannelSubscriptionUpdate(
+    obj, info, category, channel, subscribe
+):
     """
     Subscribe to or unsubscribe from a notification category for a given notification channel.
 
@@ -11796,13 +11915,13 @@ def resolve_notificationCategoryChannelSubscriptionUpdate(obj, info, category, c
     Returns:
         UserSettingsPayload with success status and updated UserSettings object
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Get the current user from context
         # In a real implementation, this would come from authentication context
         # For now, we'll assume there's a user_id in the context or we need to get it somehow
-        user_id = info.context.get('user_id')
+        user_id = info.context.get("user_id")
         if not user_id:
             raise Exception("User not authenticated")
 
@@ -11819,7 +11938,7 @@ def resolve_notificationCategoryChannelSubscriptionUpdate(obj, info, category, c
                 updatedAt=now,
                 notificationChannelPreferences={},
                 notificationCategoryPreferences={},
-                notificationDeliveryPreferences={}
+                notificationDeliveryPreferences={},
             )
             session.add(user_settings)
 
@@ -11846,13 +11965,11 @@ def resolve_notificationCategoryChannelSubscriptionUpdate(obj, info, category, c
         # Update the timestamp
         user_settings.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return the payload
         return {
-            'success': True,
-            'userSettings': user_settings,
-            'lastSyncId': 0.0  # This would typically come from a sync system
+            "success": True,
+            "userSettings": user_settings,
+            "lastSyncId": 0.0,  # This would typically come from a sync system
         }
 
     except Exception as e:
@@ -11872,11 +11989,9 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
-    session: Session = info.context['session']
-    input_data = kwargs.get('input')
-    read_at = kwargs.get('readAt')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input")
+    read_at = kwargs.get("readAt")
 
     if not input_data:
         raise Exception("Input is required")
@@ -11886,13 +12001,13 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
 
     try:
         # Extract entity identifiers from input
-        notification_id = input_data.get('id')
-        issue_id = input_data.get('issueId')
-        initiative_id = input_data.get('initiativeId')
-        initiative_update_id = input_data.get('initiativeUpdateId')
-        project_id = input_data.get('projectId')
-        project_update_id = input_data.get('projectUpdateId')
-        oauth_client_approval_id = input_data.get('oauthClientApprovalId')
+        notification_id = input_data.get("id")
+        issue_id = input_data.get("issueId")
+        initiative_id = input_data.get("initiativeId")
+        initiative_update_id = input_data.get("initiativeUpdateId")
+        project_id = input_data.get("projectId")
+        project_update_id = input_data.get("projectUpdateId")
+        oauth_client_approval_id = input_data.get("oauthClientApprovalId")
 
         # Build the query based on which entity ID was provided
         query = session.query(Notification)
@@ -11904,13 +12019,17 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
         elif initiative_id:
             query = query.filter(Notification.initiativeId == initiative_id)
         elif initiative_update_id:
-            query = query.filter(Notification.initiativeUpdateId == initiative_update_id)
+            query = query.filter(
+                Notification.initiativeUpdateId == initiative_update_id
+            )
         elif project_id:
             query = query.filter(Notification.projectId == project_id)
         elif project_update_id:
             query = query.filter(Notification.projectUpdateId == project_update_id)
         elif oauth_client_approval_id:
-            query = query.filter(Notification.oauthClientApprovalId == oauth_client_approval_id)
+            query = query.filter(
+                Notification.oauthClientApprovalId == oauth_client_approval_id
+            )
         else:
             raise Exception("At least one entity identifier must be provided")
 
@@ -11919,41 +12038,22 @@ def resolve_notificationMarkReadAll(obj, info, **kwargs):
 
         if not notifications:
             # No notifications found, but still return success
-            return {
-                'success': True,
-                'notifications': [],
-                'lastSyncId': 0.0
-            }
+            return {"success": True, "notifications": [], "lastSyncId": 0.0}
 
         # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
-
         # Mark all matching notifications as read
         # Convert readAt to datetime if it's a string
         if isinstance(read_at, str):
-            read_at_dt = datetime.fromisoformat(read_at.replace('Z', '+00:00'))
+            read_at_dt = datetime.fromisoformat(read_at.replace("Z", "+00:00"))
         else:
             read_at_dt = read_at
 
         for notification in notifications:
             if notification.readAt is None:
                 notification.readAt = read_at_dt
-                notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
-        return {
-            'success': True,
-            'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
-        }
+        # Return the proper NotificationBatchActionPayload structure
+        return {"success": True, "notifications": notifications, "lastSyncId": 0.0}
 
     except Exception as e:
         raise Exception(f"Failed to mark notifications as read: {str(e)}")
@@ -11971,23 +12071,21 @@ def resolve_notificationMarkUnreadAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
-    session: Session = info.context['session']
-    input_data = kwargs.get('input')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input")
 
     if not input_data:
         raise Exception("Input is required")
 
     try:
         # Extract entity identifiers from input
-        notification_id = input_data.get('id')
-        issue_id = input_data.get('issueId')
-        initiative_id = input_data.get('initiativeId')
-        initiative_update_id = input_data.get('initiativeUpdateId')
-        project_id = input_data.get('projectId')
-        project_update_id = input_data.get('projectUpdateId')
-        oauth_client_approval_id = input_data.get('oauthClientApprovalId')
+        notification_id = input_data.get("id")
+        issue_id = input_data.get("issueId")
+        initiative_id = input_data.get("initiativeId")
+        initiative_update_id = input_data.get("initiativeUpdateId")
+        project_id = input_data.get("projectId")
+        project_update_id = input_data.get("projectUpdateId")
+        oauth_client_approval_id = input_data.get("oauthClientApprovalId")
 
         # Build the query based on which entity ID was provided
         query = session.query(Notification)
@@ -11999,13 +12097,17 @@ def resolve_notificationMarkUnreadAll(obj, info, **kwargs):
         elif initiative_id:
             query = query.filter(Notification.initiativeId == initiative_id)
         elif initiative_update_id:
-            query = query.filter(Notification.initiativeUpdateId == initiative_update_id)
+            query = query.filter(
+                Notification.initiativeUpdateId == initiative_update_id
+            )
         elif project_id:
             query = query.filter(Notification.projectId == project_id)
         elif project_update_id:
             query = query.filter(Notification.projectUpdateId == project_update_id)
         elif oauth_client_approval_id:
-            query = query.filter(Notification.oauthClientApprovalId == oauth_client_approval_id)
+            query = query.filter(
+                Notification.oauthClientApprovalId == oauth_client_approval_id
+            )
         else:
             raise Exception("At least one entity identifier must be provided")
 
@@ -12014,34 +12116,14 @@ def resolve_notificationMarkUnreadAll(obj, info, **kwargs):
 
         if not notifications:
             # No notifications found, but still return success
-            return {
-                'success': True,
-                'notifications': [],
-                'lastSyncId': 0.0
-            }
-
-        # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
+            return {"success": True, "notifications": [], "lastSyncId": 0.0}
 
         # Mark all matching notifications as unread by clearing readAt
         for notification in notifications:
             notification.readAt = None
-            notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
-        return {
-            'success': True,
-            'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
-        }
+        # Return the proper NotificationBatchActionPayload structure
+        return {"success": True, "notifications": notifications, "lastSyncId": 0.0}
 
     except Exception as e:
         raise Exception(f"Failed to mark notifications as unread: {str(e)}")
@@ -12060,11 +12142,9 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
-    session: Session = info.context['session']
-    input_data = kwargs.get('input')
-    snoozed_until_at = kwargs.get('snoozedUntilAt')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input")
+    snoozed_until_at = kwargs.get("snoozedUntilAt")
 
     if not input_data:
         raise Exception("Input is required")
@@ -12075,16 +12155,18 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
     try:
         # Parse the snoozedUntilAt parameter if it's a string
         if isinstance(snoozed_until_at, str):
-            snoozed_until_at = datetime.fromisoformat(snoozed_until_at.replace('Z', '+00:00'))
+            snoozed_until_at = datetime.fromisoformat(
+                snoozed_until_at.replace("Z", "+00:00")
+            )
 
         # Extract entity identifiers from input
-        notification_id = input_data.get('id')
-        issue_id = input_data.get('issueId')
-        initiative_id = input_data.get('initiativeId')
-        initiative_update_id = input_data.get('initiativeUpdateId')
-        project_id = input_data.get('projectId')
-        project_update_id = input_data.get('projectUpdateId')
-        oauth_client_approval_id = input_data.get('oauthClientApprovalId')
+        notification_id = input_data.get("id")
+        issue_id = input_data.get("issueId")
+        initiative_id = input_data.get("initiativeId")
+        initiative_update_id = input_data.get("initiativeUpdateId")
+        project_id = input_data.get("projectId")
+        project_update_id = input_data.get("projectUpdateId")
+        oauth_client_approval_id = input_data.get("oauthClientApprovalId")
 
         # Build the query based on which entity ID was provided
         query = session.query(Notification)
@@ -12096,13 +12178,17 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
         elif initiative_id:
             query = query.filter(Notification.initiativeId == initiative_id)
         elif initiative_update_id:
-            query = query.filter(Notification.initiativeUpdateId == initiative_update_id)
+            query = query.filter(
+                Notification.initiativeUpdateId == initiative_update_id
+            )
         elif project_id:
             query = query.filter(Notification.projectId == project_id)
         elif project_update_id:
             query = query.filter(Notification.projectUpdateId == project_update_id)
         elif oauth_client_approval_id:
-            query = query.filter(Notification.oauthClientApprovalId == oauth_client_approval_id)
+            query = query.filter(
+                Notification.oauthClientApprovalId == oauth_client_approval_id
+            )
         else:
             raise Exception("At least one entity identifier must be provided")
 
@@ -12111,34 +12197,14 @@ def resolve_notificationSnoozeAll(obj, info, **kwargs):
 
         if not notifications:
             # No notifications found, but still return success
-            return {
-                'success': True,
-                'notifications': [],
-                'lastSyncId': 0.0
-            }
-
-        # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
+            return {"success": True, "notifications": [], "lastSyncId": 0.0}
 
         # Snooze all matching notifications by setting snoozedUntilAt timestamp
         for notification in notifications:
             notification.snoozedUntilAt = snoozed_until_at
-            notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
-        return {
-            'success': True,
-            'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
-        }
+        # Return the proper NotificationBatchActionPayload structure
+        return {"success": True, "notifications": notifications, "lastSyncId": 0.0}
 
     except Exception as e:
         raise Exception(f"Failed to snooze notifications: {str(e)}")
@@ -12157,11 +12223,9 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
     Returns:
         NotificationBatchActionPayload with success status, notifications list, and lastSyncId
     """
-    import uuid
-
-    session: Session = info.context['session']
-    input_data = kwargs.get('input')
-    unsnoozed_at = kwargs.get('unsnoozedAt')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input")
+    unsnoozed_at = kwargs.get("unsnoozedAt")
 
     if not input_data:
         raise Exception("Input is required")
@@ -12172,16 +12236,16 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
     try:
         # Parse the unsnoozedAt parameter if it's a string
         if isinstance(unsnoozed_at, str):
-            unsnoozed_at = datetime.fromisoformat(unsnoozed_at.replace('Z', '+00:00'))
+            unsnoozed_at = datetime.fromisoformat(unsnoozed_at.replace("Z", "+00:00"))
 
         # Extract entity identifiers from input
-        notification_id = input_data.get('id')
-        issue_id = input_data.get('issueId')
-        initiative_id = input_data.get('initiativeId')
-        initiative_update_id = input_data.get('initiativeUpdateId')
-        project_id = input_data.get('projectId')
-        project_update_id = input_data.get('projectUpdateId')
-        oauth_client_approval_id = input_data.get('oauthClientApprovalId')
+        notification_id = input_data.get("id")
+        issue_id = input_data.get("issueId")
+        initiative_id = input_data.get("initiativeId")
+        initiative_update_id = input_data.get("initiativeUpdateId")
+        project_id = input_data.get("projectId")
+        project_update_id = input_data.get("projectUpdateId")
+        oauth_client_approval_id = input_data.get("oauthClientApprovalId")
 
         # Build the query based on which entity ID was provided
         query = session.query(Notification)
@@ -12193,13 +12257,17 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
         elif initiative_id:
             query = query.filter(Notification.initiativeId == initiative_id)
         elif initiative_update_id:
-            query = query.filter(Notification.initiativeUpdateId == initiative_update_id)
+            query = query.filter(
+                Notification.initiativeUpdateId == initiative_update_id
+            )
         elif project_id:
             query = query.filter(Notification.projectId == project_id)
         elif project_update_id:
             query = query.filter(Notification.projectUpdateId == project_update_id)
         elif oauth_client_approval_id:
-            query = query.filter(Notification.oauthClientApprovalId == oauth_client_approval_id)
+            query = query.filter(
+                Notification.oauthClientApprovalId == oauth_client_approval_id
+            )
         else:
             raise Exception("At least one entity identifier must be provided")
 
@@ -12208,36 +12276,16 @@ def resolve_notificationUnsnoozeAll(obj, info, **kwargs):
 
         if not notifications:
             # No notifications found, but still return success
-            return {
-                'success': True,
-                'notifications': [],
-                'lastSyncId': 0.0
-            }
-
-        # Create a NotificationBatchActionPayload to track this batch operation
-        batch_payload = NotificationBatchActionPayload(
-            id=str(uuid.uuid4()),
-            lastSyncId=0.0,  # This would typically come from a sync system
-            success=True
-        )
-        session.add(batch_payload)
-        session.flush()  # Flush to get the ID
+            return {"success": True, "notifications": [], "lastSyncId": 0.0}
 
         # Unsnooze all matching notifications by setting unsnoozedAt timestamp
         # and clearing snoozedUntilAt
         for notification in notifications:
             notification.unsnoozedAt = unsnoozed_at
             notification.snoozedUntilAt = None  # Clear the snooze timestamp
-            notification.batchActionPayloadId = batch_payload.id
 
-        # Commit the changes
-
-        # Return the payload
-        return {
-            'success': True,
-            'notifications': notifications,
-            'lastSyncId': batch_payload.lastSyncId
-        }
+        # Return the proper NotificationBatchActionPayload structure
+        return {"success": True, "notifications": notifications, "lastSyncId": 0.0}
 
     except Exception as e:
         raise Exception(f"Failed to unsnooze notifications: {str(e)}")
@@ -12252,15 +12300,17 @@ def resolve_organizationCancelDelete(obj, info, **kwargs):
     Returns:
         OrganizationCancelDeletePayload with success status
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Get the organization from the context (assuming it's set by auth middleware)
         # For now, we'll query for the first organization with a deletionRequestedAt date
         # In a production system, you would get the organization ID from the authenticated user's context
-        organization = session.query(Organization).filter(
-            Organization.deletionRequestedAt.isnot(None)
-        ).first()
+        organization = (
+            session.query(Organization)
+            .filter(Organization.deletionRequestedAt.isnot(None))
+            .first()
+        )
 
         if not organization:
             raise Exception("No organization with pending deletion found")
@@ -12269,12 +12319,8 @@ def resolve_organizationCancelDelete(obj, info, **kwargs):
         organization.deletionRequestedAt = None
         organization.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to cancel organization deletion: {str(e)}")
@@ -12289,40 +12335,34 @@ def resolve_organizationDeleteChallenge(obj, info, **kwargs):
     Returns:
         OrganizationDeletePayload with success status
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
-        # Get the organization from the authenticated user's context
-        # In a production system, you would also:
-        # 1. Verify the user has administrator privileges
-        # 2. Generate a secure delete confirmation token
-        user_id = info.context.get('user_id')
+        user_id = info.context.get("user_id")
         if not user_id:
-            raise Exception("No authenticated user found. Please provide authentication credentials.")
+            raise Exception(
+                "No authenticated user found. Please provide authentication credentials."
+            )
 
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
-            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+            raise Exception(
+                f"Authenticated user with id '{user_id}' not found in database"
+            )
 
         if not user.organizationId:
             raise Exception("User does not have an associated organization")
 
-        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
+        organization = (
+            session.query(Organization)
+            .filter(Organization.id == user.organizationId)
+            .first()
+        )
         if not organization:
             raise Exception(f"Organization with id '{user.organizationId}' not found")
 
-        # In a real system, this would:
-        # 1. Generate a cryptographically secure delete confirmation token
-        # 2. Store the token (possibly with an expiration time) in the database
-        # 3. Send the token to the administrator via email or other secure channel
-        # 4. Return success status
-        # For this implementation, we'll just return success since the token
-        # generation logic would be application-specific
-
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to generate organization delete challenge: {str(e)}")
@@ -12340,16 +12380,16 @@ def resolve_organizationDelete(obj, info, **kwargs):
     Returns:
         OrganizationDeletePayload with success status
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input argument
-        input_data = kwargs.get('input')
+        input_data = kwargs.get("input")
         if not input_data:
             raise Exception("Missing required input argument")
 
         # Extract deletionCode from input
-        deletion_code = input_data.get('deletionCode')
+        deletion_code = input_data.get("deletionCode")
         if not deletion_code:
             raise Exception("Missing required deletionCode field")
 
@@ -12357,18 +12397,26 @@ def resolve_organizationDelete(obj, info, **kwargs):
         # In a production system, you would also:
         # 1. Verify the user has administrator privileges
         # 2. Verify the deletionCode matches the expected code for this organization
-        user_id = info.context.get('user_id')
+        user_id = info.context.get("user_id")
         if not user_id:
-            raise Exception("No authenticated user found. Please provide authentication credentials.")
+            raise Exception(
+                "No authenticated user found. Please provide authentication credentials."
+            )
 
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
-            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+            raise Exception(
+                f"Authenticated user with id '{user_id}' not found in database"
+            )
 
         if not user.organizationId:
             raise Exception("User does not have an associated organization")
 
-        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
+        organization = (
+            session.query(Organization)
+            .filter(Organization.id == user.organizationId)
+            .first()
+        )
         if not organization:
             raise Exception(f"Organization with id '{user.organizationId}' not found")
 
@@ -12381,16 +12429,8 @@ def resolve_organizationDelete(obj, info, **kwargs):
         # Consider soft delete instead by setting archivedAt:
         # organization.archivedAt = datetime.now(timezone.utc)
         session.delete(organization)
-
-        # Update timestamp
-        organization.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
-
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to delete organization: {str(e)}")
@@ -12408,16 +12448,18 @@ def resolve_organizationDomainClaim(obj, info, **kwargs):
     Returns:
         OrganizationDomainSimplePayload with success status
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract id argument
-        domain_id = kwargs.get('id')
+        domain_id = kwargs.get("id")
         if not domain_id:
             raise Exception("Missing required id argument")
 
         # Query for the organization domain
-        organization_domain = session.query(OrganizationDomain).filter_by(id=domain_id).first()
+        organization_domain = (
+            session.query(OrganizationDomain).filter_by(id=domain_id).first()
+        )
 
         if not organization_domain:
             raise Exception(f"Organization domain not found with id: {domain_id}")
@@ -12431,12 +12473,8 @@ def resolve_organizationDomainClaim(obj, info, **kwargs):
         organization_domain.verified = True
         organization_domain.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to claim organization domain: {str(e)}")
@@ -12456,17 +12494,17 @@ def resolve_organizationDomainVerify(obj, info, **kwargs):
     Returns:
         OrganizationDomainPayload with the verified domain or error
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input argument
-        input_data = kwargs.get('input')
+        input_data = kwargs.get("input")
         if not input_data:
             raise Exception("Missing required input argument")
 
         # Extract required fields from input
-        organization_domain_id = input_data.get('organizationDomainId')
-        verification_code = input_data.get('verificationCode')
+        organization_domain_id = input_data.get("organizationDomainId")
+        verification_code = input_data.get("verificationCode")
 
         if not organization_domain_id:
             raise Exception("Missing required organizationDomainId in input")
@@ -12474,12 +12512,16 @@ def resolve_organizationDomainVerify(obj, info, **kwargs):
             raise Exception("Missing required verificationCode in input")
 
         # Query for the organization domain
-        organization_domain = session.query(OrganizationDomain).filter_by(
-            id=organization_domain_id
-        ).first()
+        organization_domain = (
+            session.query(OrganizationDomain)
+            .filter_by(id=organization_domain_id)
+            .first()
+        )
 
         if not organization_domain:
-            raise Exception(f"Organization domain not found with id: {organization_domain_id}")
+            raise Exception(
+                f"Organization domain not found with id: {organization_domain_id}"
+            )
 
         # Verify the domain using the verification code
         # In a real system, this would:
@@ -12496,9 +12538,6 @@ def resolve_organizationDomainVerify(obj, info, **kwargs):
         organization_domain.verified = True
         organization_domain.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the verified domain
         return organization_domain
 
     except Exception as e:
@@ -12516,22 +12555,30 @@ def resolve_organizationStartTrial(obj, info, **kwargs):
     Returns:
         OrganizationStartTrialPayload with success status
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Get the organization from the authenticated user's context
-        user_id = info.context.get('user_id')
+        user_id = info.context.get("user_id")
         if not user_id:
-            raise Exception("No authenticated user found. Please provide authentication credentials.")
+            raise Exception(
+                "No authenticated user found. Please provide authentication credentials."
+            )
 
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
-            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+            raise Exception(
+                f"Authenticated user with id '{user_id}' not found in database"
+            )
 
         if not user.organizationId:
             raise Exception("User does not have an associated organization")
 
-        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
+        organization = (
+            session.query(Organization)
+            .filter(Organization.id == user.organizationId)
+            .first()
+        )
         if not organization:
             raise Exception(f"Organization with id '{user.organizationId}' not found")
 
@@ -12543,15 +12590,12 @@ def resolve_organizationStartTrial(obj, info, **kwargs):
         organization.trialEndsAt = now + timedelta(days=trial_duration_days)
         organization.updatedAt = now
 
-        # Commit the changes
-
         # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to start organization trial: {str(e)}")
+
 
 @mutation.field("organizationStartTrialForPlan")
 def resolve_organizationStartTrialForPlan(obj, info, **kwargs):
@@ -12568,32 +12612,40 @@ def resolve_organizationStartTrialForPlan(obj, info, **kwargs):
     Returns:
         OrganizationStartTrialPayload with success status
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input from kwargs
-        input_data = kwargs.get('input')
+        input_data = kwargs.get("input")
         if not input_data:
             raise Exception("Input data is required")
 
         # Validate required fields
-        plan_type = input_data.get('planType')
+        plan_type = input_data.get("planType")
         if not plan_type:
             raise Exception("planType is required")
 
         # Get the organization from the authenticated user's context
-        user_id = info.context.get('user_id')
+        user_id = info.context.get("user_id")
         if not user_id:
-            raise Exception("No authenticated user found. Please provide authentication credentials.")
+            raise Exception(
+                "No authenticated user found. Please provide authentication credentials."
+            )
 
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
-            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+            raise Exception(
+                f"Authenticated user with id '{user_id}' not found in database"
+            )
 
         if not user.organizationId:
             raise Exception("User does not have an associated organization")
 
-        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
+        organization = (
+            session.query(Organization)
+            .filter(Organization.id == user.organizationId)
+            .first()
+        )
         if not organization:
             raise Exception(f"Organization with id '{user.organizationId}' not found")
 
@@ -12610,12 +12662,7 @@ def resolve_organizationStartTrialForPlan(obj, info, **kwargs):
         organization.trialEndsAt = now + timedelta(days=trial_duration_days)
         organization.updatedAt = now
 
-        # Commit the changes
-
-        # Return success payload
-        return {
-            'success': True
-        }
+        return {"success": True}
 
     except Exception as e:
         raise Exception(f"Failed to start organization trial for plan: {str(e)}")
@@ -12635,137 +12682,170 @@ def resolve_organizationUpdate(obj, info, **kwargs):
     Returns:
         OrganizationPayload with the updated organization
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input from kwargs
-        input_data = kwargs.get('input')
+        input_data = kwargs.get("input")
         if not input_data:
             raise Exception("Input data is required")
 
         # Get the organization from the authenticated user's context
-        user_id = info.context.get('user_id')
+        user_id = info.context.get("user_id")
         if not user_id:
-            raise Exception("No authenticated user found. Please provide authentication credentials.")
+            raise Exception(
+                "No authenticated user found. Please provide authentication credentials."
+            )
 
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
-            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+            raise Exception(
+                f"Authenticated user with id '{user_id}' not found in database"
+            )
 
         if not user.organizationId:
             raise Exception("User does not have an associated organization")
 
-        organization = session.query(Organization).filter(Organization.id == user.organizationId).first()
+        organization = (
+            session.query(Organization)
+            .filter(Organization.id == user.organizationId)
+            .first()
+        )
         if not organization:
             raise Exception(f"Organization with id '{user.organizationId}' not found")
 
         # Update fields if provided in input
-        if 'aiAddonEnabled' in input_data:
-            organization.aiAddonEnabled = input_data['aiAddonEnabled']
+        if "aiAddonEnabled" in input_data:
+            organization.aiAddonEnabled = input_data["aiAddonEnabled"]
 
-        if 'aiTelemetryEnabled' in input_data:
-            organization.aiTelemetryEnabled = input_data['aiTelemetryEnabled']
+        if "aiTelemetryEnabled" in input_data:
+            organization.aiTelemetryEnabled = input_data["aiTelemetryEnabled"]
 
-        if 'allowMembersToInvite' in input_data:
-            organization.allowMembersToInvite = input_data['allowMembersToInvite']
+        if "allowMembersToInvite" in input_data:
+            organization.allowMembersToInvite = input_data["allowMembersToInvite"]
 
-        if 'allowedAuthServices' in input_data:
-            organization.allowedAuthServices = input_data['allowedAuthServices']
+        if "allowedAuthServices" in input_data:
+            organization.allowedAuthServices = input_data["allowedAuthServices"]
 
-        if 'allowedFileUploadContentTypes' in input_data:
-            organization.allowedFileUploadContentTypes = input_data['allowedFileUploadContentTypes']
+        if "allowedFileUploadContentTypes" in input_data:
+            organization.allowedFileUploadContentTypes = input_data[
+                "allowedFileUploadContentTypes"
+            ]
 
-        if 'customersConfiguration' in input_data:
-            organization.customersConfiguration = input_data['customersConfiguration']
+        if "customersConfiguration" in input_data:
+            organization.customersConfiguration = input_data["customersConfiguration"]
 
-        if 'customersEnabled' in input_data:
-            organization.customersEnabled = input_data['customersEnabled']
+        if "customersEnabled" in input_data:
+            organization.customersEnabled = input_data["customersEnabled"]
 
-        if 'defaultFeedSummarySchedule' in input_data:
-            organization.defaultFeedSummarySchedule = input_data['defaultFeedSummarySchedule']
+        if "defaultFeedSummarySchedule" in input_data:
+            organization.defaultFeedSummarySchedule = input_data[
+                "defaultFeedSummarySchedule"
+            ]
 
-        if 'feedEnabled' in input_data:
-            organization.feedEnabled = input_data['feedEnabled']
+        if "feedEnabled" in input_data:
+            organization.feedEnabled = input_data["feedEnabled"]
 
-        if 'fiscalYearStartMonth' in input_data:
-            organization.fiscalYearStartMonth = input_data['fiscalYearStartMonth']
+        if "fiscalYearStartMonth" in input_data:
+            organization.fiscalYearStartMonth = input_data["fiscalYearStartMonth"]
 
-        if 'gitBranchFormat' in input_data:
-            organization.gitBranchFormat = input_data['gitBranchFormat']
+        if "gitBranchFormat" in input_data:
+            organization.gitBranchFormat = input_data["gitBranchFormat"]
 
-        if 'gitLinkbackMessagesEnabled' in input_data:
-            organization.gitLinkbackMessagesEnabled = input_data['gitLinkbackMessagesEnabled']
+        if "gitLinkbackMessagesEnabled" in input_data:
+            organization.gitLinkbackMessagesEnabled = input_data[
+                "gitLinkbackMessagesEnabled"
+            ]
 
-        if 'gitPublicLinkbackMessagesEnabled' in input_data:
-            organization.gitPublicLinkbackMessagesEnabled = input_data['gitPublicLinkbackMessagesEnabled']
+        if "gitPublicLinkbackMessagesEnabled" in input_data:
+            organization.gitPublicLinkbackMessagesEnabled = input_data[
+                "gitPublicLinkbackMessagesEnabled"
+            ]
 
-        if 'initiativeUpdateReminderFrequencyInWeeks' in input_data:
-            organization.initiativeUpdateReminderFrequencyInWeeks = input_data['initiativeUpdateReminderFrequencyInWeeks']
+        if "initiativeUpdateReminderFrequencyInWeeks" in input_data:
+            organization.initiativeUpdateReminderFrequencyInWeeks = input_data[
+                "initiativeUpdateReminderFrequencyInWeeks"
+            ]
 
-        if 'initiativeUpdateRemindersDay' in input_data:
-            organization.initiativeUpdateRemindersDay = input_data['initiativeUpdateRemindersDay']
+        if "initiativeUpdateRemindersDay" in input_data:
+            organization.initiativeUpdateRemindersDay = input_data[
+                "initiativeUpdateRemindersDay"
+            ]
 
-        if 'initiativeUpdateRemindersHour' in input_data:
-            organization.initiativeUpdateRemindersHour = input_data['initiativeUpdateRemindersHour']
+        if "initiativeUpdateRemindersHour" in input_data:
+            organization.initiativeUpdateRemindersHour = input_data[
+                "initiativeUpdateRemindersHour"
+            ]
 
         # Note: ipRestrictions is skipped in the ORM model
         # if 'ipRestrictions' in input_data:
         #     organization.ipRestrictions = input_data['ipRestrictions']
 
-        if 'logoUrl' in input_data:
-            organization.logoUrl = input_data['logoUrl']
+        if "logoUrl" in input_data:
+            organization.logoUrl = input_data["logoUrl"]
 
-        if 'name' in input_data:
-            organization.name = input_data['name']
+        if "name" in input_data:
+            organization.name = input_data["name"]
 
-        if 'oauthAppReview' in input_data:
-            organization.oauthAppReview = input_data['oauthAppReview']
+        if "oauthAppReview" in input_data:
+            organization.oauthAppReview = input_data["oauthAppReview"]
 
-        if 'personalApiKeysEnabled' in input_data:
-            organization.personalApiKeysEnabled = input_data['personalApiKeysEnabled']
+        if "personalApiKeysEnabled" in input_data:
+            organization.personalApiKeysEnabled = input_data["personalApiKeysEnabled"]
 
-        if 'projectUpdateReminderFrequencyInWeeks' in input_data:
-            organization.projectUpdateReminderFrequencyInWeeks = input_data['projectUpdateReminderFrequencyInWeeks']
+        if "projectUpdateReminderFrequencyInWeeks" in input_data:
+            organization.projectUpdateReminderFrequencyInWeeks = input_data[
+                "projectUpdateReminderFrequencyInWeeks"
+            ]
 
-        if 'projectUpdateRemindersDay' in input_data:
-            organization.projectUpdateRemindersDay = input_data['projectUpdateRemindersDay']
+        if "projectUpdateRemindersDay" in input_data:
+            organization.projectUpdateRemindersDay = input_data[
+                "projectUpdateRemindersDay"
+            ]
 
-        if 'projectUpdateRemindersHour' in input_data:
-            organization.projectUpdateRemindersHour = input_data['projectUpdateRemindersHour']
+        if "projectUpdateRemindersHour" in input_data:
+            organization.projectUpdateRemindersHour = input_data[
+                "projectUpdateRemindersHour"
+            ]
 
-        if 'reducedPersonalInformation' in input_data:
-            organization.reducedPersonalInformation = input_data['reducedPersonalInformation']
+        if "reducedPersonalInformation" in input_data:
+            organization.reducedPersonalInformation = input_data[
+                "reducedPersonalInformation"
+            ]
 
-        if 'restrictAgentInvocationToMembers' in input_data:
-            organization.restrictAgentInvocationToMembers = input_data['restrictAgentInvocationToMembers']
+        if "restrictAgentInvocationToMembers" in input_data:
+            organization.restrictAgentInvocationToMembers = input_data[
+                "restrictAgentInvocationToMembers"
+            ]
 
-        if 'restrictLabelManagementToAdmins' in input_data:
-            organization.restrictLabelManagementToAdmins = input_data['restrictLabelManagementToAdmins']
+        if "restrictLabelManagementToAdmins" in input_data:
+            organization.restrictLabelManagementToAdmins = input_data[
+                "restrictLabelManagementToAdmins"
+            ]
 
-        if 'restrictTeamCreationToAdmins' in input_data:
-            organization.restrictTeamCreationToAdmins = input_data['restrictTeamCreationToAdmins']
+        if "restrictTeamCreationToAdmins" in input_data:
+            organization.restrictTeamCreationToAdmins = input_data[
+                "restrictTeamCreationToAdmins"
+            ]
 
-        if 'roadmapEnabled' in input_data:
-            organization.roadmapEnabled = input_data['roadmapEnabled']
+        if "roadmapEnabled" in input_data:
+            organization.roadmapEnabled = input_data["roadmapEnabled"]
 
-        if 'slaEnabled' in input_data:
-            organization.slaEnabled = input_data['slaEnabled']
+        if "slaEnabled" in input_data:
+            organization.slaEnabled = input_data["slaEnabled"]
 
-        if 'themeSettings' in input_data:
-            organization.themeSettings = input_data['themeSettings']
+        if "themeSettings" in input_data:
+            organization.themeSettings = input_data["themeSettings"]
 
-        if 'urlKey' in input_data:
-            organization.urlKey = input_data['urlKey']
+        if "urlKey" in input_data:
+            organization.urlKey = input_data["urlKey"]
 
-        if 'workingDays' in input_data:
-            organization.workingDays = input_data['workingDays']
+        if "workingDays" in input_data:
+            organization.workingDays = input_data["workingDays"]
 
         # Update the updatedAt timestamp
         organization.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated organization
         return organization
 
     except Exception as e:
@@ -12776,27 +12856,25 @@ def resolve_organizationUpdate(obj, info, **kwargs):
 # Project Mutations
 # ============================================================================
 
+
 def _get_priority_label(priority: int) -> str:
     """Map priority number to label"""
-    priority_map = {
-        0: 'No priority',
-        1: 'Urgent',
-        2: 'High',
-        3: 'Normal',
-        4: 'Low'
-    }
-    return priority_map.get(priority, 'No priority')
+    priority_map = {0: "No priority", 1: "Urgent", 2: "High", 3: "Normal", 4: "Low"}
+    return priority_map.get(priority, "No priority")
+
 
 def _generate_slug_id(name: str, project_id: str) -> str:
     """Generate a URL-friendly slug from the project name"""
     import re
+
     # Convert to lowercase and replace spaces with hyphens
     slug = name.lower().strip()
-    slug = re.sub(r'[^\w\s-]', '', slug)
-    slug = re.sub(r'[-\s]+', '-', slug)
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[-\s]+", "-", slug)
     # Append first 8 chars of ID for uniqueness
     slug = f"{slug}-{project_id[:8]}"
     return slug
+
 
 @mutation.field("projectCreate")
 def resolve_projectCreate(obj, info, **kwargs):
@@ -12810,53 +12888,54 @@ def resolve_projectCreate(obj, info, **kwargs):
     Returns:
         Project: The newly created project.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        input_data = kwargs.get('input')
-        connect_slack_channel = kwargs.get('connectSlackChannel', False)
+        input_data = kwargs.get("input")
 
         if not input_data:
             raise Exception("Input data is required")
 
         # Validate required fields
-        if not input_data.get('name'):
+        if not input_data.get("name"):
             raise Exception("Project name is required")
-        if not input_data.get('teamIds'):
+        if not input_data.get("teamIds"):
             raise Exception("At least one team ID is required")
 
         # Generate ID if not provided
-        project_id = input_data.get('id', str(uuid.uuid4()))
+        project_id = input_data.get("id", str(uuid.uuid4()))
 
         # Set defaults for non-nullable fields
         current_time = datetime.now(timezone.utc)
 
         # Priority: 0 = No priority, 1 = Urgent, 2 = High, 3 = Normal, 4 = Low
-        priority = input_data.get('priority', 0)
+        priority = input_data.get("priority", 0)
 
         # Build the project entity
         project = Project(
             id=project_id,
-            name=input_data['name'],
-            description=input_data.get('description', ''),
-            color=input_data.get('color', '#000000'),  # Default to black if not provided
-            icon=input_data.get('icon'),
-            content=input_data.get('content'),
-            state=input_data.get('state', 'planned'),
+            name=input_data["name"],
+            description=input_data.get("description", ""),
+            color=input_data.get(
+                "color", "#000000"
+            ),  # Default to black if not provided
+            icon=input_data.get("icon"),
+            content=input_data.get("content"),
+            state=input_data.get("state", "planned"),
             priority=priority,
             priorityLabel=_get_priority_label(priority),
-            prioritySortOrder=input_data.get('prioritySortOrder', 0.0),
-            sortOrder=input_data.get('sortOrder', 0.0),
-            startDate=input_data.get('startDate'),
-            startDateResolution=input_data.get('startDateResolution'),
-            targetDate=input_data.get('targetDate'),
-            targetDateResolution=input_data.get('targetDateResolution'),
-            leadId=input_data.get('leadId'),
-            convertedFromIssueId=input_data.get('convertedFromIssueId'),
-            lastAppliedTemplateId=input_data.get('lastAppliedTemplateId'),
-            statusId=input_data.get('statusId'),
-            labelIds=input_data.get('labelIds', []),
+            prioritySortOrder=input_data.get("prioritySortOrder", 0.0),
+            sortOrder=input_data.get("sortOrder", 0.0),
+            startDate=input_data.get("startDate"),
+            startDateResolution=input_data.get("startDateResolution"),
+            targetDate=input_data.get("targetDate"),
+            targetDateResolution=input_data.get("targetDateResolution"),
+            leadId=input_data.get("leadId"),
+            convertedFromIssueId=input_data.get("convertedFromIssueId"),
+            lastAppliedTemplateId=input_data.get("lastAppliedTemplateId"),
+            statusId=input_data.get("statusId"),
+            labelIds=input_data.get("labelIds", []),
             # Set default values for required fields
             createdAt=current_time,
             updatedAt=current_time,
@@ -12869,11 +12948,11 @@ def resolve_projectCreate(obj, info, **kwargs):
             progressHistory={},
             progress=0.0,
             scope=0.0,
-            frequencyResolution='weekly',
+            frequencyResolution="weekly",
             slackIssueComments=False,
             slackIssueStatuses=False,
             slackNewIssue=False,
-            slugId=_generate_slug_id(input_data['name'], project_id),
+            slugId=_generate_slug_id(input_data["name"], project_id),
             url=f"https://linear.app/project/{project_id}",  # Placeholder URL
         )
 
@@ -12884,7 +12963,7 @@ def resolve_projectCreate(obj, info, **kwargs):
         session.flush()
 
         # Handle team relationships (many-to-many)
-        team_ids = input_data.get('teamIds', [])
+        team_ids = input_data.get("teamIds", [])
         if team_ids:
             teams = session.query(Team).filter(Team.id.in_(team_ids)).all()
             if len(teams) != len(team_ids):
@@ -12892,7 +12971,7 @@ def resolve_projectCreate(obj, info, **kwargs):
             project.teams = teams
 
         # Handle member relationships (many-to-many)
-        member_ids = input_data.get('memberIds', [])
+        member_ids = input_data.get("memberIds", [])
         if member_ids:
             members = session.query(User).filter(User.id.in_(member_ids)).all()
             if len(members) != len(member_ids):
@@ -12900,16 +12979,15 @@ def resolve_projectCreate(obj, info, **kwargs):
             project.members = members
 
         # Handle label relationships (many-to-many)
-        label_ids = input_data.get('labelIds', [])
+        label_ids = input_data.get("labelIds", [])
         if label_ids:
-            labels = session.query(ProjectLabel).filter(ProjectLabel.id.in_(label_ids)).all()
+            labels = (
+                session.query(ProjectLabel).filter(ProjectLabel.id.in_(label_ids)).all()
+            )
             if len(labels) != len(label_ids):
                 raise Exception("One or more label IDs are invalid")
             project.labels = labels
 
-        # Commit the transaction
-
-        # Return the created project
         return project
 
     except Exception as e:
@@ -12928,12 +13006,12 @@ def resolve_projectAddLabel(obj, info, **kwargs):
     Returns:
         Project: The updated project.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_id = kwargs.get('id')
-        label_id = kwargs.get('labelId')
+        project_id = kwargs.get("id")
+        label_id = kwargs.get("labelId")
 
         if not project_id:
             raise Exception("Project ID is required")
@@ -12965,9 +13043,6 @@ def resolve_projectAddLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated project
         return project
 
     except Exception as e:
@@ -12986,12 +13061,12 @@ def resolve_projectRemoveLabel(obj, info, **kwargs):
     Returns:
         Project: The updated project.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_id = kwargs.get('id')
-        label_id = kwargs.get('labelId')
+        project_id = kwargs.get("id")
+        label_id = kwargs.get("labelId")
 
         if not project_id:
             raise Exception("Project ID is required")
@@ -13023,9 +13098,6 @@ def resolve_projectRemoveLabel(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated project
         return project
 
     except Exception as e:
@@ -13044,12 +13116,12 @@ def resolve_projectArchive(obj, info, **kwargs):
     Returns:
         ProjectArchivePayload: The archive payload with success status and entity.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_id = kwargs.get('id')
-        trash = kwargs.get('trash', False)
+        project_id = kwargs.get("id")
+        trash = kwargs.get("trash", False)
 
         if not project_id:
             raise Exception("Project ID is required")
@@ -13069,17 +13141,11 @@ def resolve_projectArchive(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return the payload
-        return {
-            'success': True,
-            'entity': project,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "entity": project, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to archive project: {str(e)}")
@@ -13096,11 +13162,11 @@ def resolve_projectUnarchive(obj, info, **kwargs):
     Returns:
         ProjectArchivePayload: The archive payload with success status and entity.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_id = kwargs.get('id')
+        project_id = kwargs.get("id")
 
         if not project_id:
             raise Exception("Project ID is required")
@@ -13122,11 +13188,7 @@ def resolve_projectUnarchive(obj, info, **kwargs):
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return the payload
-        return {
-            'success': True,
-            'entity': project,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "entity": project, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to unarchive project: {str(e)}")
@@ -13143,11 +13205,11 @@ def resolve_projectDelete(obj, info, **kwargs):
     Returns:
         ProjectArchivePayload: The archive payload with success status and entity.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_id = kwargs.get('id')
+        project_id = kwargs.get("id")
 
         if not project_id:
             raise Exception("Project ID is required")
@@ -13161,20 +13223,14 @@ def resolve_projectDelete(obj, info, **kwargs):
         project.archivedAt = datetime.now(timezone.utc)
 
         # Update the updatedAt timestamp if it exists
-        if hasattr(project, 'updatedAt'):
+        if hasattr(project, "updatedAt"):
             project.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return the payload
-        return {
-            'success': True,
-            'entity': project,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "entity": project, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to delete project: {str(e)}")
@@ -13192,12 +13248,12 @@ def resolve_projectReassignStatus(obj, info, **kwargs):
     Returns:
         SuccessPayload: The success payload with lastSyncId and success status.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        new_project_status_id = kwargs.get('newProjectStatusId')
-        original_project_status_id = kwargs.get('originalProjectStatusId')
+        new_project_status_id = kwargs.get("newProjectStatusId")
+        original_project_status_id = kwargs.get("originalProjectStatusId")
 
         if not new_project_status_id:
             raise Exception("newProjectStatusId is required")
@@ -13205,35 +13261,40 @@ def resolve_projectReassignStatus(obj, info, **kwargs):
             raise Exception("originalProjectStatusId is required")
 
         # Verify that the new project status exists
-        new_status = session.query(ProjectStatus).filter_by(id=new_project_status_id).first()
+        new_status = (
+            session.query(ProjectStatus).filter_by(id=new_project_status_id).first()
+        )
         if not new_status:
             raise Exception(f"ProjectStatus with ID {new_project_status_id} not found")
 
         # Verify that the original project status exists
-        original_status = session.query(ProjectStatus).filter_by(id=original_project_status_id).first()
+        original_status = (
+            session.query(ProjectStatus)
+            .filter_by(id=original_project_status_id)
+            .first()
+        )
         if not original_status:
-            raise Exception(f"ProjectStatus with ID {original_project_status_id} not found")
+            raise Exception(
+                f"ProjectStatus with ID {original_project_status_id} not found"
+            )
 
         # Find all projects with the original status
-        projects = session.query(Project).filter_by(statusId=original_project_status_id).all()
+        projects = (
+            session.query(Project).filter_by(statusId=original_project_status_id).all()
+        )
 
         # Update all projects to the new status
         for project in projects:
             project.statusId = new_project_status_id
             # Update the updatedAt timestamp
-            if hasattr(project, 'updatedAt'):
+            if hasattr(project, "updatedAt"):
                 project.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return the payload
-        return {
-            'success': True,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to reassign project status: {str(e)}")
@@ -13251,12 +13312,12 @@ def resolve_projectUpdate(obj, info, **kwargs):
     Returns:
         ProjectPayload: The updated project wrapped in a payload.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_id = kwargs.get('id')
-        input_data = kwargs.get('input', {})
+        project_id = kwargs.get("id")
+        input_data = kwargs.get("input", {})
 
         if not project_id:
             raise Exception("id is required")
@@ -13267,92 +13328,93 @@ def resolve_projectUpdate(obj, info, **kwargs):
             raise Exception(f"Project with ID {project_id} not found")
 
         # Update scalar fields
-        if 'canceledAt' in input_data:
-            project.canceledAt = input_data['canceledAt']
-        if 'color' in input_data:
-            project.color = input_data['color']
-        if 'completedAt' in input_data:
-            project.completedAt = input_data['completedAt']
-        if 'content' in input_data:
-            project.content = input_data['content']
-        if 'convertedFromIssueId' in input_data:
-            project.convertedFromIssueId = input_data['convertedFromIssueId']
-        if 'description' in input_data:
-            project.description = input_data['description']
-        if 'frequencyResolution' in input_data:
-            project.frequencyResolution = input_data['frequencyResolution']
-        if 'icon' in input_data:
-            project.icon = input_data['icon']
-        if 'labelIds' in input_data:
+        if "canceledAt" in input_data:
+            project.canceledAt = input_data["canceledAt"]
+        if "color" in input_data:
+            project.color = input_data["color"]
+        if "completedAt" in input_data:
+            project.completedAt = input_data["completedAt"]
+        if "content" in input_data:
+            project.content = input_data["content"]
+        if "convertedFromIssueId" in input_data:
+            project.convertedFromIssueId = input_data["convertedFromIssueId"]
+        if "description" in input_data:
+            project.description = input_data["description"]
+        if "frequencyResolution" in input_data:
+            project.frequencyResolution = input_data["frequencyResolution"]
+        if "icon" in input_data:
+            project.icon = input_data["icon"]
+        if "labelIds" in input_data:
             # Handle many-to-many relationship with project labels
-            label_ids = input_data['labelIds']
+            label_ids = input_data["labelIds"]
             project.labelIds = label_ids
             # Update the labels relationship
-            labels = session.query(ProjectLabel).filter(ProjectLabel.id.in_(label_ids)).all()
+            labels = (
+                session.query(ProjectLabel).filter(ProjectLabel.id.in_(label_ids)).all()
+            )
             project.labels = labels
-        if 'lastAppliedTemplateId' in input_data:
-            project.lastAppliedTemplateId = input_data['lastAppliedTemplateId']
-        if 'leadId' in input_data:
-            project.leadId = input_data['leadId']
-        if 'memberIds' in input_data:
+        if "lastAppliedTemplateId" in input_data:
+            project.lastAppliedTemplateId = input_data["lastAppliedTemplateId"]
+        if "leadId" in input_data:
+            project.leadId = input_data["leadId"]
+        if "memberIds" in input_data:
             # Handle many-to-many relationship with members
-            member_ids = input_data['memberIds']
+            member_ids = input_data["memberIds"]
             members = session.query(User).filter(User.id.in_(member_ids)).all()
             project.members = members
-        if 'name' in input_data:
-            project.name = input_data['name']
-        if 'priority' in input_data:
-            project.priority = input_data['priority']
-        if 'prioritySortOrder' in input_data:
-            project.prioritySortOrder = input_data['prioritySortOrder']
-        if 'projectUpdateRemindersPausedUntilAt' in input_data:
-            project.projectUpdateRemindersPausedUntilAt = input_data['projectUpdateRemindersPausedUntilAt']
-        if 'slackIssueComments' in input_data:
-            project.slackIssueComments = input_data['slackIssueComments']
-        if 'slackIssueStatuses' in input_data:
-            project.slackIssueStatuses = input_data['slackIssueStatuses']
-        if 'slackNewIssue' in input_data:
-            project.slackNewIssue = input_data['slackNewIssue']
-        if 'sortOrder' in input_data:
-            project.sortOrder = input_data['sortOrder']
-        if 'startDate' in input_data:
-            project.startDate = input_data['startDate']
-        if 'startDateResolution' in input_data:
-            project.startDateResolution = input_data['startDateResolution']
-        if 'state' in input_data:
-            project.state = input_data['state']
-        if 'statusId' in input_data:
-            project.statusId = input_data['statusId']
-        if 'targetDate' in input_data:
-            project.targetDate = input_data['targetDate']
-        if 'targetDateResolution' in input_data:
-            project.targetDateResolution = input_data['targetDateResolution']
-        if 'teamIds' in input_data:
+        if "name" in input_data:
+            project.name = input_data["name"]
+        if "priority" in input_data:
+            project.priority = input_data["priority"]
+        if "prioritySortOrder" in input_data:
+            project.prioritySortOrder = input_data["prioritySortOrder"]
+        if "projectUpdateRemindersPausedUntilAt" in input_data:
+            project.projectUpdateRemindersPausedUntilAt = input_data[
+                "projectUpdateRemindersPausedUntilAt"
+            ]
+        if "slackIssueComments" in input_data:
+            project.slackIssueComments = input_data["slackIssueComments"]
+        if "slackIssueStatuses" in input_data:
+            project.slackIssueStatuses = input_data["slackIssueStatuses"]
+        if "slackNewIssue" in input_data:
+            project.slackNewIssue = input_data["slackNewIssue"]
+        if "sortOrder" in input_data:
+            project.sortOrder = input_data["sortOrder"]
+        if "startDate" in input_data:
+            project.startDate = input_data["startDate"]
+        if "startDateResolution" in input_data:
+            project.startDateResolution = input_data["startDateResolution"]
+        if "state" in input_data:
+            project.state = input_data["state"]
+        if "statusId" in input_data:
+            project.statusId = input_data["statusId"]
+        if "targetDate" in input_data:
+            project.targetDate = input_data["targetDate"]
+        if "targetDateResolution" in input_data:
+            project.targetDateResolution = input_data["targetDateResolution"]
+        if "teamIds" in input_data:
             # Handle many-to-many relationship with teams
-            team_ids = input_data['teamIds']
+            team_ids = input_data["teamIds"]
             teams = session.query(Team).filter(Team.id.in_(team_ids)).all()
             project.teams = teams
-        if 'trashed' in input_data:
-            project.trashed = input_data['trashed']
-        if 'updateReminderFrequency' in input_data:
-            project.updateReminderFrequency = input_data['updateReminderFrequency']
-        if 'updateReminderFrequencyInWeeks' in input_data:
-            project.updateReminderFrequencyInWeeks = input_data['updateReminderFrequencyInWeeks']
-        if 'updateRemindersDay' in input_data:
-            project.updateRemindersDay = input_data['updateRemindersDay']
-        if 'updateRemindersHour' in input_data:
-            project.updateRemindersHour = input_data['updateRemindersHour']
+        if "trashed" in input_data:
+            project.trashed = input_data["trashed"]
+        if "updateReminderFrequency" in input_data:
+            project.updateReminderFrequency = input_data["updateReminderFrequency"]
+        if "updateReminderFrequencyInWeeks" in input_data:
+            project.updateReminderFrequencyInWeeks = input_data[
+                "updateReminderFrequencyInWeeks"
+            ]
+        if "updateRemindersDay" in input_data:
+            project.updateRemindersDay = input_data["updateRemindersDay"]
+        if "updateRemindersHour" in input_data:
+            project.updateRemindersHour = input_data["updateRemindersHour"]
 
         # Update the updatedAt timestamp
         project.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return the updated project (wrapped in payload structure)
-        return {
-            'success': True,
-            'project': project
-        }
+        return {"success": True, "project": project}
 
     except Exception as e:
         raise Exception(f"Failed to update project: {str(e)}")
@@ -13361,6 +13423,7 @@ def resolve_projectUpdate(obj, info, **kwargs):
 # ==============================================================================
 # ProjectLabel Mutations
 # ==============================================================================
+
 
 @mutation.field("projectLabelCreate")
 def resolve_projectLabelCreate(obj, info, **kwargs):
@@ -13375,30 +13438,34 @@ def resolve_projectLabelCreate(obj, info, **kwargs):
     Returns:
         ProjectLabel: The created ProjectLabel entity
     """
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Extract input fields
-        label_id = input_data.get('id') or str(uuid.uuid4())
-        name = input_data.get('name')
-        color = input_data.get('color', '#000000')  # Default to black if not provided
-        description = input_data.get('description')
-        is_group = input_data.get('isGroup', False)
-        parent_id = input_data.get('parentId')
+        label_id = input_data.get("id") or str(uuid.uuid4())
+        name = input_data.get("name")
+        color = input_data.get("color", "#000000")  # Default to black if not provided
+        description = input_data.get("description")
+        is_group = input_data.get("isGroup", False)
+        parent_id = input_data.get("parentId")
 
         # Validate required fields
         if not name:
             raise Exception("Project label name is required")
 
         # Determine organization_id from authenticated user
-        user_id = info.context.get('user_id')
+        user_id = info.context.get("user_id")
         if not user_id:
-            raise Exception("No authenticated user found. Please provide authentication credentials.")
+            raise Exception(
+                "No authenticated user found. Please provide authentication credentials."
+            )
 
         user = session.query(User).filter(User.id == user_id).first()
         if not user:
-            raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+            raise Exception(
+                f"Authenticated user with id '{user_id}' not found in database"
+            )
 
         organization_id = user.organizationId
         if not organization_id:
@@ -13420,10 +13487,8 @@ def resolve_projectLabelCreate(obj, info, **kwargs):
             updatedAt=now,
         )
 
-        # Add to session and commit
         session.add(project_label)
 
-        # Return the created project label
         return project_label
 
     except Exception as e:
@@ -13443,8 +13508,8 @@ def resolve_projectLabelDelete(obj, info, **kwargs):
     Returns:
         dict: DeletePayload with success status and entityId
     """
-    session: Session = info.context['session']
-    label_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    label_id = kwargs.get("id")
 
     try:
         # Validate required field
@@ -13462,18 +13527,12 @@ def resolve_projectLabelDelete(obj, info, **kwargs):
         project_label.archivedAt = now
         project_label.updatedAt = now
 
-        # Commit the changes
-
         # Get the last sync ID (assuming we track this somewhere or use a timestamp)
         # For now, using the current timestamp as a float
         last_sync_id = now.timestamp()
 
         # Return DeletePayload
-        return {
-            'success': True,
-            'entityId': label_id,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "entityId": label_id, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to delete project label: {str(e)}")
@@ -13492,9 +13551,9 @@ def resolve_projectLabelUpdate(obj, info, **kwargs):
     Returns:
         ProjectLabel: The updated ProjectLabel entity
     """
-    session: Session = info.context['session']
-    label_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    label_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Validate required field
@@ -13508,30 +13567,27 @@ def resolve_projectLabelUpdate(obj, info, **kwargs):
             raise Exception(f"Project label with ID {label_id} not found")
 
         # Update fields if provided in input
-        if 'color' in input_data:
-            project_label.color = input_data['color']
+        if "color" in input_data:
+            project_label.color = input_data["color"]
 
-        if 'description' in input_data:
-            project_label.description = input_data['description']
+        if "description" in input_data:
+            project_label.description = input_data["description"]
 
-        if 'isGroup' in input_data:
-            project_label.isGroup = input_data['isGroup']
+        if "isGroup" in input_data:
+            project_label.isGroup = input_data["isGroup"]
 
-        if 'name' in input_data:
-            project_label.name = input_data['name']
+        if "name" in input_data:
+            project_label.name = input_data["name"]
 
-        if 'parentId' in input_data:
-            project_label.parentId = input_data['parentId']
+        if "parentId" in input_data:
+            project_label.parentId = input_data["parentId"]
 
-        if 'retiredAt' in input_data:
-            project_label.retiredAt = input_data['retiredAt']
+        if "retiredAt" in input_data:
+            project_label.retiredAt = input_data["retiredAt"]
 
         # Update the updatedAt timestamp
         project_label.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated project label
         return project_label
 
     except Exception as e:
@@ -13541,6 +13597,7 @@ def resolve_projectLabelUpdate(obj, info, **kwargs):
 # ==============================================================================
 # ProjectMilestone Mutations
 # ==============================================================================
+
 
 @mutation.field("projectMilestoneCreate")
 def resolve_projectMilestoneCreate(obj, info, **kwargs):
@@ -13555,23 +13612,23 @@ def resolve_projectMilestoneCreate(obj, info, **kwargs):
     Returns:
         ProjectMilestone: The created ProjectMilestone entity
     """
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
 
     try:
         # Validate required fields
-        if not input_data.get('name'):
+        if not input_data.get("name"):
             raise Exception("Project milestone name is required")
-        if not input_data.get('projectId'):
+        if not input_data.get("projectId"):
             raise Exception("Project ID is required")
 
         # Verify the project exists
-        project = session.query(Project).filter_by(id=input_data['projectId']).first()
+        project = session.query(Project).filter_by(id=input_data["projectId"]).first()
         if not project:
             raise Exception(f"Project with ID {input_data['projectId']} not found")
 
         # Generate ID if not provided
-        milestone_id = input_data.get('id') or str(uuid.uuid4())
+        milestone_id = input_data.get("id") or str(uuid.uuid4())
 
         # Get current timestamp
         now = datetime.now(timezone.utc)
@@ -13580,11 +13637,11 @@ def resolve_projectMilestoneCreate(obj, info, **kwargs):
         # For new milestones, status defaults to 'unstarted'
         project_milestone = ProjectMilestone(
             id=milestone_id,
-            name=input_data['name'],
-            projectId=input_data['projectId'],
-            description=input_data.get('description'),
-            sortOrder=input_data.get('sortOrder', 0.0),
-            targetDate=input_data.get('targetDate'),
+            name=input_data["name"],
+            projectId=input_data["projectId"],
+            description=input_data.get("description"),
+            sortOrder=input_data.get("sortOrder", 0.0),
+            targetDate=input_data.get("targetDate"),
             # Set default values for required fields
             createdAt=now,
             updatedAt=now,
@@ -13594,10 +13651,8 @@ def resolve_projectMilestoneCreate(obj, info, **kwargs):
             status=ProjectMilestoneStatus.UNSTARTED,
         )
 
-        # Add to session and commit
         session.add(project_milestone)
 
-        # Return the created milestone
         return project_milestone
 
     except Exception as e:
@@ -13617,9 +13672,9 @@ def resolve_projectMilestoneUpdate(obj, info, **kwargs):
     Returns:
         ProjectMilestone: The updated ProjectMilestone entity
     """
-    session: Session = info.context['session']
-    milestone_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    milestone_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Validate that ID is provided
@@ -13633,34 +13688,33 @@ def resolve_projectMilestoneUpdate(obj, info, **kwargs):
             raise Exception(f"ProjectMilestone with id {milestone_id} not found")
 
         # Update fields if provided in input
-        if 'name' in input_data:
-            milestone.name = input_data['name']
+        if "name" in input_data:
+            milestone.name = input_data["name"]
 
-        if 'description' in input_data:
-            milestone.description = input_data['description']
+        if "description" in input_data:
+            milestone.description = input_data["description"]
 
-        if 'descriptionData' in input_data:
-            milestone.descriptionData = input_data['descriptionData']
+        if "descriptionData" in input_data:
+            milestone.descriptionData = input_data["descriptionData"]
 
-        if 'projectId' in input_data:
+        if "projectId" in input_data:
             # Verify the new project exists
-            project = session.query(Project).filter_by(id=input_data['projectId']).first()
+            project = (
+                session.query(Project).filter_by(id=input_data["projectId"]).first()
+            )
             if not project:
                 raise Exception(f"Project with ID {input_data['projectId']} not found")
-            milestone.projectId = input_data['projectId']
+            milestone.projectId = input_data["projectId"]
 
-        if 'sortOrder' in input_data:
-            milestone.sortOrder = input_data['sortOrder']
+        if "sortOrder" in input_data:
+            milestone.sortOrder = input_data["sortOrder"]
 
-        if 'targetDate' in input_data:
-            milestone.targetDate = input_data['targetDate']
+        if "targetDate" in input_data:
+            milestone.targetDate = input_data["targetDate"]
 
         # Update the updatedAt timestamp
         milestone.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
-        # Return the updated milestone
         return milestone
 
     except Exception as e:
@@ -13681,8 +13735,8 @@ def resolve_projectMilestoneDelete(obj, info, **kwargs):
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
 
-    session: Session = info.context['session']
-    milestone_id = kwargs.get('id')
+    session: Session = info.context["session"]
+    milestone_id = kwargs.get("id")
 
     try:
         # Validate that ID is provided
@@ -13699,17 +13753,11 @@ def resolve_projectMilestoneDelete(obj, info, **kwargs):
         milestone.archivedAt = datetime.now(timezone.utc)
         milestone.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return DeletePayload structure
-        return {
-            'entityId': milestone_id,
-            'success': True,
-            'lastSyncId': last_sync_id
-        }
+        return {"entityId": milestone_id, "success": True, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to delete project milestone: {str(e)}")
@@ -13734,15 +13782,15 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
         - previousProjectTeamIds: snapshot of added teams (for undo)
     """
 
-    session: Session = info.context['session']
-    milestone_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
+    session: Session = info.context["session"]
+    milestone_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
 
     try:
         # Validate required fields
         if not milestone_id:
             raise Exception("Milestone ID is required")
-        if not input_data.get('projectId'):
+        if not input_data.get("projectId"):
             raise Exception("Project ID is required in input")
 
         # Fetch the milestone to move
@@ -13751,7 +13799,7 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
             raise Exception(f"ProjectMilestone with id {milestone_id} not found")
 
         # Fetch the target project
-        target_project_id = input_data['projectId']
+        target_project_id = input_data["projectId"]
         target_project = session.query(Project).filter_by(id=target_project_id).first()
         if not target_project:
             raise Exception(f"Target project with id {target_project_id} not found")
@@ -13761,14 +13809,14 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
         previous_project_team_ids = None
 
         # Handle undo operations if specified
-        undo_issue_team_ids = input_data.get('undoIssueTeamIds', [])
-        undo_project_team_ids = input_data.get('undoProjectTeamIds')
+        undo_issue_team_ids = input_data.get("undoIssueTeamIds", [])
+        undo_project_team_ids = input_data.get("undoProjectTeamIds")
 
         if undo_issue_team_ids:
             # Undo: move issues back to their previous teams
             for undo_mapping in undo_issue_team_ids:
-                issue_id = undo_mapping.get('issueId')
-                team_id = undo_mapping.get('teamId')
+                issue_id = undo_mapping.get("issueId")
+                team_id = undo_mapping.get("teamId")
 
                 if issue_id and team_id:
                     issue = session.query(Issue).filter_by(id=issue_id).first()
@@ -13778,20 +13826,24 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
 
         if undo_project_team_ids:
             # Undo: remove teams that were added to the project
-            project_id = undo_project_team_ids.get('projectId')
-            team_ids = undo_project_team_ids.get('teamIds', [])
+            project_id = undo_project_team_ids.get("projectId")
+            team_ids = undo_project_team_ids.get("teamIds", [])
 
             if project_id and team_ids:
                 project = session.query(Project).filter_by(id=project_id).first()
                 if project:
                     # Remove the teams that were previously added
-                    teams_to_remove = session.query(Team).filter(Team.id.in_(team_ids)).all()
+                    teams_to_remove = (
+                        session.query(Team).filter(Team.id.in_(team_ids)).all()
+                    )
                     for team in teams_to_remove:
                         if team in project.teams:
                             project.teams.remove(team)
 
         # Get the milestone's issues to handle team constraints
-        milestone_issues = session.query(Issue).filter_by(projectMilestoneId=milestone_id).all()
+        milestone_issues = (
+            session.query(Issue).filter_by(projectMilestoneId=milestone_id).all()
+        )
 
         # Get the target project's team IDs
         target_project_team_ids = {team.id for team in target_project.teams}
@@ -13802,24 +13854,25 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
 
         if team_mismatch:
             # Handle team mismatch based on input options
-            new_issue_team_id = input_data.get('newIssueTeamId')
-            add_issue_team_to_project = input_data.get('addIssueTeamToProject', False)
+            new_issue_team_id = input_data.get("newIssueTeamId")
+            add_issue_team_to_project = input_data.get("addIssueTeamToProject", False)
 
             if new_issue_team_id:
                 # Move all milestone issues to the specified team
                 for issue in milestone_issues:
                     if issue.teamId:
                         # Store previous team mapping for undo
-                        previous_issue_team_ids.append({
-                            'issueId': issue.id,
-                            'teamId': issue.teamId
-                        })
+                        previous_issue_team_ids.append(
+                            {"issueId": issue.id, "teamId": issue.teamId}
+                        )
                     issue.teamId = new_issue_team_id
                     issue.updatedAt = datetime.now(timezone.utc)
 
             elif add_issue_team_to_project:
                 # Add each issue's team to the target project
-                teams_to_add = session.query(Team).filter(Team.id.in_(issue_team_ids)).all()
+                teams_to_add = (
+                    session.query(Team).filter(Team.id.in_(issue_team_ids)).all()
+                )
                 project_team_ids_before = [team.id for team in target_project.teams]
 
                 for team in teams_to_add:
@@ -13829,8 +13882,8 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
                 # Store snapshot for undo
                 if teams_to_add:
                     previous_project_team_ids = {
-                        'projectId': target_project_id,
-                        'teamIds': project_team_ids_before
+                        "projectId": target_project_id,
+                        "teamIds": project_team_ids_before,
                     }
 
             else:
@@ -13844,18 +13897,18 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
         milestone.projectId = target_project_id
         milestone.updatedAt = datetime.now(timezone.utc)
 
-        # Commit all changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return ProjectMilestoneMovePayload structure
         return {
-            'projectMilestone': milestone,
-            'success': True,
-            'lastSyncId': last_sync_id,
-            'previousIssueTeamIds': previous_issue_team_ids if previous_issue_team_ids else None,
-            'previousProjectTeamIds': previous_project_team_ids
+            "projectMilestone": milestone,
+            "success": True,
+            "lastSyncId": last_sync_id,
+            "previousIssueTeamIds": previous_issue_team_ids
+            if previous_issue_team_ids
+            else None,
+            "previousProjectTeamIds": previous_project_team_ids,
         }
 
     except Exception as e:
@@ -13865,6 +13918,7 @@ def resolve_projectMilestoneMove(obj, info, **kwargs):
 # ============================================================
 # PROJECT RELATION MUTATIONS
 # ============================================================
+
 
 @mutation.field("projectRelationCreate")
 def resolve_projectRelationCreate(obj, info, **kwargs):
@@ -13879,29 +13933,29 @@ def resolve_projectRelationCreate(obj, info, **kwargs):
     """
     import uuid
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        input_data = kwargs.get('input')
+        input_data = kwargs.get("input")
 
         if not input_data:
             raise Exception("Input data is required")
 
         # Validate required fields
-        if not input_data.get('projectId'):
+        if not input_data.get("projectId"):
             raise Exception("projectId is required")
-        if not input_data.get('relatedProjectId'):
+        if not input_data.get("relatedProjectId"):
             raise Exception("relatedProjectId is required")
-        if not input_data.get('anchorType'):
+        if not input_data.get("anchorType"):
             raise Exception("anchorType is required")
-        if not input_data.get('relatedAnchorType'):
+        if not input_data.get("relatedAnchorType"):
             raise Exception("relatedAnchorType is required")
-        if not input_data.get('type'):
+        if not input_data.get("type"):
             raise Exception("type is required")
 
         # Generate ID if not provided
-        relation_id = input_data.get('id', str(uuid.uuid4()))
+        relation_id = input_data.get("id", str(uuid.uuid4()))
 
         # Set timestamps
         current_time = datetime.now(timezone.utc)
@@ -13909,19 +13963,18 @@ def resolve_projectRelationCreate(obj, info, **kwargs):
         # Build the project relation entity
         project_relation = ProjectRelation(
             id=relation_id,
-            projectId=input_data['projectId'],
-            relatedProjectId=input_data['relatedProjectId'],
-            anchorType=input_data['anchorType'],
-            relatedAnchorType=input_data['relatedAnchorType'],
-            type=input_data['type'],
-            projectMilestoneId=input_data.get('projectMilestoneId'),
-            relatedProjectMilestoneId=input_data.get('relatedProjectMilestoneId'),
+            projectId=input_data["projectId"],
+            relatedProjectId=input_data["relatedProjectId"],
+            anchorType=input_data["anchorType"],
+            relatedAnchorType=input_data["relatedAnchorType"],
+            type=input_data["type"],
+            projectMilestoneId=input_data.get("projectMilestoneId"),
+            relatedProjectMilestoneId=input_data.get("relatedProjectMilestoneId"),
             createdAt=current_time,
             updatedAt=current_time,
-            archivedAt=None
+            archivedAt=None,
         )
 
-        # Add to session and commit
         session.add(project_relation)
 
         return project_relation
@@ -13942,17 +13995,19 @@ def resolve_projectRelationDelete(obj, info, **kwargs):
         DeletePayload: Payload indicating success and the entity ID.
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        relation_id = kwargs.get('id')
+        relation_id = kwargs.get("id")
 
         if not relation_id:
             raise Exception("id is required")
 
         # Query for the project relation
-        project_relation = session.query(ProjectRelation).filter_by(id=relation_id).first()
+        project_relation = (
+            session.query(ProjectRelation).filter_by(id=relation_id).first()
+        )
 
         if not project_relation:
             raise Exception(f"Project relation with id {relation_id} not found")
@@ -13962,13 +14017,11 @@ def resolve_projectRelationDelete(obj, info, **kwargs):
         project_relation.archivedAt = current_time
         project_relation.updatedAt = current_time
 
-        # Commit the transaction
-
         # Return DeletePayload
         return {
-            'entityId': relation_id,
-            'lastSyncId': current_time.timestamp(),
-            'success': True
+            "entityId": relation_id,
+            "lastSyncId": current_time.timestamp(),
+            "success": True,
         }
 
     except Exception as e:
@@ -13988,12 +14041,12 @@ def resolve_projectRelationUpdate(obj, info, **kwargs):
         ProjectRelation: The updated project relation.
     """
 
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        relation_id = kwargs.get('id')
-        input_data = kwargs.get('input')
+        relation_id = kwargs.get("id")
+        input_data = kwargs.get("input")
 
         if not relation_id:
             raise Exception("id is required")
@@ -14002,38 +14055,40 @@ def resolve_projectRelationUpdate(obj, info, **kwargs):
             raise Exception("input is required")
 
         # Query for the project relation
-        project_relation = session.query(ProjectRelation).filter_by(id=relation_id).first()
+        project_relation = (
+            session.query(ProjectRelation).filter_by(id=relation_id).first()
+        )
 
         if not project_relation:
             raise Exception(f"Project relation with id {relation_id} not found")
 
         # Update fields if provided in input
-        if 'anchorType' in input_data:
-            project_relation.anchorType = input_data['anchorType']
+        if "anchorType" in input_data:
+            project_relation.anchorType = input_data["anchorType"]
 
-        if 'projectId' in input_data:
-            project_relation.projectId = input_data['projectId']
+        if "projectId" in input_data:
+            project_relation.projectId = input_data["projectId"]
 
-        if 'projectMilestoneId' in input_data:
-            project_relation.projectMilestoneId = input_data['projectMilestoneId']
+        if "projectMilestoneId" in input_data:
+            project_relation.projectMilestoneId = input_data["projectMilestoneId"]
 
-        if 'relatedAnchorType' in input_data:
-            project_relation.relatedAnchorType = input_data['relatedAnchorType']
+        if "relatedAnchorType" in input_data:
+            project_relation.relatedAnchorType = input_data["relatedAnchorType"]
 
-        if 'relatedProjectId' in input_data:
-            project_relation.relatedProjectId = input_data['relatedProjectId']
+        if "relatedProjectId" in input_data:
+            project_relation.relatedProjectId = input_data["relatedProjectId"]
 
-        if 'relatedProjectMilestoneId' in input_data:
-            project_relation.relatedProjectMilestoneId = input_data['relatedProjectMilestoneId']
+        if "relatedProjectMilestoneId" in input_data:
+            project_relation.relatedProjectMilestoneId = input_data[
+                "relatedProjectMilestoneId"
+            ]
 
-        if 'type' in input_data:
-            project_relation.type = input_data['type']
+        if "type" in input_data:
+            project_relation.type = input_data["type"]
 
         # Update the updatedAt timestamp
         current_time = datetime.now(timezone.utc)
         project_relation.updatedAt = current_time
-
-        # Commit the transaction
 
         # Return the updated project relation
         return project_relation
@@ -14060,26 +14115,26 @@ def resolve_projectStatusCreate(obj, info, **kwargs):
     Returns:
         ProjectStatusPayload: The create payload with success status and entity.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input argument
-        input_data = kwargs.get('input')
+        input_data = kwargs.get("input")
 
         if not input_data:
             raise Exception("Input data is required")
 
         # Validate required fields
-        required_fields = ['color', 'name', 'position', 'type']
+        required_fields = ["color", "name", "position", "type"]
         for field in required_fields:
             if field not in input_data:
                 raise Exception(f"Required field '{field}' is missing")
 
         # Generate ID if not provided
-        project_status_id = input_data.get('id', str(uuid.uuid4()))
+        project_status_id = input_data.get("id", str(uuid.uuid4()))
 
         # Set defaults
-        indefinite = input_data.get('indefinite', False)
+        indefinite = input_data.get("indefinite", False)
 
         # Create timestamps
         now = datetime.now(timezone.utc)
@@ -14087,31 +14142,31 @@ def resolve_projectStatusCreate(obj, info, **kwargs):
         # Create the new ProjectStatus entity
         project_status = ProjectStatus(
             id=project_status_id,
-            color=input_data['color'],
-            name=input_data['name'],
-            position=input_data['position'],
-            type=input_data['type'],
+            color=input_data["color"],
+            name=input_data["name"],
+            position=input_data["position"],
+            type=input_data["type"],
             indefinite=indefinite,
-            description=input_data.get('description'),
+            description=input_data.get("description"),
             createdAt=now,
             updatedAt=now,
             archivedAt=None,
-            organizationId=input_data.get('organizationId', '00000000-0000-0000-0000-000000000000')  # Placeholder
+            organizationId=input_data.get(
+                "organizationId", "00000000-0000-0000-0000-000000000000"
+            ),  # Placeholder
         )
 
         # Add to session
         session.add(project_status)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = now.timestamp()
 
         # Return the payload
         return {
-            'success': True,
-            'projectStatus': project_status,
-            'lastSyncId': last_sync_id
+            "success": True,
+            "projectStatus": project_status,
+            "lastSyncId": last_sync_id,
         }
 
     except Exception as e:
@@ -14129,17 +14184,19 @@ def resolve_projectStatusArchive(obj, info, **kwargs):
     Returns:
         ProjectStatusArchivePayload: The archive payload with success status and entity.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_status_id = kwargs.get('id')
+        project_status_id = kwargs.get("id")
 
         if not project_status_id:
             raise Exception("Project status ID is required")
 
         # Fetch the project status
-        project_status = session.query(ProjectStatus).filter_by(id=project_status_id).first()
+        project_status = (
+            session.query(ProjectStatus).filter_by(id=project_status_id).first()
+        )
         if not project_status:
             raise Exception(f"Project status with ID {project_status_id} not found")
 
@@ -14149,17 +14206,11 @@ def resolve_projectStatusArchive(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project_status.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return the payload
-        return {
-            'success': True,
-            'entity': project_status,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "entity": project_status, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to archive project status: {str(e)}")
@@ -14176,17 +14227,19 @@ def resolve_projectStatusUnarchive(obj, info, **kwargs):
     Returns:
         ProjectStatusArchivePayload: The unarchive payload with success status and entity.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_status_id = kwargs.get('id')
+        project_status_id = kwargs.get("id")
 
         if not project_status_id:
             raise Exception("Project status ID is required")
 
         # Fetch the project status
-        project_status = session.query(ProjectStatus).filter_by(id=project_status_id).first()
+        project_status = (
+            session.query(ProjectStatus).filter_by(id=project_status_id).first()
+        )
         if not project_status:
             raise Exception(f"Project status with ID {project_status_id} not found")
 
@@ -14196,17 +14249,11 @@ def resolve_projectStatusUnarchive(obj, info, **kwargs):
         # Update the updatedAt timestamp
         project_status.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return the payload
-        return {
-            'success': True,
-            'entity': project_status,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "entity": project_status, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to unarchive project status: {str(e)}")
@@ -14230,12 +14277,12 @@ def resolve_projectStatusUpdate(obj, info, **kwargs):
     Returns:
         ProjectStatusPayload: The update payload with success status and entity.
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        project_status_id = kwargs.get('id')
-        input_data = kwargs.get('input')
+        project_status_id = kwargs.get("id")
+        input_data = kwargs.get("input")
 
         if not project_status_id:
             raise Exception("Project status ID is required")
@@ -14244,42 +14291,42 @@ def resolve_projectStatusUpdate(obj, info, **kwargs):
             raise Exception("Input data is required")
 
         # Fetch the project status
-        project_status = session.query(ProjectStatus).filter_by(id=project_status_id).first()
+        project_status = (
+            session.query(ProjectStatus).filter_by(id=project_status_id).first()
+        )
         if not project_status:
             raise Exception(f"Project status with ID {project_status_id} not found")
 
         # Update fields if provided in input
-        if 'color' in input_data:
-            project_status.color = input_data['color']
+        if "color" in input_data:
+            project_status.color = input_data["color"]
 
-        if 'description' in input_data:
-            project_status.description = input_data['description']
+        if "description" in input_data:
+            project_status.description = input_data["description"]
 
-        if 'indefinite' in input_data:
-            project_status.indefinite = input_data['indefinite']
+        if "indefinite" in input_data:
+            project_status.indefinite = input_data["indefinite"]
 
-        if 'name' in input_data:
-            project_status.name = input_data['name']
+        if "name" in input_data:
+            project_status.name = input_data["name"]
 
-        if 'position' in input_data:
-            project_status.position = input_data['position']
+        if "position" in input_data:
+            project_status.position = input_data["position"]
 
-        if 'type' in input_data:
-            project_status.type = input_data['type']
+        if "type" in input_data:
+            project_status.type = input_data["type"]
 
         # Update the updatedAt timestamp
         project_status.updatedAt = datetime.now(timezone.utc)
-
-        # Commit the changes
 
         # Generate lastSyncId (using timestamp as sync ID)
         last_sync_id = datetime.now(timezone.utc).timestamp()
 
         # Return the payload
         return {
-            'success': True,
-            'projectStatus': project_status,
-            'lastSyncId': last_sync_id
+            "success": True,
+            "projectStatus": project_status,
+            "lastSyncId": last_sync_id,
         }
 
     except Exception as e:
@@ -14289,6 +14336,7 @@ def resolve_projectStatusUpdate(obj, info, **kwargs):
 # ================================================================================
 # Team Mutations
 # ================================================================================
+
 
 @mutation.field("teamCreate")
 def resolve_teamCreate(obj, info, **kwargs):
@@ -14307,28 +14355,32 @@ def resolve_teamCreate(obj, info, **kwargs):
     import uuid
     import secrets
 
-    session: Session = info.context['session']
-    input_data = kwargs.get('input', {})
-    copy_settings_from_team_id = kwargs.get('copySettingsFromTeamId')
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
+    copy_settings_from_team_id = kwargs.get("copySettingsFromTeamId")
 
     try:
         # Extract required field
-        name = input_data.get('name')
+        name = input_data.get("name")
         if not name:
             raise Exception("Team name is required")
 
         # Get the organization from context (since organizationId is deprecated in input)
         # If organizationId is provided in input, use it; otherwise get from authenticated user
-        org_id = input_data.get('organizationId')
+        org_id = input_data.get("organizationId")
         if not org_id:
             # Get organization from authenticated user
-            user_id = info.context.get('user_id')
+            user_id = info.context.get("user_id")
             if not user_id:
-                raise Exception("No authenticated user found. Please provide authentication credentials.")
+                raise Exception(
+                    "No authenticated user found. Please provide authentication credentials."
+                )
 
             user = session.query(User).filter(User.id == user_id).first()
             if not user:
-                raise Exception(f"Authenticated user with id '{user_id}' not found in database")
+                raise Exception(
+                    f"Authenticated user with id '{user_id}' not found in database"
+                )
 
             org_id = user.organizationId
             if not org_id:
@@ -14340,13 +14392,13 @@ def resolve_teamCreate(obj, info, **kwargs):
             raise Exception(f"Organization with id {org_id} not found")
 
         # Generate ID if not provided
-        team_id = input_data.get('id', str(uuid.uuid4()))
+        team_id = input_data.get("id", str(uuid.uuid4()))
 
         # Generate key if not provided (based on name)
-        key = input_data.get('key')
+        key = input_data.get("key")
         if not key:
             # Generate key from name (uppercase, remove spaces, limit to 5 chars)
-            key = name.upper().replace(' ', '')[:5]
+            key = name.upper().replace(" ", "")[:5]
             # Ensure uniqueness by appending random chars if needed
             existing_team = session.query(Team).filter_by(key=key).first()
             if existing_team:
@@ -14361,37 +14413,39 @@ def resolve_teamCreate(obj, info, **kwargs):
         # Get settings from source team if copySettingsFromTeamId is provided
         default_settings = {}
         if copy_settings_from_team_id:
-            source_team = session.query(Team).filter_by(id=copy_settings_from_team_id).first()
+            source_team = (
+                session.query(Team).filter_by(id=copy_settings_from_team_id).first()
+            )
             if source_team:
                 # Copy relevant settings
                 default_settings = {
-                    'autoArchivePeriod': source_team.autoArchivePeriod,
-                    'autoClosePeriod': source_team.autoClosePeriod,
-                    'autoCloseStateId': source_team.autoCloseStateId,
-                    'color': source_team.color,
-                    'cycleCooldownTime': source_team.cycleCooldownTime,
-                    'cycleDuration': source_team.cycleDuration,
-                    'cycleIssueAutoAssignCompleted': source_team.cycleIssueAutoAssignCompleted,
-                    'cycleIssueAutoAssignStarted': source_team.cycleIssueAutoAssignStarted,
-                    'cycleLockToActive': source_team.cycleLockToActive,
-                    'cycleStartDay': source_team.cycleStartDay,
-                    'cyclesEnabled': source_team.cyclesEnabled,
-                    'defaultIssueEstimate': source_team.defaultIssueEstimate,
-                    'groupIssueHistory': source_team.groupIssueHistory,
-                    'icon': source_team.icon,
-                    'inheritIssueEstimation': source_team.inheritIssueEstimation,
-                    'inheritProductIntelligenceScope': source_team.inheritProductIntelligenceScope,
-                    'inheritWorkflowStatuses': source_team.inheritWorkflowStatuses,
-                    'issueEstimationAllowZero': source_team.issueEstimationAllowZero,
-                    'issueEstimationExtended': source_team.issueEstimationExtended,
-                    'issueEstimationType': source_team.issueEstimationType,
-                    'markedAsDuplicateWorkflowStateId': source_team.markedAsDuplicateWorkflowStateId,
-                    'productIntelligenceScope': source_team.productIntelligenceScope,
-                    'requirePriorityToLeaveTriage': source_team.requirePriorityToLeaveTriage,
-                    'setIssueSortOrderOnStateChange': source_team.setIssueSortOrderOnStateChange,
-                    'timezone': source_team.timezone,
-                    'triageEnabled': source_team.triageEnabled,
-                    'upcomingCycleCount': source_team.upcomingCycleCount,
+                    "autoArchivePeriod": source_team.autoArchivePeriod,
+                    "autoClosePeriod": source_team.autoClosePeriod,
+                    "autoCloseStateId": source_team.autoCloseStateId,
+                    "color": source_team.color,
+                    "cycleCooldownTime": source_team.cycleCooldownTime,
+                    "cycleDuration": source_team.cycleDuration,
+                    "cycleIssueAutoAssignCompleted": source_team.cycleIssueAutoAssignCompleted,
+                    "cycleIssueAutoAssignStarted": source_team.cycleIssueAutoAssignStarted,
+                    "cycleLockToActive": source_team.cycleLockToActive,
+                    "cycleStartDay": source_team.cycleStartDay,
+                    "cyclesEnabled": source_team.cyclesEnabled,
+                    "defaultIssueEstimate": source_team.defaultIssueEstimate,
+                    "groupIssueHistory": source_team.groupIssueHistory,
+                    "icon": source_team.icon,
+                    "inheritIssueEstimation": source_team.inheritIssueEstimation,
+                    "inheritProductIntelligenceScope": source_team.inheritProductIntelligenceScope,
+                    "inheritWorkflowStatuses": source_team.inheritWorkflowStatuses,
+                    "issueEstimationAllowZero": source_team.issueEstimationAllowZero,
+                    "issueEstimationExtended": source_team.issueEstimationExtended,
+                    "issueEstimationType": source_team.issueEstimationType,
+                    "markedAsDuplicateWorkflowStateId": source_team.markedAsDuplicateWorkflowStateId,
+                    "productIntelligenceScope": source_team.productIntelligenceScope,
+                    "requirePriorityToLeaveTriage": source_team.requirePriorityToLeaveTriage,
+                    "setIssueSortOrderOnStateChange": source_team.setIssueSortOrderOnStateChange,
+                    "timezone": source_team.timezone,
+                    "triageEnabled": source_team.triageEnabled,
+                    "upcomingCycleCount": source_team.upcomingCycleCount,
                 }
 
         # Create the new team with input data, using default settings as fallback
@@ -14404,45 +14458,119 @@ def resolve_teamCreate(obj, info, **kwargs):
             createdAt=now,
             updatedAt=now,
             # Optional fields from input or defaults
-            autoArchivePeriod=input_data.get('autoArchivePeriod', default_settings.get('autoArchivePeriod', 0.0)),
-            autoClosePeriod=input_data.get('autoClosePeriod', default_settings.get('autoClosePeriod')),
-            autoCloseStateId=input_data.get('autoCloseStateId', default_settings.get('autoCloseStateId')),
-            color=input_data.get('color', default_settings.get('color')),
-            cycleCooldownTime=input_data.get('cycleCooldownTime', default_settings.get('cycleCooldownTime', 0.0)),
-            cycleDuration=input_data.get('cycleDuration', default_settings.get('cycleDuration', 1.0)),
-            cycleIssueAutoAssignCompleted=input_data.get('cycleIssueAutoAssignCompleted', default_settings.get('cycleIssueAutoAssignCompleted', False)),
-            cycleIssueAutoAssignStarted=input_data.get('cycleIssueAutoAssignStarted', default_settings.get('cycleIssueAutoAssignStarted', False)),
-            cycleLockToActive=input_data.get('cycleLockToActive', default_settings.get('cycleLockToActive', False)),
-            cycleStartDay=input_data.get('cycleStartDay', default_settings.get('cycleStartDay', 1.0)),
-            cyclesEnabled=input_data.get('cyclesEnabled', default_settings.get('cyclesEnabled', False)),
-            defaultIssueEstimate=input_data.get('defaultIssueEstimate', default_settings.get('defaultIssueEstimate', 0.0)),
-            defaultProjectTemplateId=input_data.get('defaultProjectTemplateId', default_settings.get('defaultProjectTemplateId')),
-            defaultTemplateForMembersId=input_data.get('defaultTemplateForMembersId', default_settings.get('defaultTemplateForMembersId')),
-            defaultTemplateForNonMembersId=input_data.get('defaultTemplateForNonMembersId', default_settings.get('defaultTemplateForNonMembersId')),
-            description=input_data.get('description', default_settings.get('description')),
-            groupIssueHistory=input_data.get('groupIssueHistory', default_settings.get('groupIssueHistory', False)),
-            icon=input_data.get('icon', default_settings.get('icon')),
-            inheritIssueEstimation=input_data.get('inheritIssueEstimation', default_settings.get('inheritIssueEstimation', False)),
-            inheritProductIntelligenceScope=input_data.get('inheritProductIntelligenceScope', default_settings.get('inheritProductIntelligenceScope')),
-            inheritWorkflowStatuses=input_data.get('inheritWorkflowStatuses', default_settings.get('inheritWorkflowStatuses', False)),
-            issueEstimationAllowZero=input_data.get('issueEstimationAllowZero', default_settings.get('issueEstimationAllowZero', False)),
-            issueEstimationExtended=input_data.get('issueEstimationExtended', default_settings.get('issueEstimationExtended', False)),
-            issueEstimationType=input_data.get('issueEstimationType', default_settings.get('issueEstimationType', 'notUsed')),
-            markedAsDuplicateWorkflowStateId=input_data.get('markedAsDuplicateWorkflowStateId', default_settings.get('markedAsDuplicateWorkflowStateId')),
-            parentId=input_data.get('parentId'),
-            private=input_data.get('private', default_settings.get('private', False)),
-            productIntelligenceScope=input_data.get('productIntelligenceScope', default_settings.get('productIntelligenceScope')),
-            requirePriorityToLeaveTriage=input_data.get('requirePriorityToLeaveTriage', default_settings.get('requirePriorityToLeaveTriage', False)),
-            setIssueSortOrderOnStateChange=input_data.get('setIssueSortOrderOnStateChange', default_settings.get('setIssueSortOrderOnStateChange', 'none')),
-            timezone=input_data.get('timezone', default_settings.get('timezone', 'America/Los_Angeles')),
-            triageEnabled=input_data.get('triageEnabled', default_settings.get('triageEnabled', False)),
-            upcomingCycleCount=input_data.get('upcomingCycleCount', default_settings.get('upcomingCycleCount', 3.0)),
+            autoArchivePeriod=input_data.get(
+                "autoArchivePeriod", default_settings.get("autoArchivePeriod", 0.0)
+            ),
+            autoClosePeriod=input_data.get(
+                "autoClosePeriod", default_settings.get("autoClosePeriod")
+            ),
+            autoCloseStateId=input_data.get(
+                "autoCloseStateId", default_settings.get("autoCloseStateId")
+            ),
+            color=input_data.get("color", default_settings.get("color")),
+            cycleCooldownTime=input_data.get(
+                "cycleCooldownTime", default_settings.get("cycleCooldownTime", 0.0)
+            ),
+            cycleDuration=input_data.get(
+                "cycleDuration", default_settings.get("cycleDuration", 1.0)
+            ),
+            cycleIssueAutoAssignCompleted=input_data.get(
+                "cycleIssueAutoAssignCompleted",
+                default_settings.get("cycleIssueAutoAssignCompleted", False),
+            ),
+            cycleIssueAutoAssignStarted=input_data.get(
+                "cycleIssueAutoAssignStarted",
+                default_settings.get("cycleIssueAutoAssignStarted", False),
+            ),
+            cycleLockToActive=input_data.get(
+                "cycleLockToActive", default_settings.get("cycleLockToActive", False)
+            ),
+            cycleStartDay=input_data.get(
+                "cycleStartDay", default_settings.get("cycleStartDay", 1.0)
+            ),
+            cyclesEnabled=input_data.get(
+                "cyclesEnabled", default_settings.get("cyclesEnabled", False)
+            ),
+            defaultIssueEstimate=input_data.get(
+                "defaultIssueEstimate",
+                default_settings.get("defaultIssueEstimate", 0.0),
+            ),
+            defaultProjectTemplateId=input_data.get(
+                "defaultProjectTemplateId",
+                default_settings.get("defaultProjectTemplateId"),
+            ),
+            defaultTemplateForMembersId=input_data.get(
+                "defaultTemplateForMembersId",
+                default_settings.get("defaultTemplateForMembersId"),
+            ),
+            defaultTemplateForNonMembersId=input_data.get(
+                "defaultTemplateForNonMembersId",
+                default_settings.get("defaultTemplateForNonMembersId"),
+            ),
+            description=input_data.get(
+                "description", default_settings.get("description")
+            ),
+            groupIssueHistory=input_data.get(
+                "groupIssueHistory", default_settings.get("groupIssueHistory", False)
+            ),
+            icon=input_data.get("icon", default_settings.get("icon")),
+            inheritIssueEstimation=input_data.get(
+                "inheritIssueEstimation",
+                default_settings.get("inheritIssueEstimation", False),
+            ),
+            inheritProductIntelligenceScope=input_data.get(
+                "inheritProductIntelligenceScope",
+                default_settings.get("inheritProductIntelligenceScope"),
+            ),
+            inheritWorkflowStatuses=input_data.get(
+                "inheritWorkflowStatuses",
+                default_settings.get("inheritWorkflowStatuses", False),
+            ),
+            issueEstimationAllowZero=input_data.get(
+                "issueEstimationAllowZero",
+                default_settings.get("issueEstimationAllowZero", False),
+            ),
+            issueEstimationExtended=input_data.get(
+                "issueEstimationExtended",
+                default_settings.get("issueEstimationExtended", False),
+            ),
+            issueEstimationType=input_data.get(
+                "issueEstimationType",
+                default_settings.get("issueEstimationType", "notUsed"),
+            ),
+            markedAsDuplicateWorkflowStateId=input_data.get(
+                "markedAsDuplicateWorkflowStateId",
+                default_settings.get("markedAsDuplicateWorkflowStateId"),
+            ),
+            parentId=input_data.get("parentId"),
+            private=input_data.get("private", default_settings.get("private", False)),
+            productIntelligenceScope=input_data.get(
+                "productIntelligenceScope",
+                default_settings.get("productIntelligenceScope"),
+            ),
+            requirePriorityToLeaveTriage=input_data.get(
+                "requirePriorityToLeaveTriage",
+                default_settings.get("requirePriorityToLeaveTriage", False),
+            ),
+            setIssueSortOrderOnStateChange=input_data.get(
+                "setIssueSortOrderOnStateChange",
+                default_settings.get("setIssueSortOrderOnStateChange", "none"),
+            ),
+            timezone=input_data.get(
+                "timezone", default_settings.get("timezone", "America/Los_Angeles")
+            ),
+            triageEnabled=input_data.get(
+                "triageEnabled", default_settings.get("triageEnabled", False)
+            ),
+            upcomingCycleCount=input_data.get(
+                "upcomingCycleCount", default_settings.get("upcomingCycleCount", 3.0)
+            ),
             # Required fields with defaults
             aiThreadSummariesEnabled=False,
             autoCloseChildIssues=False,
             autoCloseParentIssues=False,
             currentProgress={},
-            cycleCalenderUrl='',  # This would be generated based on team
+            cycleCalenderUrl="",  # This would be generated based on team
             displayName=name,  # Initially same as name
             issueCount=0,
             issueOrderingNoPriorityFirst=False,
@@ -14467,21 +14595,26 @@ def resolve_teamCreate(obj, info, **kwargs):
         # Flush to get the ID before creating membership
         session.flush()
 
-        # TODO: Add the creating user as a team member
-        # This would require getting the current user from context:
-        # current_user_id = info.context.get('user_id')
-        # if current_user_id:
-        #     membership = TeamMembership(
-        #         id=str(uuid.uuid4()),
-        #         userId=current_user_id,
-        #         teamId=team_id,
-        #         createdAt=now,
-        #         updatedAt=now,
-        #         owner=True
-        #     )
-        #     session.add(membership)
+        # Add the creating user as team owner
+        creating_user_id = info.context.get("user_id")
+        if creating_user_id:
+            # Verify the user exists in the database
+            user = session.query(User).filter_by(id=creating_user_id).first()
+            if not user:
+                raise Exception(
+                    f"Cannot create team membership: User with id '{creating_user_id}' not found in database"
+                )
 
-        # Commit the transaction
+            membership = TeamMembership(
+                id=str(uuid.uuid4()),
+                userId=creating_user_id,
+                teamId=team_id,
+                createdAt=now,
+                updatedAt=now,
+                owner=True,
+                sortOrder=0.0,
+            )
+            session.add(membership)
 
         # Return the team entity (TeamPayload structure expects just the entity)
         return new_team
@@ -14504,10 +14637,10 @@ def resolve_teamUpdate(obj, info, **kwargs):
         Team entity (TeamPayload structure)
     """
 
-    session: Session = info.context['session']
-    team_id = kwargs.get('id')
-    input_data = kwargs.get('input', {})
-    mapping = kwargs.get('mapping')  # Optional inheritance entity mapping
+    session: Session = info.context["session"]
+    team_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
+    mapping = kwargs.get("mapping")  # Optional inheritance entity mapping
 
     try:
         # Validate required arguments
@@ -14521,187 +14654,246 @@ def resolve_teamUpdate(obj, info, **kwargs):
             raise Exception(f"Team with id {team_id} not found")
 
         # Update fields from input (only if provided)
-        if 'aiThreadSummariesEnabled' in input_data:
-            team.aiThreadSummariesEnabled = input_data['aiThreadSummariesEnabled']
+        if "aiThreadSummariesEnabled" in input_data:
+            team.aiThreadSummariesEnabled = input_data["aiThreadSummariesEnabled"]
 
-        if 'autoArchivePeriod' in input_data:
-            team.autoArchivePeriod = input_data['autoArchivePeriod']
+        if "autoArchivePeriod" in input_data:
+            team.autoArchivePeriod = input_data["autoArchivePeriod"]
 
-        if 'autoCloseChildIssues' in input_data:
-            team.autoCloseChildIssues = input_data['autoCloseChildIssues']
+        if "autoCloseChildIssues" in input_data:
+            team.autoCloseChildIssues = input_data["autoCloseChildIssues"]
 
-        if 'autoCloseParentIssues' in input_data:
-            team.autoCloseParentIssues = input_data['autoCloseParentIssues']
+        if "autoCloseParentIssues" in input_data:
+            team.autoCloseParentIssues = input_data["autoCloseParentIssues"]
 
-        if 'autoClosePeriod' in input_data:
-            team.autoClosePeriod = input_data['autoClosePeriod']
+        if "autoClosePeriod" in input_data:
+            team.autoClosePeriod = input_data["autoClosePeriod"]
 
-        if 'autoCloseStateId' in input_data:
-            team.autoCloseStateId = input_data['autoCloseStateId']
+        if "autoCloseStateId" in input_data:
+            team.autoCloseStateId = input_data["autoCloseStateId"]
             # Verify the workflow state exists if provided
-            if input_data['autoCloseStateId']:
-                state = session.query(WorkflowState).filter_by(id=input_data['autoCloseStateId']).first()
+            if input_data["autoCloseStateId"]:
+                state = (
+                    session.query(WorkflowState)
+                    .filter_by(id=input_data["autoCloseStateId"])
+                    .first()
+                )
                 if not state:
-                    raise Exception(f"Workflow state with id {input_data['autoCloseStateId']} not found")
+                    raise Exception(
+                        f"Workflow state with id {input_data['autoCloseStateId']} not found"
+                    )
 
-        if 'color' in input_data:
-            team.color = input_data['color']
+        if "color" in input_data:
+            team.color = input_data["color"]
 
-        if 'cycleCooldownTime' in input_data:
-            team.cycleCooldownTime = input_data['cycleCooldownTime']
+        if "cycleCooldownTime" in input_data:
+            team.cycleCooldownTime = input_data["cycleCooldownTime"]
 
-        if 'cycleDuration' in input_data:
-            team.cycleDuration = input_data['cycleDuration']
+        if "cycleDuration" in input_data:
+            team.cycleDuration = input_data["cycleDuration"]
 
-        if 'cycleEnabledStartDate' in input_data:
+        if "cycleEnabledStartDate" in input_data:
             # This field doesn't exist in the ORM - it might be used to calculate other fields
             # For now, we'll skip it or handle it in business logic
             pass
 
-        if 'cycleIssueAutoAssignCompleted' in input_data:
-            team.cycleIssueAutoAssignCompleted = input_data['cycleIssueAutoAssignCompleted']
+        if "cycleIssueAutoAssignCompleted" in input_data:
+            team.cycleIssueAutoAssignCompleted = input_data[
+                "cycleIssueAutoAssignCompleted"
+            ]
 
-        if 'cycleIssueAutoAssignStarted' in input_data:
-            team.cycleIssueAutoAssignStarted = input_data['cycleIssueAutoAssignStarted']
+        if "cycleIssueAutoAssignStarted" in input_data:
+            team.cycleIssueAutoAssignStarted = input_data["cycleIssueAutoAssignStarted"]
 
-        if 'cycleLockToActive' in input_data:
-            team.cycleLockToActive = input_data['cycleLockToActive']
+        if "cycleLockToActive" in input_data:
+            team.cycleLockToActive = input_data["cycleLockToActive"]
 
-        if 'cycleStartDay' in input_data:
-            team.cycleStartDay = input_data['cycleStartDay']
+        if "cycleStartDay" in input_data:
+            team.cycleStartDay = input_data["cycleStartDay"]
 
-        if 'cyclesEnabled' in input_data:
-            team.cyclesEnabled = input_data['cyclesEnabled']
+        if "cyclesEnabled" in input_data:
+            team.cyclesEnabled = input_data["cyclesEnabled"]
 
-        if 'defaultIssueEstimate' in input_data:
-            team.defaultIssueEstimate = input_data['defaultIssueEstimate']
+        if "defaultIssueEstimate" in input_data:
+            team.defaultIssueEstimate = input_data["defaultIssueEstimate"]
 
-        if 'defaultIssueStateId' in input_data:
-            team.defaultIssueStateId = input_data['defaultIssueStateId']
+        if "defaultIssueStateId" in input_data:
+            team.defaultIssueStateId = input_data["defaultIssueStateId"]
             # Verify the workflow state exists if provided
-            if input_data['defaultIssueStateId']:
-                state = session.query(WorkflowState).filter_by(id=input_data['defaultIssueStateId']).first()
+            if input_data["defaultIssueStateId"]:
+                state = (
+                    session.query(WorkflowState)
+                    .filter_by(id=input_data["defaultIssueStateId"])
+                    .first()
+                )
                 if not state:
-                    raise Exception(f"Workflow state with id {input_data['defaultIssueStateId']} not found")
+                    raise Exception(
+                        f"Workflow state with id {input_data['defaultIssueStateId']} not found"
+                    )
 
-        if 'defaultProjectTemplateId' in input_data:
-            team.defaultProjectTemplateId = input_data['defaultProjectTemplateId']
+        if "defaultProjectTemplateId" in input_data:
+            team.defaultProjectTemplateId = input_data["defaultProjectTemplateId"]
             # Verify the template exists if provided
-            if input_data['defaultProjectTemplateId']:
-                template = session.query(Template).filter_by(id=input_data['defaultProjectTemplateId']).first()
+            if input_data["defaultProjectTemplateId"]:
+                template = (
+                    session.query(Template)
+                    .filter_by(id=input_data["defaultProjectTemplateId"])
+                    .first()
+                )
                 if not template:
-                    raise Exception(f"Template with id {input_data['defaultProjectTemplateId']} not found")
+                    raise Exception(
+                        f"Template with id {input_data['defaultProjectTemplateId']} not found"
+                    )
 
-        if 'defaultTemplateForMembersId' in input_data:
-            team.defaultTemplateForMembersId = input_data['defaultTemplateForMembersId']
+        if "defaultTemplateForMembersId" in input_data:
+            team.defaultTemplateForMembersId = input_data["defaultTemplateForMembersId"]
             # Verify the template exists if provided
-            if input_data['defaultTemplateForMembersId']:
-                template = session.query(Template).filter_by(id=input_data['defaultTemplateForMembersId']).first()
+            if input_data["defaultTemplateForMembersId"]:
+                template = (
+                    session.query(Template)
+                    .filter_by(id=input_data["defaultTemplateForMembersId"])
+                    .first()
+                )
                 if not template:
-                    raise Exception(f"Template with id {input_data['defaultTemplateForMembersId']} not found")
+                    raise Exception(
+                        f"Template with id {input_data['defaultTemplateForMembersId']} not found"
+                    )
 
-        if 'defaultTemplateForNonMembersId' in input_data:
-            team.defaultTemplateForNonMembersId = input_data['defaultTemplateForNonMembersId']
+        if "defaultTemplateForNonMembersId" in input_data:
+            team.defaultTemplateForNonMembersId = input_data[
+                "defaultTemplateForNonMembersId"
+            ]
             # Verify the template exists if provided
-            if input_data['defaultTemplateForNonMembersId']:
-                template = session.query(Template).filter_by(id=input_data['defaultTemplateForNonMembersId']).first()
+            if input_data["defaultTemplateForNonMembersId"]:
+                template = (
+                    session.query(Template)
+                    .filter_by(id=input_data["defaultTemplateForNonMembersId"])
+                    .first()
+                )
                 if not template:
-                    raise Exception(f"Template with id {input_data['defaultTemplateForNonMembersId']} not found")
+                    raise Exception(
+                        f"Template with id {input_data['defaultTemplateForNonMembersId']} not found"
+                    )
 
-        if 'description' in input_data:
-            team.description = input_data['description']
+        if "description" in input_data:
+            team.description = input_data["description"]
 
-        if 'groupIssueHistory' in input_data:
-            team.groupIssueHistory = input_data['groupIssueHistory']
+        if "groupIssueHistory" in input_data:
+            team.groupIssueHistory = input_data["groupIssueHistory"]
 
-        if 'icon' in input_data:
-            team.icon = input_data['icon']
+        if "icon" in input_data:
+            team.icon = input_data["icon"]
 
-        if 'inheritIssueEstimation' in input_data:
-            team.inheritIssueEstimation = input_data['inheritIssueEstimation']
+        if "inheritIssueEstimation" in input_data:
+            team.inheritIssueEstimation = input_data["inheritIssueEstimation"]
 
-        if 'inheritProductIntelligenceScope' in input_data:
-            team.inheritProductIntelligenceScope = input_data['inheritProductIntelligenceScope']
+        if "inheritProductIntelligenceScope" in input_data:
+            team.inheritProductIntelligenceScope = input_data[
+                "inheritProductIntelligenceScope"
+            ]
 
-        if 'inheritWorkflowStatuses' in input_data:
-            team.inheritWorkflowStatuses = input_data['inheritWorkflowStatuses']
+        if "inheritWorkflowStatuses" in input_data:
+            team.inheritWorkflowStatuses = input_data["inheritWorkflowStatuses"]
 
-        if 'issueEstimationAllowZero' in input_data:
-            team.issueEstimationAllowZero = input_data['issueEstimationAllowZero']
+        if "issueEstimationAllowZero" in input_data:
+            team.issueEstimationAllowZero = input_data["issueEstimationAllowZero"]
 
-        if 'issueEstimationExtended' in input_data:
-            team.issueEstimationExtended = input_data['issueEstimationExtended']
+        if "issueEstimationExtended" in input_data:
+            team.issueEstimationExtended = input_data["issueEstimationExtended"]
 
-        if 'issueEstimationType' in input_data:
-            team.issueEstimationType = input_data['issueEstimationType']
+        if "issueEstimationType" in input_data:
+            team.issueEstimationType = input_data["issueEstimationType"]
 
-        if 'issueOrderingNoPriorityFirst' in input_data:
-            team.issueOrderingNoPriorityFirst = input_data['issueOrderingNoPriorityFirst']
+        if "issueOrderingNoPriorityFirst" in input_data:
+            team.issueOrderingNoPriorityFirst = input_data[
+                "issueOrderingNoPriorityFirst"
+            ]
 
-        if 'joinByDefault' in input_data:
-            team.joinByDefault = input_data['joinByDefault']
+        if "joinByDefault" in input_data:
+            team.joinByDefault = input_data["joinByDefault"]
 
-        if 'key' in input_data:
+        if "key" in input_data:
             # Verify key uniqueness
-            existing_team = session.query(Team).filter_by(key=input_data['key']).filter(Team.id != team_id).first()
+            existing_team = (
+                session.query(Team)
+                .filter_by(key=input_data["key"])
+                .filter(Team.id != team_id)
+                .first()
+            )
             if existing_team:
                 raise Exception(f"Team with key {input_data['key']} already exists")
-            team.key = input_data['key']
+            team.key = input_data["key"]
 
-        if 'markedAsDuplicateWorkflowStateId' in input_data:
-            team.markedAsDuplicateWorkflowStateId = input_data['markedAsDuplicateWorkflowStateId']
+        if "markedAsDuplicateWorkflowStateId" in input_data:
+            team.markedAsDuplicateWorkflowStateId = input_data[
+                "markedAsDuplicateWorkflowStateId"
+            ]
             # Verify the workflow state exists if provided
-            if input_data['markedAsDuplicateWorkflowStateId']:
-                state = session.query(WorkflowState).filter_by(id=input_data['markedAsDuplicateWorkflowStateId']).first()
+            if input_data["markedAsDuplicateWorkflowStateId"]:
+                state = (
+                    session.query(WorkflowState)
+                    .filter_by(id=input_data["markedAsDuplicateWorkflowStateId"])
+                    .first()
+                )
                 if not state:
-                    raise Exception(f"Workflow state with id {input_data['markedAsDuplicateWorkflowStateId']} not found")
+                    raise Exception(
+                        f"Workflow state with id {input_data['markedAsDuplicateWorkflowStateId']} not found"
+                    )
 
-        if 'name' in input_data:
-            team.name = input_data['name']
+        if "name" in input_data:
+            team.name = input_data["name"]
             # Update displayName if name changes (typically displayName includes parent team name)
             # For now, we'll just set it to the name
-            team.displayName = input_data['name']
+            team.displayName = input_data["name"]
 
-        if 'parentId' in input_data:
-            team.parentId = input_data['parentId']
+        if "parentId" in input_data:
+            team.parentId = input_data["parentId"]
             # Verify parent team exists if provided
-            if input_data['parentId']:
-                parent_team = session.query(Team).filter_by(id=input_data['parentId']).first()
+            if input_data["parentId"]:
+                parent_team = (
+                    session.query(Team).filter_by(id=input_data["parentId"]).first()
+                )
                 if not parent_team:
-                    raise Exception(f"Parent team with id {input_data['parentId']} not found")
+                    raise Exception(
+                        f"Parent team with id {input_data['parentId']} not found"
+                    )
 
-        if 'private' in input_data:
-            team.private = input_data['private']
+        if "private" in input_data:
+            team.private = input_data["private"]
 
-        if 'productIntelligenceScope' in input_data:
-            team.productIntelligenceScope = input_data['productIntelligenceScope']
+        if "productIntelligenceScope" in input_data:
+            team.productIntelligenceScope = input_data["productIntelligenceScope"]
 
-        if 'requirePriorityToLeaveTriage' in input_data:
-            team.requirePriorityToLeaveTriage = input_data['requirePriorityToLeaveTriage']
+        if "requirePriorityToLeaveTriage" in input_data:
+            team.requirePriorityToLeaveTriage = input_data[
+                "requirePriorityToLeaveTriage"
+            ]
 
-        if 'scimManaged' in input_data:
-            team.scimManaged = input_data['scimManaged']
+        if "scimManaged" in input_data:
+            team.scimManaged = input_data["scimManaged"]
 
-        if 'setIssueSortOrderOnStateChange' in input_data:
-            team.setIssueSortOrderOnStateChange = input_data['setIssueSortOrderOnStateChange']
+        if "setIssueSortOrderOnStateChange" in input_data:
+            team.setIssueSortOrderOnStateChange = input_data[
+                "setIssueSortOrderOnStateChange"
+            ]
 
-        if 'slackIssueComments' in input_data:
-            team.slackIssueComments = input_data['slackIssueComments']
+        if "slackIssueComments" in input_data:
+            team.slackIssueComments = input_data["slackIssueComments"]
 
-        if 'slackIssueStatuses' in input_data:
-            team.slackIssueStatuses = input_data['slackIssueStatuses']
+        if "slackIssueStatuses" in input_data:
+            team.slackIssueStatuses = input_data["slackIssueStatuses"]
 
-        if 'slackNewIssue' in input_data:
-            team.slackNewIssue = input_data['slackNewIssue']
+        if "slackNewIssue" in input_data:
+            team.slackNewIssue = input_data["slackNewIssue"]
 
-        if 'timezone' in input_data:
-            team.timezone = input_data['timezone']
+        if "timezone" in input_data:
+            team.timezone = input_data["timezone"]
 
-        if 'triageEnabled' in input_data:
-            team.triageEnabled = input_data['triageEnabled']
+        if "triageEnabled" in input_data:
+            team.triageEnabled = input_data["triageEnabled"]
 
-        if 'upcomingCycleCount' in input_data:
-            team.upcomingCycleCount = input_data['upcomingCycleCount']
+        if "upcomingCycleCount" in input_data:
+            team.upcomingCycleCount = input_data["upcomingCycleCount"]
 
         # Handle inheritance entity mapping if provided
         # This is an internal field used when updating team hierarchy
@@ -14717,9 +14909,6 @@ def resolve_teamUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         team.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated team entity
         return team
 
     except Exception as e:
@@ -14737,7 +14926,7 @@ def resolve_teamCyclesDelete(obj, info, id: str):
     Returns:
         Team: The team whose cycles were deleted
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Query for the team
@@ -14760,9 +14949,6 @@ def resolve_teamCyclesDelete(obj, info, id: str):
         # Update the team's updatedAt timestamp
         team.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the team entity
         return team
 
     except Exception as e:
@@ -14780,7 +14966,7 @@ def resolve_teamDelete(obj, info, id: str):
     Returns:
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Query for the team to delete
@@ -14793,17 +14979,16 @@ def resolve_teamDelete(obj, info, id: str):
         team.archivedAt = datetime.now(timezone.utc)
         team.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return DeletePayload structure
         return {
-            'entityId': id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entityId": id,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
         raise Exception(f"Failed to delete team: {str(e)}")
+
 
 @mutation.field("teamUnarchive")
 def resolve_teamUnarchive(obj, info, id: str):
@@ -14816,7 +15001,7 @@ def resolve_teamUnarchive(obj, info, id: str):
     Returns:
         Dict containing TeamArchivePayload with entity, success, and lastSyncId
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Query for the team to unarchive
@@ -14829,17 +15014,16 @@ def resolve_teamUnarchive(obj, info, id: str):
         team.archivedAt = None
         team.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the changes
-
         # Return TeamArchivePayload structure
         return {
-            'entity': team,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entity": team,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
         raise Exception(f"Failed to unarchive team: {str(e)}")
+
 
 @mutation.field("teamKeyDelete")
 def resolve_teamKeyDelete(obj, info, id: str):
@@ -14857,7 +15041,7 @@ def resolve_teamKeyDelete(obj, info, id: str):
     Returns:
         Dict containing DeletePayload with entityId, success, and lastSyncId
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Note: TeamKey table doesn't exist in current ORM schema
@@ -14872,9 +15056,9 @@ def resolve_teamKeyDelete(obj, info, id: str):
 
         # Assuming the operation would succeed if the table existed:
         return {
-            'entityId': id,
-            'success': True,
-            'lastSyncId': 0.0  # In a real implementation, this would come from a sync tracking system
+            "entityId": id,
+            "success": True,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
         }
 
     except Exception as e:
@@ -14884,6 +15068,7 @@ def resolve_teamKeyDelete(obj, info, id: str):
 # ============================================================
 # TeamMembership mutations
 # ============================================================
+
 
 @mutation.field("teamMembershipCreate")
 def resolve_teamMembershipCreate(obj, info, **kwargs):
@@ -14898,33 +15083,35 @@ def resolve_teamMembershipCreate(obj, info, **kwargs):
     Returns:
         The created TeamMembership entity
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract input data
-        input_data = kwargs.get('input', {})
+        input_data = kwargs.get("input", {})
 
         # Validate required fields
-        if not input_data.get('teamId'):
+        if not input_data.get("teamId"):
             raise Exception("Field 'teamId' is required")
-        if not input_data.get('userId'):
+        if not input_data.get("userId"):
             raise Exception("Field 'userId' is required")
 
         # Generate ID if not provided
-        membership_id = input_data.get('id', str(uuid.uuid4()))
+        membership_id = input_data.get("id", str(uuid.uuid4()))
 
         # Get current timestamp
         now = datetime.now(timezone.utc)
 
         # Build team membership data
         membership_data = {
-            'id': membership_id,
-            'teamId': input_data['teamId'],
-            'userId': input_data['userId'],
-            'owner': input_data.get('owner', False),  # Default to False if not provided
-            'sortOrder': input_data.get('sortOrder', 0.0),  # Default to 0.0 if not provided
-            'createdAt': now,
-            'updatedAt': now,
+            "id": membership_id,
+            "teamId": input_data["teamId"],
+            "userId": input_data["userId"],
+            "owner": input_data.get("owner", False),  # Default to False if not provided
+            "sortOrder": input_data.get(
+                "sortOrder", 0.0
+            ),  # Default to 0.0 if not provided
+            "createdAt": now,
+            "updatedAt": now,
         }
 
         # Create the team membership entity
@@ -14932,11 +15119,8 @@ def resolve_teamMembershipCreate(obj, info, **kwargs):
 
         session.add(team_membership)
 
-        # Commit the transaction
-
-        # Return the team membership entity
-        # Ariadne will handle converting this to TeamMembershipPayload
-        return team_membership
+        # Return the proper TeamMembershipPayload structure
+        return {"success": True, "lastSyncId": 0.0, "teamMembership": team_membership}
 
     except Exception as e:
         raise Exception(f"Failed to create team membership: {str(e)}")
@@ -14955,19 +15139,21 @@ def resolve_teamMembershipDelete(obj, info, **kwargs):
     Returns:
         DeletePayload with success status and entityId
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        membership_id = kwargs.get('id')
-        also_leave_parent_teams = kwargs.get('alsoLeaveParentTeams', False)
+        membership_id = kwargs.get("id")
+        also_leave_parent_teams = kwargs.get("alsoLeaveParentTeams", False)
 
         # Validate required fields
         if not membership_id:
             raise Exception("Field 'id' is required")
 
         # Query for the team membership
-        team_membership = session.query(TeamMembership).filter_by(id=membership_id).first()
+        team_membership = (
+            session.query(TeamMembership).filter_by(id=membership_id).first()
+        )
 
         if not team_membership:
             raise Exception(f"Team membership with id '{membership_id}' not found")
@@ -14990,14 +15176,8 @@ def resolve_teamMembershipDelete(obj, info, **kwargs):
         team_membership.archivedAt = datetime.now(timezone.utc)
         team_membership.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
         # Return DeletePayload structure
-        return {
-            'success': True,
-            'entityId': entity_id,
-            'lastSyncId': last_sync_id
-        }
+        return {"success": True, "entityId": entity_id, "lastSyncId": last_sync_id}
 
     except Exception as e:
         raise Exception(f"Failed to delete team membership: {str(e)}")
@@ -15016,38 +15196,37 @@ def resolve_teamMembershipUpdate(obj, info, **kwargs):
     Returns:
         The updated TeamMembership entity
     """
-    session: Session = info.context['session']
+    session: Session = info.context["session"]
 
     try:
         # Extract arguments
-        membership_id = kwargs.get('id')
-        input_data = kwargs.get('input', {})
+        membership_id = kwargs.get("id")
+        input_data = kwargs.get("input", {})
 
         # Validate required fields
         if not membership_id:
             raise Exception("Field 'id' is required")
 
         # Query for the team membership
-        team_membership = session.query(TeamMembership).filter_by(id=membership_id).first()
+        team_membership = (
+            session.query(TeamMembership).filter_by(id=membership_id).first()
+        )
 
         if not team_membership:
             raise Exception(f"Team membership with id '{membership_id}' not found")
 
         # Update fields if provided in input
-        if 'owner' in input_data:
-            team_membership.owner = input_data['owner']
+        if "owner" in input_data:
+            team_membership.owner = input_data["owner"]
 
-        if 'sortOrder' in input_data:
-            team_membership.sortOrder = input_data['sortOrder']
+        if "sortOrder" in input_data:
+            team_membership.sortOrder = input_data["sortOrder"]
 
         # Update the updatedAt timestamp
         team_membership.updatedAt = datetime.now(timezone.utc)
 
-        # Commit the transaction
-
-        # Return the updated team membership entity
-        # Ariadne will handle converting this to TeamMembershipPayload
-        return team_membership
+        # Return the proper TeamMembershipPayload structure
+        return {"success": True, "lastSyncId": 0.0, "teamMembership": team_membership}
 
     except Exception as e:
         raise Exception(f"Failed to update team membership: {str(e)}")
