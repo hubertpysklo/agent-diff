@@ -8,8 +8,14 @@
       "createdAt": "2025-01-01T00:00:00",
       "updatedAt": "2025-01-01T00:00:00",
       "aiAddonEnabled": false,
-      "allowedAuthServices": ["google"],
-      "allowedFileUploadContentTypes": ["image/png", "image/jpeg", "application/pdf"],
+      "allowedAuthServices": [
+        "google"
+      ],
+      "allowedFileUploadContentTypes": [
+        "image/png",
+        "image/jpeg",
+        "application/pdf"
+      ],
       "createdIssueCount": 0,
       "customerCount": 0,
       "customersConfiguration": {},
@@ -163,7 +169,6 @@
       "issueEstimationType": "notUsed",
       "issueOrderingNoPriorityFirst": false,
       "issueSortOrderDefaultToBottom": true,
-      "private": false,
       "progressHistory": {},
       "requirePriorityToLeaveTriage": false,
       "scimManaged": false,
@@ -209,7 +214,6 @@
       "issueEstimationType": "notUsed",
       "issueOrderingNoPriorityFirst": false,
       "issueSortOrderDefaultToBottom": true,
-      "private": false,
       "progressHistory": {},
       "requirePriorityToLeaveTriage": false,
       "scimManaged": false,

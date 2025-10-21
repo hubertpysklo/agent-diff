@@ -14,6 +14,7 @@ import os
 import sys
 import json
 from pathlib import Path
+from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -71,6 +72,33 @@ def insert_seed_data(conn, schema_name: str, seed_data: dict):
             conn.execute(text(sql), record)
 
 
+def register_public_template(
+    conn, *, service: str, name: str, location: str, description: str | None = None
+):
+    """Register a template in platform meta DB as public (owner_scope='public')."""
+    sql = text(
+        """
+        INSERT INTO public.environments (
+            id, service, name, version, owner_scope, description,
+            owner_org_id, owner_user_id, kind, location, created_at, updated_at
+        ) VALUES (
+            :id, :service, :name, :version, 'public', :description,
+            NULL, NULL, 'schema', :location, NOW(), NOW()
+        )
+        ON CONFLICT ON CONSTRAINT uq_environments_identity DO NOTHING
+        """
+    )
+    params = {
+        "id": str(uuid4()),
+        "service": service,
+        "name": name,
+        "version": "v1",
+        "description": description,
+        "location": location,
+    }
+    conn.execute(sql, params)
+
+
 def create_template(engine, template_name: str, seed_file: Path | None = None):
     """Create a template schema with optional seed data.
 
@@ -99,7 +127,21 @@ def create_template(engine, template_name: str, seed_file: Path | None = None):
             insert_seed_data(conn, template_name, seed_data)
             print(f"Loaded seed data from {seed_file.name}")
         else:
-            print(f"Empty template ready")
+            print(f"Empty template {template_name} ready")
+
+        # Register as a public template in platform DB
+        register_public_template(
+            conn,
+            service="slack",
+            name=template_name,
+            location=template_name,
+            description=(
+                "Slack base template without seed data"
+                if template_name == "slack_base"
+                else "Slack default template with seed data"
+            ),
+        )
+        print(f"Registered public template: {template_name}")
 
 
 def main():
