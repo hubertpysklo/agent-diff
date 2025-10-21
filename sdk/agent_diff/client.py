@@ -4,7 +4,6 @@ from models import (
     InitEnvRequestBody,
     InitEnvResponse,
     TemplateEnvironmentListResponse,
-    TemplateEnvironmentSummary,
     TemplateEnvironmentDetail,
     UUID,
 )
