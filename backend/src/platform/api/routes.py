@@ -26,6 +26,8 @@ from src.platform.api.models import (
     TestSummary,
     APIError,
     Principal,
+    TemplateEnvironmentSummary,
+    TemplateEnvironmentListResponse,
 )
 from src.platform.api.auth import (
     require_resource_access,
@@ -38,6 +40,7 @@ from src.platform.db.schema import (
     TestRun,
     RunTimeEnvironment,
     OrganizationMembership,
+    TemplateEnvironment,
 )
 from src.platform.evaluationEngine.core import CoreEvaluationEngine
 from src.platform.evaluationEngine.differ import Differ
@@ -45,6 +48,37 @@ from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
 
 logger = logging.getLogger(__name__)
+
+
+async def list_environment_templates(
+    request: Request,
+) -> TemplateEnvironmentListResponse:
+    session = request.state.db_session
+    principal = _principal_from_request(request)
+    templates = (
+        session.query(TemplateEnvironment)
+        .filter(
+            or_(
+                TemplateEnvironment.owner_scope == "public",
+                TemplateEnvironment.owner_org_id.in_(principal.org_ids),
+                TemplateEnvironment.owner_user_id == principal.user_id,
+            )
+        )
+        .all()
+    )
+    return TemplateEnvironmentListResponse(
+        templates=[
+            TemplateEnvironmentSummary(
+                id=template.id,
+                service=template.service,
+                description=template.description,
+                name=template.name,
+                version=template.version,
+                location=template.location,
+            )
+            for template in templates
+        ]
+    )
 
 
 def _principal_from_request(request: Request) -> Principal:

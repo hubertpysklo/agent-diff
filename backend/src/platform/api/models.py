@@ -45,9 +45,11 @@ class TestSuiteDetail(TestSuiteSummary):
 
 
 class TemplateEnvironmentSummary(BaseModel):
-    id: str
+    id: UUID
     service: str
+    description: str | None = None
     name: str
+    version: str
     location: str  # Location of the template environment in the database (schema_name) or S3 (s3://...)
 
 

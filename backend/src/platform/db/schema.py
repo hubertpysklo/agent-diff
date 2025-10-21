@@ -82,9 +82,9 @@ class TemplateEnvironment(PlatformBase):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
     owner_scope: Mapped[str] = mapped_column(
-        Enum("global", "org", "user", name="owner_scope"),
+        Enum("public", "org", "user", name="owner_scope"),
         nullable=False,
-        default="global",
+        default="public",
     )
     description: Mapped[str | None] = mapped_column(
         Text, nullable=True
