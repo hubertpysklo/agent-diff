@@ -35,7 +35,6 @@ def create_team(
     if created_at is not None:
         team.created_at = created_at
     session.add(team)
-    session.flush()
     if default_channel_name:
         # Generate channel_id for default channel
         channel_id = "C" + "".join(secrets.choice(chars) for _ in range(10))
@@ -452,7 +451,6 @@ def find_or_create_dm_channel(
         is_dm=True, is_private=True, team_id=team_id, channel_name=f"dm-{a}-{b}"
     )
     session.add(ch)
-    session.flush()
     session.add_all(
         [
             ChannelMember(channel_id=ch.channel_id, user_id=a),
