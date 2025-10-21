@@ -11,6 +11,7 @@ from starlette import status
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
+from uuid import UUID
 
 from src.platform.api.models import (
     InitEnvRequestBody,
@@ -50,6 +51,13 @@ from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
 
 logger = logging.getLogger(__name__)
+
+
+def _uuid_from_path_param(path_param: str) -> UUID:
+    try:
+        return UUID(path_param)
+    except ValueError:
+        raise ValueError(f"invalid UUID: {path_param}") from None
 
 
 def _principal_from_request(request: Request) -> Principal:
@@ -106,7 +114,7 @@ async def get_environment_template(
 
     template = (
         session.query(TemplateEnvironment)
-        .filter(TemplateEnvironment.id == template_id)
+        .filter(TemplateEnvironment.id == _uuid_from_path_param(template_id))
         .one_or_none()
     )
     if template is None:
