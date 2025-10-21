@@ -21,7 +21,10 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/initEnv",
             json=request.model_dump(mode="json"),
+            headers={"Authorization": f"ApiKey {self.api_key}"},
+            timeout=30,
         )
+        response.raise_for_status()
         return InitEnvResponse.model_validate(response.json())
 
     def list_templates(self) -> List[Template]:
