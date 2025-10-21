@@ -1,6 +1,13 @@
 import os
 import requests
-from models import InitEnvRequestBody, InitEnvResponse
+from models import (
+    InitEnvRequestBody,
+    InitEnvResponse,
+    TemplateEnvironmentListResponse,
+    TemplateEnvironmentSummary,
+    TemplateEnvironmentDetail,
+    UUID,
+)
 
 ## WIP
 
@@ -30,8 +37,23 @@ class AgentDiff:
         response.raise_for_status()
         return InitEnvResponse.model_validate(response.json())
 
-    def list_templates(self) -> List[Template]:
-        pass
+    def list_templates(self) -> TemplateEnvironmentListResponse:
+        response = requests.get(
+            f"{self.base_url}/api/platform/templates",
+            headers={"X-API-Key": self.api_key},
+            timeout=5,
+        )
+        response.raise_for_status()
+        return TemplateEnvironmentListResponse.model_validate(response.json())
+
+    def get_template(self, template_id: UUID) -> TemplateEnvironmentDetail:
+        response = requests.get(
+            f"{self.base_url}/api/platform/templates/{template_id}",
+            headers={"X-API-Key": self.api_key},
+            timeout=5,
+        )
+        response.raise_for_status()
+        return TemplateEnvironmentDetail.model_validate(response.json())
 
     def add_template(self, template: Template) -> Template:
         pass

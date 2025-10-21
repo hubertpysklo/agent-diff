@@ -53,7 +53,7 @@ class TemplateEnvironmentSummary(BaseModel):
 
 class TemplateEnvironmentDetail(TemplateEnvironmentSummary):
     version: str
-    location: str  # Location of the template environment in the database (schema_name) or S3 (s3://...)
+    schemaName: str  # Location of the template environment in the database (schema_name) or S3 (s3://...)
 
 
 class TemplateEnvironmentListResponse(BaseModel):

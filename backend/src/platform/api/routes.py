@@ -145,7 +145,7 @@ async def get_environment_template(
         description=template.description,
         name=template.name,
         version=template.version,
-        location=template.location,
+        schemaName=template.location,
     )
     return JSONResponse(response.model_dump(mode="json"))
 
