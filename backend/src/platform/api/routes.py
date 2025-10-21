@@ -112,9 +112,17 @@ async def get_environment_template(
     session = request.state.db_session
     principal = _principal_from_request(request)
 
+    try:
+        parsed_id = _uuid_from_path_param(template_id)
+    except ValueError:
+        return JSONResponse(
+            APIError(detail="invalid template id").model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     template = (
         session.query(TemplateEnvironment)
-        .filter(TemplateEnvironment.id == _uuid_from_path_param(template_id))
+        .filter(TemplateEnvironment.id == parsed_id)
         .one_or_none()
     )
     if template is None:
