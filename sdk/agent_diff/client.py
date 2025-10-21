@@ -13,7 +13,10 @@ class AgentDiff:
             raise ValueError(
                 "API key required. Set DIFF_AGENT_API_KEY env var or pass api_key parameter"
             )
-
+        if not self.base_url:
+            raise ValueError(
+                "Base URL required. Set DIFF_AGENT_BASE_URL env var or pass base_url parameter"
+            )
     def init_env(self, request: InitEnvRequestBody) -> InitEnvResponse:
         response = requests.post(
             f"{self.base_url}/api/platform/initEnv",
