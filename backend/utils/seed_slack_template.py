@@ -130,6 +130,7 @@ def create_template(engine, template_name: str, seed_file: Path | None = None):
             print(f"Empty template {template_name} ready")
 
         # Register as a public template in platform DB
+
         register_public_template(
             conn,
             service="slack",
