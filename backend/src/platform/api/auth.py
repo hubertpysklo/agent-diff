@@ -180,10 +180,12 @@ def check_template_access(principal: Principal, template: TemplateEnvironment) -
     if template.owner_scope == "user":
         require_resource_access(principal, template.owner_user_id or "")
         return
+    if template.owner_scope == "org" and not template.owner_org_id:
+        raise PermissionError("unauthorized")
     if template.owner_scope == "org":
         require_resource_access_with_org(
             principal,
-            template.owner_user_id or "",
+            "",  # do not allow user-id equality to bypass org-membership
             [template.owner_org_id] if template.owner_org_id else [],
         )
         return
