@@ -27,3 +27,10 @@ class EnvironmentResponse(BaseModel):
     expires_at: datetime
     impersonate_user_id: Optional[str] = None
     impersonate_email: Optional[str] = None
+
+
+class TemplateCreateResult(BaseModel):
+    template_id: str
+    schema_name: str
+    service: str
+    name: str

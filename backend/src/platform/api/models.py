@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, List, Optional
 from uuid import UUID
 
@@ -27,6 +28,26 @@ class APIError(BaseModel):
     detail: str
 
 
+class TestSuite(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    owner: str
+    visibility: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class Test(BaseModel):
+    id: UUID
+    name: str
+    prompt: str
+    type: str
+    expected_output: dict
+    created_at: datetime
+    updated_at: datetime
+
+
 class TestSummary(BaseModel):
     id: UUID
     name: str
@@ -40,13 +61,24 @@ class TestSuiteSummary(BaseModel):
     description: str
 
 
-class TestSuiteDetail(TestSuiteSummary):
-    tests: List[TestSummary]
+class TestSuiteListResponse(BaseModel):
+    testSuites: List[TestSuiteSummary]
+
+
+class TestSuiteDetail(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    owner: str
+    visibility: str
+    created_at: datetime
+    updated_at: datetime
+    tests: List[Test]
 
 
 class TemplateEnvironmentSummary(BaseModel):
     id: UUID
-    service: str
+    service: "Service"
     description: str | None = None
     name: str
 
@@ -62,6 +94,11 @@ class TemplateEnvironmentListResponse(BaseModel):
 
 class InitEnvRequestBody(BaseModel):
     testId: Optional[UUID] = None
+    # Preferred ways to select a template
+    templateId: Optional[UUID] = None
+    templateService: Optional["Service"] = None
+    templateName: Optional[str] = None
+    # Legacy fallback (schema name). Keep temporarily for BC if provided.
     templateSchema: Optional[str] = None
     ttlSeconds: Optional[int] = None
     impersonateUserId: Optional[str] = None
@@ -72,7 +109,7 @@ class InitEnvResponse(BaseModel):
     environmentId: str
     templateSchema: str
     schemaName: str
-    service: str
+    service: "Service"
     environmentUrl: str
     expiresAt: Optional[datetime]
 
@@ -116,3 +153,24 @@ class TestResultResponse(BaseModel):
 class DeleteEnvResponse(BaseModel):
     environmentId: str
     status: str
+
+
+class CreateTemplateFromEnvRequest(BaseModel):
+    environmentId: str
+    service: "Service"
+    name: str
+    description: Optional[str] = None
+    ownerScope: str = "org"  # one of: public, org, user
+    version: str = "v1"  # optional
+
+
+class CreateTemplateFromEnvResponse(BaseModel):
+    templateId: str
+    schemaName: str
+    service: "Service"
+    name: str
+
+
+class Service(str, Enum):
+    slack = "slack"
+    linear = "linear"

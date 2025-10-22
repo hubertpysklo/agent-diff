@@ -5,6 +5,16 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+class Test(BaseModel):
+    id: UUID
+    name: str
+    prompt: str
+    type: str
+    expected_output: dict
+    created_at: datetime
+    updated_at: datetime
+
+
 class TestSummary(BaseModel):
     id: UUID
     name: str
@@ -18,8 +28,19 @@ class TestSuiteSummary(BaseModel):
     description: str
 
 
-class TestSuiteDetail(TestSuiteSummary):
-    tests: List[TestSummary]
+class TestSuiteDetail(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    owner: str
+    visibility: str
+    created_at: datetime
+    updated_at: datetime
+    tests: List[Test]
+
+
+class TestSuiteListResponse(BaseModel):
+    testSuites: List[TestSuiteSummary]
 
 
 class TemplateEnvironmentSummary(BaseModel):
@@ -40,6 +61,11 @@ class TemplateEnvironmentListResponse(BaseModel):
 
 class InitEnvRequestBody(BaseModel):
     testId: Optional[UUID] = None
+    # Preferred selectors
+    templateId: Optional[UUID] = None
+    templateService: Optional[str] = None
+    templateName: Optional[str] = None
+    # Legacy fallback
     templateSchema: Optional[str] = None
     ttlSeconds: Optional[int] = None
     impersonateUserId: Optional[str] = None
@@ -91,3 +117,19 @@ class TestResultResponse(BaseModel):
 class DeleteEnvResponse(BaseModel):
     environmentId: str
     status: str
+
+
+class CreateTemplateFromEnvRequest(BaseModel):
+    environmentId: str
+    service: str
+    name: str
+    description: Optional[str] = None
+    ownerScope: str = "org"
+    version: str = "v1"
+
+
+class CreateTemplateFromEnvResponse(BaseModel):
+    templateId: str
+    schemaName: str
+    service: str
+    name: str

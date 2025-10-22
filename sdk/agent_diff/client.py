@@ -3,12 +3,14 @@ import requests
 from models import (
     InitEnvRequestBody,
     InitEnvResponse,
+    TestSuiteListResponse,
     TemplateEnvironmentListResponse,
     TemplateEnvironmentDetail,
     UUID,
+    TestSuiteDetail,
+    CreateTemplateFromEnvRequest,
+    CreateTemplateFromEnvResponse,
 )
-
-## WIP
 
 
 class AgentDiff:
@@ -36,6 +38,18 @@ class AgentDiff:
         response.raise_for_status()
         return InitEnvResponse.model_validate(response.json())
 
+    def create_template_from_environment(
+        self, request: CreateTemplateFromEnvRequest
+    ) -> CreateTemplateFromEnvResponse:
+        response = requests.post(
+            f"{self.base_url}/api/platform/templates/from-environment",
+            json=request.model_dump(mode="json"),
+            headers={"X-API-Key": self.api_key},
+            timeout=30,
+        )
+        response.raise_for_status()
+        return CreateTemplateFromEnvResponse.model_validate(response.json())
+
     def list_templates(self) -> TemplateEnvironmentListResponse:
         response = requests.get(
             f"{self.base_url}/api/platform/templates",
@@ -54,46 +68,53 @@ class AgentDiff:
         response.raise_for_status()
         return TemplateEnvironmentDetail.model_validate(response.json())
 
-    def add_template(self, template: Template) -> Template:
-        pass
-
-    def list_test_suites(self) -> List[TestSuiteSummary]:
-        pass
+    def list_test_suites(self) -> TestSuiteListResponse:
+        response = requests.get(
+            f"{self.base_url}/api/platform/testSuites",
+            headers={"X-API-Key": self.api_key},
+            timeout=5,
+        )
+        response.raise_for_status()
+        return TestSuiteListResponse.model_validate(response.json())
 
     def get_test_suite(self, suite_id: UUID) -> TestSuiteDetail:
+        response = requests.get(
+            f"{self.base_url}/api/platform/testSuites/{suite_id}",
+            headers={"X-API-Key": self.api_key},
+            timeout=5,
+        )
+        response.raise_for_status()
+        return TestSuiteDetail.model_validate(response.json())
+
+    def get_test(self, test_id: UUID):
         pass
 
-    def get_test(self, test_id: UUID) -> Test:
+    def create_test(self, test, testSuiteId: UUID):
         pass
 
-    def create_test(self, test: Test, testSuiteId: UUID) -> Test:
+    def create_test_suite(self, test_suite):
         pass
 
-    def create_test_suite(self, test_suite: TestSuite) -> TestSuite:
+    def take_before_snapshot(self, env_id: str):
         pass
 
-    def take_before_snapshot(self, env_id: str) -> BeforeSnapshotResponse:
+    def take_after_snapshot(self, env_id: str):
         pass
 
-    def take_after_snapshot(self, env_id: str) -> AfterSnapshotResponse:
-        pass
-
-    def get_diff(self, before_suffix: str, after_suffix: str) -> Diff:
+    def get_diff(self, before_suffix: str, after_suffix: str):
         pass  # This function should accept aither a runId or just pure test written in DSL
 
-    def evaluate(
-        self, before_suffix: str, after_suffix: str, expected_output: dict
-    ) -> Evaluation:
+    def evaluate(self, before_suffix: str, after_suffix: str, expected_output: dict):
         pass  # This function should accept aither a runId or just pure test written in DSL
 
-    def start_run(self, run: Run) -> Run:
+    def start_run(self, run):
         pass
 
-    def end_run(self, run_id: str) -> Run:
+    def end_run(self, run_id: str):
         pass
 
-    def get_results_for_run(self, run_id: str) -> TestResultResponse:
+    def get_results_for_run(self, run_id: str):
         pass
 
-    def delete_env(self, env_id: str) -> DeleteEnvResponse:
+    def delete_env(self, env_id: str):
         pass

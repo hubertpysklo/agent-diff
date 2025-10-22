@@ -16,6 +16,8 @@ from uuid import UUID
 from src.platform.api.models import (
     InitEnvRequestBody,
     InitEnvResponse,
+    TestSuiteListResponse,
+    Test as TestModel,
     StartRunRequest,
     StartRunResponse,
     EndRunRequest,
@@ -24,12 +26,14 @@ from src.platform.api.models import (
     DeleteEnvResponse,
     TestSuiteSummary,
     TestSuiteDetail,
-    TestSummary,
     APIError,
     Principal,
     TemplateEnvironmentSummary,
     TemplateEnvironmentListResponse,
     TemplateEnvironmentDetail,
+    CreateTemplateFromEnvRequest,
+    CreateTemplateFromEnvResponse,
+    Service,
 )
 from src.platform.api.auth import (
     require_resource_access,
@@ -150,6 +154,67 @@ async def get_environment_template(
     return JSONResponse(response.model_dump(mode="json"))
 
 
+async def create_template_from_environment(request: Request) -> JSONResponse:
+    try:
+        payload = CreateTemplateFromEnvRequest(**(await request.json()))
+    except (json.JSONDecodeError, ValidationError) as e:
+        return JSONResponse(
+            APIError(detail=str(e)).model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    principal = _principal_from_request(request)
+    owner_scope = payload.ownerScope
+    owner_user_id: str | None = None
+    owner_org_id: str | None = None
+    if owner_scope == "user":
+        owner_user_id = principal.user_id
+    elif owner_scope == "org":
+        if len(principal.org_ids) == 1:
+            owner_org_id = principal.org_ids[0]
+        else:
+            return JSONResponse(
+                APIError(
+                    detail="ownerScope=org requires membership in exactly one org or explicit ownerOrgId (not yet supported)"
+                ).model_dump(),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+    elif owner_scope == "public":
+        pass
+    else:
+        return JSONResponse(
+            APIError(detail="invalid ownerScope").model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    core: CoreIsolationEngine = request.app.state.coreIsolationEngine
+    try:
+        result = core.create_template_from_environment(
+            environment_id=payload.environmentId,
+            service=payload.service,
+            name=payload.name,
+            description=payload.description,
+            owner_scope=owner_scope,
+            owner_user_id=owner_user_id,
+            owner_org_id=owner_org_id,
+            version=payload.version or "v1",
+        )
+    except ValueError as e:
+        return JSONResponse(
+            APIError(detail=str(e)).model_dump(),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return JSONResponse(
+        CreateTemplateFromEnvResponse(
+            templateId=result.template_id,
+            schemaName=result.schema_name,
+            service=Service(result.service),
+            name=result.name,
+        ).model_dump(mode="json")
+    )
+
+
 async def list_test_suites(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
@@ -164,15 +229,17 @@ async def list_test_suites(request: Request) -> JSONResponse:
         )
         .all()
     )
-    payload = [
-        TestSuiteSummary(
-            id=s.id,
-            name=s.name,
-            description=s.description,
-        )
-        for s in suites
-    ]
-    return JSONResponse({"testSuites": [suite.model_dump() for suite in payload]})
+    response = TestSuiteListResponse(
+        testSuites=[
+            TestSuiteSummary(
+                id=s.id,
+                name=s.name,
+                description=s.description,
+            )
+            for s in suites
+        ]
+    )
+    return JSONResponse(response.model_dump(mode="json"))
 
 
 async def get_test_suite(request: Request) -> JSONResponse:
@@ -206,8 +273,20 @@ async def get_test_suite(request: Request) -> JSONResponse:
         id=suite.id,
         name=suite.name,
         description=suite.description,
+        owner=suite.owner,
+        visibility=suite.visibility,
+        created_at=suite.created_at,
+        updated_at=suite.updated_at,
         tests=[
-            TestSummary(id=t.id, name=t.name, prompt=t.prompt, type=t.type)
+            TestModel(
+                id=t.id,
+                name=t.name,
+                prompt=t.prompt,
+                type=t.type,
+                expected_output=t.expected_output,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
+            )
             for t in tests
         ],
     )
@@ -234,6 +313,7 @@ async def init_environment(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
 
+    # Resolve template via testId, templateId, or service+name. Fallback to legacy templateSchema.
     if body.testId:
         test = session.query(Test).filter(Test.id == body.testId).one_or_none()
         if test is None:
@@ -259,18 +339,77 @@ async def init_environment(request: Request) -> JSONResponse:
         schema = body.templateSchema or test.template_schema
 
     else:
-        if not body.templateSchema:
+        schema = None
+        # Preferred: templateId
+        if body.templateId is not None:
+            template = (
+                session.query(TemplateEnvironment)
+                .filter(TemplateEnvironment.id == body.templateId)
+                .one_or_none()
+            )
+            if template is None:
+                return JSONResponse(
+                    APIError(detail="template not found").model_dump(),
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            try:
+                check_template_access(principal, template)
+            except PermissionError:
+                return JSONResponse(
+                    APIError(detail="unauthorized").model_dump(),
+                    status_code=status.HTTP_403_FORBIDDEN,
+                )
+            schema = template.location
+        # Next: service + name
+        elif body.templateService and body.templateName:
+            query = session.query(TemplateEnvironment).filter(
+                TemplateEnvironment.service == body.templateService,
+                TemplateEnvironment.name == body.templateName,
+            )
+            if not principal.is_platform_admin:
+                query = query.filter(
+                    or_(
+                        TemplateEnvironment.owner_scope == "public",
+                        and_(
+                            TemplateEnvironment.owner_scope == "org",
+                            TemplateEnvironment.owner_org_id.in_(principal.org_ids),
+                        ),
+                        and_(
+                            TemplateEnvironment.owner_scope == "user",
+                            TemplateEnvironment.owner_user_id == principal.user_id,
+                        ),
+                    )
+                )
+            matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
+            if len(matches) == 0:
+                return JSONResponse(
+                    APIError(detail="template not found").model_dump(),
+                    status_code=status.HTTP_404_NOT_FOUND,
+                )
+            if len(matches) > 1:
+                return JSONResponse(
+                    APIError(
+                        detail="multiple templates match service+name; use templateId"
+                    ).model_dump(),
+                    status_code=status.HTTP_409_CONFLICT,
+                )
+            schema = matches[0].location
+        # Legacy fallback: templateSchema
+        elif body.templateSchema:
+            schema = body.templateSchema
+        else:
             return JSONResponse(
                 APIError(
-                    detail="either testId or templateSchema must be provided"
+                    detail="one of templateId, (templateService+templateName), templateSchema, or testId must be provided"
                 ).model_dump(),
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
-        schema = body.templateSchema
+
+        # When not using a testId and not impersonating through a test, require impersonation hints
         if not body.impersonateUserId and not body.impersonateEmail:
             return JSONResponse(
                 APIError(
-                    detail="impersonateUserId or impersonateEmail must be provided when using a template schema without a testId"
+                    detail="impersonateUserId or impersonateEmail must be provided when initializing without a testId"
                 ).model_dump(),
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
@@ -299,7 +438,7 @@ async def init_environment(request: Request) -> JSONResponse:
         environmentUrl=env_url,
         expiresAt=result.expires_at,
         schemaName=result.schema_name,
-        service=service,
+        service=Service(service),
     )
     return JSONResponse(
         response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
@@ -567,6 +706,11 @@ routes = [
     Route("/testSuites/{suite_id}", get_test_suite, methods=["GET"]),
     Route("/templates", list_environment_templates, methods=["GET"]),
     Route("/templates/{template_id}", get_environment_template, methods=["GET"]),
+    Route(
+        "/templates/from-environment",
+        create_template_from_environment,
+        methods=["POST"],
+    ),
     Route("/initEnv", init_environment, methods=["POST"]),
     Route("/startRun", start_run, methods=["POST"]),
     Route("/endRun", end_run, methods=["POST"]),

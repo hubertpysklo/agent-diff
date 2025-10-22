@@ -2,9 +2,10 @@ import logging
 from .session import SessionManager
 from .environment import EnvironmentHandler
 from .models import EnvironmentResponse
+from .models import TemplateCreateResult
+from src.platform.db.schema import RunTimeEnvironment
 from uuid import uuid4
 from datetime import datetime, timedelta
-from src.platform.db.schema import RunTimeEnvironment
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +53,9 @@ class CoreIsolationEngine:
             impersonate_email=impersonate_email,
         )
 
-        logger.info(f"Created environment {environment_id} from template {template_schema} for user {created_by}")
+        logger.info(
+            f"Created environment {environment_id} from template {template_schema} for user {created_by}"
+        )
 
         return EnvironmentResponse(
             environment_id=environment_id,
@@ -60,6 +63,49 @@ class CoreIsolationEngine:
             expires_at=expires_at,
             impersonate_user_id=impersonate_user_id,
             impersonate_email=impersonate_email,
+        )
+
+    def create_template_from_environment(
+        self,
+        *,
+        environment_id: str,
+        service: str,
+        name: str,
+        description: str | None = None,
+        owner_scope: str = "user",
+        owner_user_id: str | None = None,
+        owner_org_id: str | None = None,
+        version: str = "v1",
+    ) -> TemplateCreateResult:
+        rte = self.environment_handler.require_environment(environment_id)
+        source_schema = rte.schema
+
+        base = f"{service}_{name}".lower().replace(" ", "_")
+        target_schema = base
+        if self.environment_handler.schema_exists(target_schema):
+            target_schema = f"{base}_{uuid4().hex[:8]}"
+
+        self.environment_handler.clone_schema_from_environment(
+            source_schema, target_schema
+        )
+
+        template_id = self.environment_handler.register_template(
+            service=service,
+            name=name,
+            version=version,
+            owner_scope=owner_scope,
+            description=description,
+            owner_org_id=owner_org_id,
+            owner_user_id=owner_user_id,
+            kind="schema",
+            location=target_schema,
+        )
+
+        return TemplateCreateResult(
+            template_id=template_id,
+            schema_name=target_schema,
+            service=service,
+            name=name,
         )
 
     def get_schema_for_environment(self, environment_id: str) -> str:
