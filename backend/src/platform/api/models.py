@@ -38,6 +38,14 @@ class TestSuite(BaseModel):
     updated_at: datetime
 
 
+class AddTestRequest(BaseModel):
+    name: str
+    prompt: str
+    type: str
+    expected_output: dict
+    testSuiteId: UUID
+
+
 class Test(BaseModel):
     id: UUID
     name: str
@@ -98,7 +106,7 @@ class InitEnvRequestBody(BaseModel):
     templateId: Optional[UUID] = None
     templateService: Optional["Service"] = None
     templateName: Optional[str] = None
-    # Legacy fallback (schema name). Keep temporarily for BC if provided.
+    # Legacy fallback (schema name).
     templateSchema: Optional[str] = None
     ttlSeconds: Optional[int] = None
     impersonateUserId: Optional[str] = None

@@ -1,12 +1,12 @@
 import os
+from uuid import UUID
 import requests
-from models import (
+from .models import (
     InitEnvRequestBody,
     InitEnvResponse,
     TestSuiteListResponse,
     TemplateEnvironmentListResponse,
     TemplateEnvironmentDetail,
-    UUID,
     TestSuiteDetail,
     CreateTemplateFromEnvRequest,
     CreateTemplateFromEnvResponse,
@@ -87,9 +87,23 @@ class AgentDiff:
         return TestSuiteDetail.model_validate(response.json())
 
     def get_test(self, test_id: UUID):
-        pass
+        response = requests.get(
+            f"{self.base_url}/api/platform/tests/{test_id}",
+            headers={"X-API-Key": self.api_key},
+            timeout=5,
+        )
+        response.raise_for_status()
+        return response.json()
 
     def create_test(self, test, testSuiteId: UUID):
+        response = requests.post(
+            f"{self.base_url}/api/platform/tests",
+            json=test,
+            headers={"X-API-Key": self.api_key},
+            timeout=5,
+        )
+        response.raise_for_status()
+        return response.json()
         pass
 
     def create_test_suite(self, test_suite):
