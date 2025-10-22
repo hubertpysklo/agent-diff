@@ -6,6 +6,7 @@ from os import environ
 from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.evaluationEngine.core import CoreEvaluationEngine
 from src.platform.isolationEngine.environment import EnvironmentHandler
+from src.platform.testManager.core import CoreTestManager
 from starlette.routing import Router
 from src.platform.api.routes import routes as platform_routes
 from src.platform.api.middleware import IsolationMiddleware, PlatformMiddleware
@@ -30,9 +31,11 @@ def create_app():
         sessions=sessions, environment_handler=environment_handler
     )
     coreEvaluationEngine = CoreEvaluationEngine(sessions=sessions)
+    coreTestManager = CoreTestManager()
 
     app.state.coreIsolationEngine = coreIsolationEngine
     app.state.coreEvaluationEngine = coreEvaluationEngine
+    app.state.coreTestManager = coreTestManager
     app.state.sessions = sessions
 
     platform_router = Router(

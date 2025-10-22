@@ -38,11 +38,11 @@ class TestSuite(BaseModel):
     updated_at: datetime
 
 
-class AddTestRequest(BaseModel):
+class CreateTestRequest(BaseModel):
     name: str
     prompt: str
     type: str
-    expected_output: dict
+    expected_output: dict[str, Any]
     testSuiteId: UUID
 
 
@@ -51,7 +51,7 @@ class Test(BaseModel):
     name: str
     prompt: str
     type: str
-    expected_output: dict
+    expected_output: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 

@@ -95,7 +95,7 @@ class AgentDiff:
         response.raise_for_status()
         return response.json()
 
-    def create_test(self, test, testSuiteId: UUID):
+    def create_test(self, test: AddTestRequest, testSuiteId: UUID):
         response = requests.post(
             f"{self.base_url}/api/platform/tests",
             json=test,
@@ -104,7 +104,6 @@ class AgentDiff:
         )
         response.raise_for_status()
         return response.json()
-        pass
 
     def create_test_suite(self, test_suite):
         pass

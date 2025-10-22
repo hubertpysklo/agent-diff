@@ -53,6 +53,7 @@ from src.platform.evaluationEngine.core import CoreEvaluationEngine
 from src.platform.evaluationEngine.differ import Differ
 from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
+from src.platform.testManager.core import CoreTestManager
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,28 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
         )
 
     principal = _principal_from_request(request)
+    session = request.state.db_session
+    env = (
+        session.query(RunTimeEnvironment)
+        .filter(RunTimeEnvironment.id == payload.environmentId)
+        .one_or_none()
+    )
+    if env is None:
+        return JSONResponse(
+            APIError(detail="environment not found").model_dump(),
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
+    creator_org_ids = [
+        m.organization_id
+        for m in session.query(OrganizationMembership).filter_by(user_id=env.created_by)
+    ]
+    try:
+        require_resource_access_with_org(principal, env.created_by, creator_org_ids)
+    except PermissionError:
+        return JSONResponse(
+            APIError(detail="unauthorized").model_dump(),
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
     owner_scope = payload.ownerScope
     owner_user_id: str | None = None
     owner_org_id: str | None = None
@@ -218,17 +241,8 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
 async def list_test_suites(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
-    suites = (
-        session.query(TestSuite)
-        .order_by(TestSuite.created_at.desc())
-        .filter(
-            or_(
-                TestSuite.visibility == "public",
-                TestSuite.owner == principal.user_id,
-            )
-        )
-        .all()
-    )
+    core_tests: CoreTestManager = request.app.state.coreTestManager
+    suites = core_tests.list_test_suites(session, principal)
     response = TestSuiteListResponse(
         testSuites=[
             TestSuiteSummary(
@@ -246,29 +260,19 @@ async def get_test_suite(request: Request) -> JSONResponse:
     suite_id = request.path_params["suite_id"]
     session = request.state.db_session
     principal = _principal_from_request(request)
-
-    suite = session.query(TestSuite).filter(TestSuite.id == suite_id).one_or_none()
+    core_tests: CoreTestManager = request.app.state.coreTestManager
+    try:
+        suite, tests = core_tests.get_test_suite(session, principal, suite_id)
+    except PermissionError:
+        return JSONResponse(
+            APIError(detail="unauthorized").model_dump(),
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
     if suite is None:
         return JSONResponse(
             APIError(detail="test suite not found").model_dump(),
             status_code=status.HTTP_404_NOT_FOUND,
         )
-
-    if suite.visibility == "private":
-        try:
-            require_resource_access(principal, suite.owner)
-        except PermissionError:
-            return JSONResponse(
-                APIError(detail="unauthorized").model_dump(),
-                status_code=status.HTTP_403_FORBIDDEN,
-            )
-
-    tests = (
-        session.query(Test)
-        .join(TestMembership, TestMembership.test_id == Test.id)
-        .filter(TestMembership.test_suite_id == suite_id)
-        .all()
-    )
     payload = TestSuiteDetail(
         id=suite.id,
         name=suite.name,
@@ -322,20 +326,14 @@ async def init_environment(request: Request) -> JSONResponse:
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
-        test_suite = (
-            session.query(TestSuite)
-            .join(TestMembership, TestMembership.test_suite_id == TestSuite.id)
-            .filter(TestMembership.test_id == body.testId)
-            .first()
-        )
-        if test_suite and test_suite.visibility == "private":
-            try:
-                require_resource_access(principal, test_suite.owner)
-            except PermissionError:
-                return JSONResponse(
-                    APIError(detail="unauthorized").model_dump(),
-                    status_code=status.HTTP_403_FORBIDDEN,
-                )
+        core_tests: CoreTestManager = request.app.state.coreTestManager
+        try:
+            _ = core_tests.get_test_suite_for_test(session, principal, str(body.testId))
+        except PermissionError:
+            return JSONResponse(
+                APIError(detail="unauthorized").model_dump(),
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
         schema = body.templateSchema or test.template_schema
 
     else:
