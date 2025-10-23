@@ -232,12 +232,40 @@ async def create_test(request: Request) -> JSONResponse:
         prompt=test_row.prompt,
         type=test_row.type,
         expected_output=test_row.expected_output,
-        created_at=test_row.created_at,
-        updated_at=test_row.updated_at,
     )
     return JSONResponse(
         response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
     )
+
+
+async def get_test(request: Request) -> JSONResponse:
+    test_id = request.path_params["test_id"]
+    session = request.state.db_session
+    principal = _principal_from_request(request)
+    core_tests: CoreTestManager = request.app.state.coreTestManager
+
+    try:
+        test_uuid = parse_uuid(test_id)
+    except ValueError:
+        return bad_request("invalid test id")
+
+    try:
+        test = core_tests.get_test(session, principal, str(test_uuid))
+    except ValueError as e:
+        return not_found(str(e))
+    except PermissionError:
+        return unauthorized()
+
+    response = TestModel(
+        id=test.id,
+        name=test.name,
+        prompt=test.prompt,
+        type=test.type,
+        expected_output=test.expected_output,
+        created_at=test.created_at,
+        updated_at=test.updated_at,
+    )
+    return JSONResponse(response.model_dump(mode="json"))
 
 
 async def create_test_suite(request: Request) -> JSONResponse:
@@ -631,4 +659,5 @@ routes = [
     Route("/results/{run_id}", get_run_result, methods=["GET"]),
     Route("/env/{env_id}", delete_environment, methods=["DELETE"]),
     Route("/tests", create_test, methods=["POST"]),
+    Route("/tests/{test_id}", get_test, methods=["GET"]),
 ]
