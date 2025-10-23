@@ -24,54 +24,53 @@ from src.services.slack.database.schema import (
 COMMON_REACTIONS = {
     # Basic standard emojis
     "raised_hands",  # thank you
-    "bow",           # thank you
-    "thumbsup",      # agree / got it
-    "clap",          # well done
-    "tada",          # congrats / celebration
-    "dart",          # bullseye / nailed it
-    "joy",           # crying-laughing
-    "+1",            # agree / like
-    "-1",            # disagree
-    "eyes",          # watching / reviewing
-    "heart",         # love it
-    "fire",          # hot / amazing
-    "rocket",        # ship it / launch
-    "check",         # done / confirmed
-    "x",             # no / wrong
-    "wave",          # hello / goodbye
-    "pray",          # hoping / please
-    "thinking",      # considering
-    "shrug",         # I don't know
-    "facepalm",      # oops / mistake
-    "grimacing",     # awkward
-    "sweat_smile",   # nervous laugh
-    "zzz",           # sleeping / boring
-    "coffee",        # need caffeine
-    "pizza",         # food / break
-
+    "bow",  # thank you
+    "thumbsup",  # agree / got it
+    "clap",  # well done
+    "tada",  # congrats / celebration
+    "dart",  # bullseye / nailed it
+    "joy",  # crying-laughing
+    "+1",  # agree / like
+    "-1",  # disagree
+    "eyes",  # watching / reviewing
+    "heart",  # love it
+    "fire",  # hot / amazing
+    "rocket",  # ship it / launch
+    "check",  # done / confirmed
+    "x",  # no / wrong
+    "wave",  # hello / goodbye
+    "pray",  # hoping / please
+    "thinking",  # considering
+    "shrug",  # I don't know
+    "facepalm",  # oops / mistake
+    "grimacing",  # awkward
+    "sweat_smile",  # nervous laugh
+    "zzz",  # sleeping / boring
+    "coffee",  # need caffeine
+    "pizza",  # food / break
     # Popular Slack custom emojis
-    "finish_flag",         # done / finished
-    "blob_smiley",         # happy
-    "alert",               # warning
-    "mic-drop",            # nailed it
-    "cool-doge",           # cool
-    "thankyou",            # thanks
-    "party_blob",          # celebration
-    "partyparrot",         # party
-    "this_is_fine",        # chaos
-    "extreme-teamwork",    # collaboration
-    "done",                # completed
-    "loading",             # in progress
-    "huh",                 # confused
-    "dumpster-fire",       # disaster
-    "blob-yes",            # yes
-    "blob-no",             # no
-    "blob_help",           # need help
-    "chefs-kiss",          # perfect
-    "troll",               # joking
-    "1000",                # 100% perfect
-    "catjam",              # vibing
-    "keanu-thanks",        # thanks
+    "finish_flag",  # done / finished
+    "blob_smiley",  # happy
+    "alert",  # warning
+    "mic-drop",  # nailed it
+    "cool-doge",  # cool
+    "thankyou",  # thanks
+    "party_blob",  # celebration
+    "partyparrot",  # party
+    "this_is_fine",  # chaos
+    "extreme-teamwork",  # collaboration
+    "done",  # completed
+    "loading",  # in progress
+    "huh",  # confused
+    "dumpster-fire",  # disaster
+    "blob-yes",  # yes
+    "blob-no",  # no
+    "blob_help",  # need help
+    "chefs-kiss",  # perfect
+    "troll",  # joking
+    "1000",  # 100% perfect
+    "catjam",  # vibing
+    "keanu-thanks",  # thanks
 }
 
 
@@ -319,50 +318,55 @@ async def conversations_create(request: Request) -> JSONResponse:
         channel_obj = ops.create_channel(
             session=session, channel_name=name, team_id=team_id
         )
-        if is_private:
-            channel_obj.is_private = True
-
-        # Add creator as member
-        ops.join_channel(
-            session=session, channel_id=channel_obj.channel_id, user_id=actor_id
-        )
-
-        # Build response matching Slack API format
-        created_timestamp = (
-            int(channel_obj.created_at.timestamp()) if channel_obj.created_at else 0
-        )
-
-        return _json_response(
-            {
-                "ok": True,
-                "channel": {
-                    "id": _format_channel_id(channel_obj.channel_id),
-                    "name": channel_obj.channel_name,
-                    "is_channel": not channel_obj.is_private,
-                    "is_group": channel_obj.is_private,
-                    "is_im": False,
-                    "created": created_timestamp,
-                    "creator": _format_user_id(actor_id),
-                    "is_archived": channel_obj.is_archived,
-                    "is_general": False,
-                    "name_normalized": channel_obj.channel_name,
-                    "is_shared": False,
-                    "is_ext_shared": False,
-                    "is_org_shared": False,
-                    "is_member": True,
-                    "is_private": channel_obj.is_private,
-                    "is_mpim": False,
-                    "topic": {
-                        "value": channel_obj.topic_text or "",
-                        "creator": "",
-                        "last_set": 0,
-                    },
-                    "purpose": {"value": "", "creator": "", "last_set": 0},
-                },
-            }
-        )
+    except ValueError as e:
+        if "name_taken" in str(e):
+            _slack_error("name_taken")
+        raise
     except IntegrityError:
         _slack_error("name_taken")
+
+    if is_private:
+        channel_obj.is_private = True
+
+    # Add creator as member
+    ops.join_channel(
+        session=session, channel_id=channel_obj.channel_id, user_id=actor_id
+    )
+
+    # Build response matching Slack API format
+    created_timestamp = (
+        int(channel_obj.created_at.timestamp()) if channel_obj.created_at else 0
+    )
+
+    return _json_response(
+        {
+            "ok": True,
+            "channel": {
+                "id": _format_channel_id(channel_obj.channel_id),
+                "name": channel_obj.channel_name,
+                "is_channel": not channel_obj.is_private,
+                "is_group": channel_obj.is_private,
+                "is_im": False,
+                "created": created_timestamp,
+                "creator": _format_user_id(actor_id),
+                "is_archived": channel_obj.is_archived,
+                "is_general": False,
+                "name_normalized": channel_obj.channel_name,
+                "is_shared": False,
+                "is_ext_shared": False,
+                "is_org_shared": False,
+                "is_member": True,
+                "is_private": channel_obj.is_private,
+                "is_mpim": False,
+                "topic": {
+                    "value": channel_obj.topic_text or "",
+                    "creator": "",
+                    "last_set": 0,
+                },
+                "purpose": {"value": "", "creator": "", "last_set": 0},
+            },
+        }
+    )
 
 
 async def conversations_list(request: Request) -> JSONResponse:
@@ -918,7 +922,10 @@ async def conversations_open(request: Request) -> JSONResponse:
         _slack_error("channel_not_found")
 
     mpim_name = f"mpdm-{'-'.join(str(uid) for uid in all_member_ids)}"
+    channel_id = ops._generate_slack_id("G")
+
     mpim_channel = Channel(
+        channel_id=channel_id,
         channel_name=mpim_name,
         team_id=team_id,
         is_private=True,
@@ -1206,9 +1213,10 @@ async def conversations_rename(request: Request) -> JSONResponse:
     # Rename the channel
     try:
         ops.rename_channel(session=session, channel_id=channel_id, new_name=name)
-        session.flush()
-    except IntegrityError:
-        _slack_error("name_taken")
+    except ValueError as e:
+        if "name_taken" in str(e):
+            _slack_error("name_taken")
+        raise
 
     # Return updated channel info
     created_timestamp = int(ch.created_at.timestamp()) if ch.created_at else 0

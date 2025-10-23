@@ -1,69 +1,10 @@
 from __future__ import annotations
-
 from datetime import datetime
-from enum import Enum
-from typing import Any, List, Optional, Literal
+from typing import Any, List, Optional, Union
 from uuid import UUID
-
-from pydantic import BaseModel
-
-
-class Service(str, Enum):
-    slack = "slack"
-    linear = "linear"
-
-
-class OwnerScope(str, Enum):
-    public = "public"
-    org = "org"
-    user = "user"
-
-
-class Principal(BaseModel):
-    user_id: str
-    org_ids: List[str]
-    is_platform_admin: bool
-    is_organization_admin: bool
-
-
-class ApiKeyResponse(BaseModel):
-    token: str
-    key_id: str
-    expires_at: datetime
-    user_id: str
-    is_platform_admin: bool
-    is_organization_admin: bool
-
-
-class APIError(BaseModel):
-    detail: str
-
-
-class TestSuite(BaseModel):
-    id: UUID
-    name: str
-    description: str
-    owner: str
-    visibility: str
-    created_at: datetime
-    updated_at: datetime
-
-
-class CreateTestRequest(BaseModel):
-    name: str
-    prompt: str
-    type: Literal["actionEval", "retriEval", "compositeEval"]
-    expected_output: dict[str, Any]
-    testSuite: UUID | str
-    environmentTemplate: UUID | str
-    impersonateUserId: Optional[str] = None
-
-
-class CreateTestSuiteRequest(BaseModel):
-    name: str
-    description: str
-    visibility: Literal["public", "private"] = "private"
-    tests: Optional[List[CreateTestRequest]]
+import json
+from typing_extensions import Literal
+from pydantic import BaseModel, field_validator
 
 
 class Test(BaseModel):
@@ -71,7 +12,7 @@ class Test(BaseModel):
     name: str
     prompt: str
     type: str
-    expected_output: dict[str, Any]
+    expected_output: dict
     created_at: datetime
     updated_at: datetime
 
@@ -89,8 +30,44 @@ class TestSuiteSummary(BaseModel):
     description: str
 
 
-class TestSuiteListResponse(BaseModel):
-    testSuites: List[TestSuiteSummary]
+class CreateTestSuiteRequest(BaseModel):
+    name: str
+    description: str
+    visibility: Literal["public", "private"] = "private"
+    tests: Optional[List[CreateTestRequest]]
+
+
+class CreateTestSuiteResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    visibility: Literal["public", "private"]
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreateTestRequest(BaseModel):
+    name: str
+    prompt: str
+    type: Literal["actionEval", "retriEval", "compositeEval"]
+    expected_output: Union[dict[str, Any], str]
+    testSuite: UUID | str
+    environmentTemplate: UUID | str
+    impersonateUserId: Optional[str] = None
+
+    @field_validator("expected_output", mode="before")
+    @classmethod
+    def _parse_expected_output(cls, value):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except Exception as exc:
+                raise ValueError(
+                    "expected_output must be a valid JSON string or dict"
+                ) from exc
+        if isinstance(value, dict):
+            return value
+        raise ValueError("expected_output must be a dict or JSON string")
 
 
 class TestSuiteDetail(BaseModel):
@@ -104,9 +81,13 @@ class TestSuiteDetail(BaseModel):
     tests: List[Test]
 
 
+class TestSuiteListResponse(BaseModel):
+    testSuites: List[TestSuiteSummary]
+
+
 class TemplateEnvironmentSummary(BaseModel):
     id: UUID
-    service: "Service"
+    service: str
     description: str | None = None
     name: str
 
@@ -122,11 +103,11 @@ class TemplateEnvironmentListResponse(BaseModel):
 
 class InitEnvRequestBody(BaseModel):
     testId: Optional[UUID] = None
-    # Preferred ways to select a template
+    # Preferred selectors
     templateId: Optional[UUID] = None
-    templateService: Optional["Service"] = None
+    templateService: Optional[str] = None
     templateName: Optional[str] = None
-    # Legacy fallback (schema name).
+    # Legacy fallback
     templateSchema: Optional[str] = None
     ttlSeconds: Optional[int] = None
     impersonateUserId: Optional[str] = None
@@ -137,12 +118,9 @@ class InitEnvResponse(BaseModel):
     environmentId: str
     templateSchema: str
     schemaName: str
-    service: "Service"
+    service: str
     environmentUrl: str
     expiresAt: Optional[datetime]
-
-    class Config:
-        allow_population_by_field_name = True
 
 
 class StartRunRequest(BaseModel):
@@ -185,15 +163,15 @@ class DeleteEnvResponse(BaseModel):
 
 class CreateTemplateFromEnvRequest(BaseModel):
     environmentId: str
-    service: "Service"
+    service: str
     name: str
     description: Optional[str] = None
-    ownerScope: "OwnerScope" = OwnerScope.org
-    version: str = "v1"  # optional
+    ownerScope: str = "org"
+    version: str = "v1"
 
 
 class CreateTemplateFromEnvResponse(BaseModel):
     templateId: str
     schemaName: str
-    service: "Service"
+    service: str
     name: str

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import MetaData, text
 
-from src.platform.db.schema import RunTimeEnvironment
+from src.platform.db.schema import RunTimeEnvironment, TemplateEnvironment
 
 from .session import SessionManager
 
@@ -142,6 +142,60 @@ class EnvironmentHandler:
             if impersonate_email is not None:
                 rte.impersonate_email = impersonate_email
             s.add(rte)
+
+    def get_environment(self, environment_id: str) -> RunTimeEnvironment | None:
+        env_uuid = self._to_uuid(environment_id)
+        with self.session_manager.with_meta_session() as s:
+            return (
+                s.query(RunTimeEnvironment)
+                .filter(RunTimeEnvironment.id == env_uuid)
+                .one_or_none()
+            )
+
+    def require_environment(self, environment_id: str) -> RunTimeEnvironment:
+        env = self.get_environment(environment_id)
+        if env is None:
+            raise ValueError("environment not found")
+        return env
+
+    def clone_schema_from_environment(
+        self, source_schema: str, target_schema: str
+    ) -> None:
+        self.create_schema(target_schema)
+        self.migrate_schema(source_schema, target_schema)
+        self.seed_data_from_template(source_schema, target_schema)
+
+    def register_template(
+        self,
+        *,
+        service: str,
+        name: str,
+        version: str,
+        owner_scope: str,
+        description: str | None,
+        owner_org_id: str | None,
+        owner_user_id: str | None,
+        kind: str,
+        location: str,
+    ) -> str:
+        from uuid import uuid4
+
+        template_uuid = uuid4()
+        with self.session_manager.with_meta_session() as s:
+            tmpl = TemplateEnvironment(
+                id=template_uuid,
+                service=service,
+                name=name,
+                version=version,
+                owner_scope=owner_scope,
+                description=description,
+                owner_org_id=owner_org_id,
+                owner_user_id=owner_user_id,
+                kind=kind,
+                location=location,
+            )
+            s.add(tmpl)
+        return str(template_uuid)
 
     def drop_schema(self, schema: str) -> None:
         try:
