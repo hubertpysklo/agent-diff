@@ -137,9 +137,15 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
 
     principal = _principal_from_request(request)
     session = request.state.db_session
+
+    try:
+        env_uuid = parse_uuid(payload.environmentId)
+    except ValueError:
+        return bad_request("invalid environment id")
+
     env = (
         session.query(RunTimeEnvironment)
-        .filter(RunTimeEnvironment.id == payload.environmentId)
+        .filter(RunTimeEnvironment.id == env_uuid)
         .one_or_none()
     )
     if env is None:
@@ -252,20 +258,25 @@ async def create_test_suite(request: Request) -> JSONResponse:
     )
     if body.tests:
         for t in body.tests:
-            schema = resolve_template_schema(
-                session, principal, str(t.environmentTemplate)
-            )
-            core_tests.create_test(
-                session,
-                principal,
-                test_suite_id=str(suite.id),
-                name=t.name,
-                prompt=t.prompt,
-                type=t.type,
-                expected_output=t.expected_output,
-                template_schema=schema,
-                impersonate_user_id=t.impersonateUserId,
-            )
+            try:
+                schema = resolve_template_schema(
+                    session, principal, str(t.environmentTemplate)
+                )
+                core_tests.create_test(
+                    session,
+                    principal,
+                    test_suite_id=str(suite.id),
+                    name=t.name,
+                    prompt=t.prompt,
+                    type=t.type,
+                    expected_output=t.expected_output,
+                    template_schema=schema,
+                    impersonate_user_id=t.impersonateUserId,
+                )
+            except ValueError as e:
+                return bad_request(str(e))
+            except PermissionError:
+                return unauthorized()
     summary = TestSuiteSummary(
         id=suite.id, name=suite.name, description=suite.description
     )
@@ -402,7 +413,12 @@ async def start_run(request: Request) -> JSONResponse:
         return not_found("test not found")
 
     try:
-        _ = require_environment_access(session, principal, body.envId)
+        env_uuid = parse_uuid(body.envId)
+    except ValueError:
+        return bad_request("invalid environment id")
+
+    try:
+        _ = require_environment_access(session, principal, str(env_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
@@ -459,7 +475,12 @@ async def end_run(request: Request) -> JSONResponse:
     principal = _principal_from_request(request)
 
     try:
-        run = require_run_access(session, principal, body.runId)
+        run_uuid = parse_uuid(body.runId)
+    except ValueError:
+        return bad_request("invalid run id")
+
+    try:
+        run = require_run_access(session, principal, str(run_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
@@ -533,7 +554,12 @@ async def get_run_result(request: Request) -> JSONResponse:
     principal = _principal_from_request(request)
 
     try:
-        run = require_run_access(session, principal, run_id)
+        run_uuid = parse_uuid(run_id)
+    except ValueError:
+        return bad_request("invalid run id")
+
+    try:
+        run = require_run_access(session, principal, str(run_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
@@ -557,7 +583,12 @@ async def delete_environment(request: Request) -> JSONResponse:
     principal = _principal_from_request(request)
 
     try:
-        env = require_environment_access(session, principal, env_id)
+        env_uuid = parse_uuid(env_id)
+    except ValueError:
+        return bad_request("invalid environment id")
+
+    try:
+        env = require_environment_access(session, principal, str(env_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
