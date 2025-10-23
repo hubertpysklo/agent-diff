@@ -1,4 +1,4 @@
-"""TODO: This is AI slop code, will need to be cleaned up and refactored"""
+"""TODO: This is AI slop code, will need to be cleaned up and refactored after MVP"""
 
 from __future__ import annotations
 
@@ -167,6 +167,25 @@ def require_run_access(session: Session, principal: Principal, run_id: str) -> T
     ]
     require_resource_access_with_org(principal, run.created_by, creator_org_ids)
     return run
+
+
+def resolve_owner_ids(
+    principal: Principal, owner_scope: OwnerScope
+) -> tuple[str | None, str | None]:
+    """Return (owner_user_id, owner_org_id) based on scope and principal.
+    Raises ValueError if org scope requires explicit org and principal has multiple.
+    """
+    if owner_scope == OwnerScope.user:
+        return principal.user_id, None
+    if owner_scope == OwnerScope.org:
+        if len(principal.org_ids) != 1:
+            raise ValueError(
+                "ownerScope=org requires membership in exactly one org or explicit ownerOrgId (not yet supported)"
+            )
+        return None, principal.org_ids[0]
+    if owner_scope == OwnerScope.public:
+        return None, None
+    raise ValueError("invalid ownerScope")
 
 
 def resolve_init_template(

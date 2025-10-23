@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 from datetime import datetime
-from typing import Any
 
 from pydantic import ValidationError
 from starlette import status
@@ -58,6 +57,7 @@ from src.platform.api.resolvers import (
     resolve_init_template,
     require_run_access,
     parse_uuid,
+    resolve_owner_ids,
 )
 from src.platform.api.errors import bad_request, not_found, unauthorized
 
@@ -152,33 +152,20 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
         require_resource_access_with_org(principal, env.created_by, creator_org_ids)
     except PermissionError:
         return unauthorized()
-    from src.platform.api.models import OwnerScope
 
-    owner_scope = payload.ownerScope
-    owner_user_id: str | None = None
-    owner_org_id: str | None = None
-    if owner_scope == OwnerScope.user:
-        owner_user_id = principal.user_id
-    elif owner_scope == OwnerScope.org:
-        if len(principal.org_ids) == 1:
-            owner_org_id = principal.org_ids[0]
-        else:
-            return bad_request(
-                "ownerScope=org requires membership in exactly one org or explicit ownerOrgId (not yet supported)"
-            )
-    elif owner_scope == OwnerScope.public:
-        pass
-    else:
-        return bad_request("invalid ownerScope")
+    try:
+        owner_user_id, owner_org_id = resolve_owner_ids(principal, payload.ownerScope)
+    except ValueError as e:
+        return bad_request(str(e))
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
     try:
         result = core.create_template_from_environment(
             environment_id=payload.environmentId,
-            service=payload.service,
+            service=payload.service.value,
             name=payload.name,
             description=payload.description,
-            owner_scope=owner_scope,
+            owner_scope=payload.ownerScope.value,
             owner_user_id=owner_user_id,
             owner_org_id=owner_org_id,
             version=payload.version or "v1",
@@ -421,12 +408,6 @@ async def start_run(request: Request) -> JSONResponse:
     except PermissionError:
         return unauthorized()
 
-    core_tests: CoreTestManager = request.app.state.coreTestManager
-    try:
-        core_tests.get_test_suite_for_test(session, principal, str(body.testId))
-    except PermissionError:
-        return unauthorized()
-
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
     schema = request.app.state.coreIsolationEngine.get_schema_for_environment(
         body.envId
@@ -494,7 +475,6 @@ async def end_run(request: Request) -> JSONResponse:
     after = core_eval.take_after(
         schema=rte.schema, environment_id=str(run.environment_id)
     )
-    evaluation: dict[str, Any]
     diff_payload: DiffResult | None = None
     try:
         if run.before_snapshot_suffix is None:
