@@ -125,12 +125,10 @@ class CoreTestManager:
             require_resource_access(principal, suite.owner)
         return suite
 
-    def get_test(
-        self, session: Session, principal: Principal, test_id: str
-    ) -> Test:
+    def get_test(self, session: Session, principal: Principal, test_id: str) -> Test:
         test = session.query(Test).filter(Test.id == test_id).one_or_none()
         if test is None:
             raise ValueError("test not found")
-        
+
         self.get_test_suite_for_test(session, principal, test_id)
         return test

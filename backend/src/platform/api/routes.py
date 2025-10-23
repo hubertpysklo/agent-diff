@@ -232,6 +232,8 @@ async def create_test(request: Request) -> JSONResponse:
         prompt=test_row.prompt,
         type=test_row.type,
         expected_output=test_row.expected_output,
+        created_at=test_row.created_at,
+        updated_at=test_row.updated_at,
     )
     return JSONResponse(
         response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED

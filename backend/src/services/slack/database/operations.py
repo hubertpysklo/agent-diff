@@ -15,6 +15,14 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, exists, and_
+
+
+def _generate_slack_id(prefix: str) -> str:
+    """Generate a Slack-style ID: prefix + 10 random alphanumeric chars."""
+    chars = string.ascii_uppercase + string.digits
+    return prefix + "".join(secrets.choice(chars) for _ in range(10))
+
+
 # Create Team
 
 
@@ -27,17 +35,14 @@ def create_team(
 ):
     # Generate team_id if not provided
     if team_id is None:
-        # Generate Slack-style team ID: T + 10 alphanumeric chars
-        chars = string.ascii_uppercase + string.digits
-        team_id = "T" + "".join(secrets.choice(chars) for _ in range(10))
+        team_id = _generate_slack_id("T")
 
     team = Team(team_id=team_id, team_name=team_name)
     if created_at is not None:
         team.created_at = created_at
     session.add(team)
     if default_channel_name:
-        # Generate channel_id for default channel
-        channel_id = "C" + "".join(secrets.choice(chars) for _ in range(10))
+        channel_id = _generate_slack_id("C")
         channel = Channel(
             channel_id=channel_id,
             channel_name=default_channel_name,
@@ -66,9 +71,7 @@ def create_user(
 ):
     # Generate user_id if not provided
     if user_id is None:
-        # Generate Slack-style user ID: U + 10 alphanumeric chars
-        chars = string.ascii_uppercase + string.digits
-        user_id = "U" + "".join(secrets.choice(chars) for _ in range(10))
+        user_id = _generate_slack_id("U")
 
     user = User(
         user_id=user_id,
@@ -99,11 +102,18 @@ def create_channel(
     if team is None:
         raise ValueError("Team not found")
 
+    # Check if channel name already exists in this team
+    existing = (
+        session.query(Channel)
+        .filter(Channel.team_id == team_id, Channel.channel_name == channel_name)
+        .first()
+    )
+    if existing:
+        raise ValueError("name_taken")
+
     # Generate channel_id if not provided
     if channel_id is None:
-        # Generate Slack-style channel ID: C + 10 alphanumeric chars
-        chars = string.ascii_uppercase + string.digits
-        channel_id = "C" + "".join(secrets.choice(chars) for _ in range(10))
+        channel_id = _generate_slack_id("C")
 
     channel = Channel(
         channel_id=channel_id,
@@ -148,6 +158,20 @@ def rename_channel(session: Session, channel_id: str, new_name: str) -> Channel:
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
+
+    # Check if another channel in the same team already has this name
+    existing = (
+        session.query(Channel)
+        .filter(
+            Channel.team_id == channel.team_id,
+            Channel.channel_name == new_name,
+            Channel.channel_id != channel_id,
+        )
+        .first()
+    )
+    if existing:
+        raise ValueError("name_taken")
+
     channel.channel_name = new_name
     return channel
 
@@ -447,8 +471,15 @@ def find_or_create_dm_channel(
     )
     if dm:
         return dm
+
+    channel_id = _generate_slack_id("D")
+
     ch = Channel(
-        is_dm=True, is_private=True, team_id=team_id, channel_name=f"dm-{a}-{b}"
+        channel_id=channel_id,
+        is_dm=True,
+        is_private=True,
+        team_id=team_id,
+        channel_name=f"dm-{a}-{b}",
     )
     session.add(ch)
     session.add_all(
