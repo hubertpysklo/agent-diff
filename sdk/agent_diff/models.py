@@ -1,8 +1,10 @@
 from __future__ import annotations
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 from uuid import UUID
-from pydantic import BaseModel
+import json
+from typing_extensions import Literal
+from pydantic import BaseModel, field_validator
 
 
 class Test(BaseModel):
@@ -26,6 +28,46 @@ class TestSuiteSummary(BaseModel):
     id: UUID
     name: str
     description: str
+
+
+class CreateTestSuiteRequest(BaseModel):
+    name: str
+    description: str
+    visibility: Literal["public", "private"] = "private"
+    tests: Optional[List[CreateTestRequest]]
+
+
+class CreateTestSuiteResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    visibility: Literal["public", "private"]
+    created_at: datetime
+    updated_at: datetime
+
+
+class CreateTestRequest(BaseModel):
+    name: str
+    prompt: str
+    type: Literal["actionEval", "retriEval", "compositeEval"]
+    expected_output: Union[dict[str, Any], str]
+    testSuite: UUID | str
+    environmentTemplate: UUID | str
+    impersonateUserId: Optional[str] = None
+
+    @field_validator("expected_output", mode="before")
+    @classmethod
+    def _parse_expected_output(cls, value):
+        if isinstance(value, str):
+            try:
+                return json.loads(value)
+            except Exception as exc:
+                raise ValueError(
+                    "expected_output must be a valid JSON string or dict"
+                ) from exc
+        if isinstance(value, dict):
+            return value
+        raise ValueError("expected_output must be a dict or JSON string")
 
 
 class TestSuiteDetail(BaseModel):

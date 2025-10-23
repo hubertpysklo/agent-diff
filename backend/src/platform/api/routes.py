@@ -6,18 +6,18 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import ValidationError
-from sqlalchemy import and_, or_
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
-from uuid import UUID
 
 from src.platform.api.models import (
     InitEnvRequestBody,
     InitEnvResponse,
     TestSuiteListResponse,
     Test as TestModel,
+    CreateTestSuiteRequest,
+    CreateTestRequest,
     StartRunRequest,
     StartRunResponse,
     EndRunRequest,
@@ -26,7 +26,6 @@ from src.platform.api.models import (
     DeleteEnvResponse,
     TestSuiteSummary,
     TestSuiteDetail,
-    APIError,
     Principal,
     TemplateEnvironmentSummary,
     TemplateEnvironmentListResponse,
@@ -36,14 +35,11 @@ from src.platform.api.models import (
     Service,
 )
 from src.platform.api.auth import (
-    require_resource_access,
     require_resource_access_with_org,
     check_template_access,
 )
 from src.platform.db.schema import (
-    TestSuite,
     Test,
-    TestMembership,
     TestRun,
     RunTimeEnvironment,
     OrganizationMembership,
@@ -54,15 +50,18 @@ from src.platform.evaluationEngine.differ import Differ
 from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.testManager.core import CoreTestManager
+from src.platform.api.resolvers import (
+    resolve_test_suite,
+    resolve_template_schema,
+    list_templates_for_principal,
+    require_environment_access,
+    resolve_init_template,
+    require_run_access,
+    parse_uuid,
+)
+from src.platform.api.errors import bad_request, not_found, unauthorized
 
 logger = logging.getLogger(__name__)
-
-
-def _uuid_from_path_param(path_param: str) -> UUID:
-    try:
-        return UUID(path_param)
-    except ValueError:
-        raise ValueError(f"invalid UUID: {path_param}") from None
 
 
 def _principal_from_request(request: Request) -> Principal:
@@ -78,29 +77,13 @@ async def list_environment_templates(
     session = request.state.db_session
     principal = _principal_from_request(request)
 
-    query = session.query(TemplateEnvironment)
-    if not principal.is_platform_admin:
-        query = query.filter(
-            or_(
-                TemplateEnvironment.owner_scope == "public",
-                and_(
-                    TemplateEnvironment.owner_scope == "org",
-                    TemplateEnvironment.owner_org_id.in_(principal.org_ids),
-                ),
-                and_(
-                    TemplateEnvironment.owner_scope == "user",
-                    TemplateEnvironment.owner_user_id == principal.user_id,
-                ),
-            )
-        )
-
-    templates = query.order_by(TemplateEnvironment.created_at.desc()).all()
+    templates = list_templates_for_principal(session, principal)
 
     response = TemplateEnvironmentListResponse(
         templates=[
             TemplateEnvironmentSummary(
                 id=template.id,
-                service=template.service,
+                service=Service(template.service),
                 description=template.description,
                 name=template.name,
             )
@@ -118,12 +101,9 @@ async def get_environment_template(
     principal = _principal_from_request(request)
 
     try:
-        parsed_id = _uuid_from_path_param(template_id)
+        parsed_id = parse_uuid(template_id)
     except ValueError:
-        return JSONResponse(
-            APIError(detail="invalid template id").model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request("invalid template id")
 
     template = (
         session.query(TemplateEnvironment)
@@ -131,18 +111,12 @@ async def get_environment_template(
         .one_or_none()
     )
     if template is None:
-        return JSONResponse(
-            APIError(detail="template not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return not_found("template not found")
 
     try:
         check_template_access(principal, template)
     except PermissionError:
-        return JSONResponse(
-            APIError(detail="unauthorized").model_dump(),
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+        return unauthorized()
 
     response = TemplateEnvironmentDetail(
         id=template.id,
@@ -159,10 +133,7 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
     try:
         payload = CreateTemplateFromEnvRequest(**(await request.json()))
     except (json.JSONDecodeError, ValidationError) as e:
-        return JSONResponse(
-            APIError(detail=str(e)).model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request(str(e))
 
     principal = _principal_from_request(request)
     session = request.state.db_session
@@ -172,10 +143,7 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
         .one_or_none()
     )
     if env is None:
-        return JSONResponse(
-            APIError(detail="environment not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return not_found("environment not found")
     creator_org_ids = [
         m.organization_id
         for m in session.query(OrganizationMembership).filter_by(user_id=env.created_by)
@@ -183,32 +151,25 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
     try:
         require_resource_access_with_org(principal, env.created_by, creator_org_ids)
     except PermissionError:
-        return JSONResponse(
-            APIError(detail="unauthorized").model_dump(),
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+        return unauthorized()
+    from src.platform.api.models import OwnerScope
+
     owner_scope = payload.ownerScope
     owner_user_id: str | None = None
     owner_org_id: str | None = None
-    if owner_scope == "user":
+    if owner_scope == OwnerScope.user:
         owner_user_id = principal.user_id
-    elif owner_scope == "org":
+    elif owner_scope == OwnerScope.org:
         if len(principal.org_ids) == 1:
             owner_org_id = principal.org_ids[0]
         else:
-            return JSONResponse(
-                APIError(
-                    detail="ownerScope=org requires membership in exactly one org or explicit ownerOrgId (not yet supported)"
-                ).model_dump(),
-                status_code=status.HTTP_400_BAD_REQUEST,
+            return bad_request(
+                "ownerScope=org requires membership in exactly one org or explicit ownerOrgId (not yet supported)"
             )
-    elif owner_scope == "public":
+    elif owner_scope == OwnerScope.public:
         pass
     else:
-        return JSONResponse(
-            APIError(detail="invalid ownerScope").model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request("invalid ownerScope")
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
     try:
@@ -223,10 +184,7 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
             version=payload.version or "v1",
         )
     except ValueError as e:
-        return JSONResponse(
-            APIError(detail=str(e)).model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request(str(e))
 
     return JSONResponse(
         CreateTemplateFromEnvResponse(
@@ -235,6 +193,97 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
             service=Service(result.service),
             name=result.name,
         ).model_dump(mode="json")
+    )
+
+
+async def create_test(request: Request) -> JSONResponse:
+    try:
+        body = CreateTestRequest(**(await request.json()))
+    except (json.JSONDecodeError, ValidationError) as e:
+        return bad_request(str(e))
+
+    session = request.state.db_session
+    principal = _principal_from_request(request)
+    core_tests: CoreTestManager = request.app.state.coreTestManager
+
+    try:
+        suite = resolve_test_suite(session, principal, str(body.testSuite))
+        template_schema = resolve_template_schema(
+            session, principal, str(body.environmentTemplate)
+        )
+    except ValueError as e:
+        return bad_request(str(e))
+    except PermissionError:
+        return unauthorized()
+
+    try:
+        test_row = core_tests.create_test(
+            session,
+            principal,
+            test_suite_id=str(suite.id),
+            name=body.name,
+            prompt=body.prompt,
+            type=body.type,
+            expected_output=body.expected_output,
+            template_schema=template_schema,
+            impersonate_user_id=body.impersonateUserId,
+        )
+    except PermissionError:
+        return unauthorized()
+    except ValueError as e:
+        return bad_request(str(e))
+
+    response = TestModel(
+        id=test_row.id,
+        name=test_row.name,
+        prompt=test_row.prompt,
+        type=test_row.type,
+        expected_output=test_row.expected_output,
+        created_at=test_row.created_at,
+        updated_at=test_row.updated_at,
+    )
+    return JSONResponse(
+        response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
+    )
+
+
+async def create_test_suite(request: Request) -> JSONResponse:
+    try:
+        body = CreateTestSuiteRequest(**(await request.json()))
+    except (json.JSONDecodeError, ValidationError) as e:
+        return bad_request(str(e))
+
+    session = request.state.db_session
+    principal = _principal_from_request(request)
+    core_tests: CoreTestManager = request.app.state.coreTestManager
+    suite = core_tests.create_test_suite(
+        session,
+        principal,
+        name=body.name,
+        description=body.description,
+        visibility=body.visibility,
+    )
+    if body.tests:
+        for t in body.tests:
+            schema = resolve_template_schema(
+                session, principal, str(t.environmentTemplate)
+            )
+            core_tests.create_test(
+                session,
+                principal,
+                test_suite_id=str(suite.id),
+                name=t.name,
+                prompt=t.prompt,
+                type=t.type,
+                expected_output=t.expected_output,
+                template_schema=schema,
+                impersonate_user_id=t.impersonateUserId,
+            )
+    summary = TestSuiteSummary(
+        id=suite.id, name=suite.name, description=suite.description
+    )
+    return JSONResponse(
+        summary.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
     )
 
 
@@ -264,15 +313,9 @@ async def get_test_suite(request: Request) -> JSONResponse:
     try:
         suite, tests = core_tests.get_test_suite(session, principal, suite_id)
     except PermissionError:
-        return JSONResponse(
-            APIError(detail="unauthorized").model_dump(),
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+        return unauthorized()
     if suite is None:
-        return JSONResponse(
-            APIError(detail="test suite not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return not_found("test suite not found")
     payload = TestSuiteDetail(
         id=suite.id,
         name=suite.name,
@@ -301,116 +344,29 @@ async def init_environment(request: Request) -> JSONResponse:
     try:
         data = await request.json()
     except json.JSONDecodeError:
-        return JSONResponse(
-            APIError(detail="invalid JSON in request body").model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request("invalid JSON in request body")
 
     try:
         body = InitEnvRequestBody(**data)
     except ValidationError as e:
-        return JSONResponse(
-            APIError(detail=str(e)).model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request(str(e))
 
     session = request.state.db_session
     principal = _principal_from_request(request)
 
-    # Resolve template via testId, templateId, or service+name. Fallback to legacy templateSchema.
-    if body.testId:
-        test = session.query(Test).filter(Test.id == body.testId).one_or_none()
-        if test is None:
-            return JSONResponse(
-                APIError(detail="test not found").model_dump(),
-                status_code=status.HTTP_404_NOT_FOUND,
-            )
+    try:
+        schema, selected_template_service = resolve_init_template(
+            session, principal, body
+        )
+    except PermissionError:
+        return unauthorized()
+    except ValueError as e:
+        return bad_request(str(e))
 
-        core_tests: CoreTestManager = request.app.state.coreTestManager
-        try:
-            _ = core_tests.get_test_suite_for_test(session, principal, str(body.testId))
-        except PermissionError:
-            return JSONResponse(
-                APIError(detail="unauthorized").model_dump(),
-                status_code=status.HTTP_403_FORBIDDEN,
-            )
-        schema = body.templateSchema or test.template_schema
-
-    else:
-        schema = None
-        # Preferred: templateId
-        if body.templateId is not None:
-            template = (
-                session.query(TemplateEnvironment)
-                .filter(TemplateEnvironment.id == body.templateId)
-                .one_or_none()
-            )
-            if template is None:
-                return JSONResponse(
-                    APIError(detail="template not found").model_dump(),
-                    status_code=status.HTTP_404_NOT_FOUND,
-                )
-            try:
-                check_template_access(principal, template)
-            except PermissionError:
-                return JSONResponse(
-                    APIError(detail="unauthorized").model_dump(),
-                    status_code=status.HTTP_403_FORBIDDEN,
-                )
-            schema = template.location
-        # Next: service + name
-        elif body.templateService and body.templateName:
-            query = session.query(TemplateEnvironment).filter(
-                TemplateEnvironment.service == body.templateService,
-                TemplateEnvironment.name == body.templateName,
-            )
-            if not principal.is_platform_admin:
-                query = query.filter(
-                    or_(
-                        TemplateEnvironment.owner_scope == "public",
-                        and_(
-                            TemplateEnvironment.owner_scope == "org",
-                            TemplateEnvironment.owner_org_id.in_(principal.org_ids),
-                        ),
-                        and_(
-                            TemplateEnvironment.owner_scope == "user",
-                            TemplateEnvironment.owner_user_id == principal.user_id,
-                        ),
-                    )
-                )
-            matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
-            if len(matches) == 0:
-                return JSONResponse(
-                    APIError(detail="template not found").model_dump(),
-                    status_code=status.HTTP_404_NOT_FOUND,
-                )
-            if len(matches) > 1:
-                return JSONResponse(
-                    APIError(
-                        detail="multiple templates match service+name; use templateId"
-                    ).model_dump(),
-                    status_code=status.HTTP_409_CONFLICT,
-                )
-            schema = matches[0].location
-        # Legacy fallback: templateSchema
-        elif body.templateSchema:
-            schema = body.templateSchema
-        else:
-            return JSONResponse(
-                APIError(
-                    detail="one of templateId, (templateService+templateName), templateSchema, or testId must be provided"
-                ).model_dump(),
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # When not using a testId and not impersonating through a test, require impersonation hints
-        if not body.impersonateUserId and not body.impersonateEmail:
-            return JSONResponse(
-                APIError(
-                    detail="impersonateUserId or impersonateEmail must be provided when initializing without a testId"
-                ).model_dump(),
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
+    if not body.testId and not body.impersonateUserId and not body.impersonateEmail:
+        return bad_request(
+            "impersonateUserId or impersonateEmail must be provided when initializing without a testId"
+        )
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
 
@@ -423,12 +379,9 @@ async def init_environment(request: Request) -> JSONResponse:
             impersonate_email=body.impersonateEmail,
         )
     except ValueError as e:
-        return JSONResponse(
-            APIError(detail=str(e)).model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request(str(e))
 
-    service = schema.split("_")[0]
+    service = selected_template_service
     env_url = f"/api/env/{result.environment_id}/services/{service}/"
     response = InitEnvResponse(
         environmentId=result.environment_id,
@@ -447,43 +400,32 @@ async def start_run(request: Request) -> JSONResponse:
     try:
         data = await request.json()
     except json.JSONDecodeError:
-        return JSONResponse(
-            APIError(detail="invalid JSON in request body").model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request("invalid JSON in request body")
 
     try:
         body = StartRunRequest(**data)
     except ValidationError as e:
-        return JSONResponse(
-            APIError(detail=str(e)).model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request(str(e))
 
     session = request.state.db_session
     principal = _principal_from_request(request)
 
     test = session.query(Test).filter(Test.id == body.testId).one_or_none()
     if test is None:
-        return JSONResponse(
-            APIError(detail="test not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
+        return not_found("test not found")
 
-    test_suite = (
-        session.query(TestSuite)
-        .join(TestMembership, TestMembership.test_suite_id == TestSuite.id)
-        .filter(TestMembership.test_id == body.testId)
-        .first()
-    )
-    if test_suite and test_suite.visibility == "private":
-        try:
-            require_resource_access(principal, test_suite.owner)
-        except PermissionError:
-            return JSONResponse(
-                APIError(detail="unauthorized").model_dump(),
-                status_code=status.HTTP_403_FORBIDDEN,
-            )
+    try:
+        _ = require_environment_access(session, principal, body.envId)
+    except ValueError as e:
+        return not_found(str(e))
+    except PermissionError:
+        return unauthorized()
+
+    core_tests: CoreTestManager = request.app.state.coreTestManager
+    try:
+        core_tests.get_test_suite_for_test(session, principal, str(body.testId))
+    except PermissionError:
+        return unauthorized()
 
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
     schema = request.app.state.coreIsolationEngine.get_schema_for_environment(
@@ -506,7 +448,6 @@ async def start_run(request: Request) -> JSONResponse:
         updated_at=datetime.now(),
     )
     session.add(run)
-    session.flush()
 
     logger.info(
         f"Started test run {run.id} for test {body.testId} in environment {body.envId}"
@@ -526,40 +467,22 @@ async def end_run(request: Request) -> JSONResponse:
     try:
         data = await request.json()
     except json.JSONDecodeError:
-        return JSONResponse(
-            APIError(detail="invalid JSON in request body").model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request("invalid JSON in request body")
 
     try:
         body = EndRunRequest(**data)
     except ValidationError as e:
-        return JSONResponse(
-            APIError(detail=str(e)).model_dump(),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
+        return bad_request(str(e))
 
     session = request.state.db_session
     principal = _principal_from_request(request)
 
-    run = session.query(TestRun).filter(TestRun.id == body.runId).one_or_none()
-    if run is None:
-        return JSONResponse(
-            APIError(detail="run not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    creator_org_ids = [
-        m.organization_id
-        for m in session.query(OrganizationMembership).filter_by(user_id=run.created_by)
-    ]
     try:
-        require_resource_access_with_org(principal, run.created_by, creator_org_ids)
+        run = require_run_access(session, principal, body.runId)
+    except ValueError as e:
+        return not_found(str(e))
     except PermissionError:
-        return JSONResponse(
-            APIError(detail="unauthorized").model_dump(),
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+        return unauthorized()
 
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
     rte = (
@@ -574,6 +497,8 @@ async def end_run(request: Request) -> JSONResponse:
     evaluation: dict[str, Any]
     diff_payload: DiffResult | None = None
     try:
+        if run.before_snapshot_suffix is None:
+            raise ValueError("before snapshot missing")
         diff_payload = core_eval.compute_diff(
             schema=rte.schema,
             environment_id=str(run.environment_id),
@@ -627,31 +552,19 @@ async def get_run_result(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
 
-    run = session.query(TestRun).filter(TestRun.id == run_id).one_or_none()
-    if run is None:
-        return JSONResponse(
-            APIError(detail="run not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    creator_org_ids = [
-        m.organization_id
-        for m in session.query(OrganizationMembership).filter_by(user_id=run.created_by)
-    ]
     try:
-        require_resource_access_with_org(principal, run.created_by, creator_org_ids)
+        run = require_run_access(session, principal, run_id)
+    except ValueError as e:
+        return not_found(str(e))
     except PermissionError:
-        return JSONResponse(
-            APIError(detail="unauthorized").model_dump(),
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+        return unauthorized()
 
     payload = TestResultResponse(
         runId=str(run.id),
         status=run.status,
         passed=bool(run.result.get("passed") if run.result else False),
         score=run.result.get("score") if run.result else None,
-        failures=run.result.get("failures") if run.result else [],
+        failures=run.result.get("failures", []) if run.result else [],
         diff=run.result.get("diff") if run.result else None,
         createdAt=run.created_at,
     )
@@ -663,28 +576,12 @@ async def delete_environment(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
 
-    env = (
-        session.query(RunTimeEnvironment)
-        .filter(RunTimeEnvironment.id == env_id)
-        .one_or_none()
-    )
-    if env is None:
-        return JSONResponse(
-            APIError(detail="environment not found").model_dump(),
-            status_code=status.HTTP_404_NOT_FOUND,
-        )
-
-    creator_org_ids = [
-        m.organization_id
-        for m in session.query(OrganizationMembership).filter_by(user_id=env.created_by)
-    ]
     try:
-        require_resource_access_with_org(principal, env.created_by, creator_org_ids)
+        env = require_environment_access(session, principal, env_id)
+    except ValueError as e:
+        return not_found(str(e))
     except PermissionError:
-        return JSONResponse(
-            APIError(detail="unauthorized").model_dump(),
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+        return unauthorized()
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
     core.environment_handler.drop_schema(env.schema)
@@ -695,12 +592,20 @@ async def delete_environment(request: Request) -> JSONResponse:
 
 
 async def health_check(request: Request) -> JSONResponse:
-    return JSONResponse({"status": "healthy", "service": "diff-the-universe"})
+    time = datetime.now()
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "service": "diff-the-universe",
+            "time": time.isoformat(),
+        }
+    )
 
 
 routes = [
     Route("/health", health_check, methods=["GET"]),
     Route("/testSuites", list_test_suites, methods=["GET"]),
+    Route("/testSuites", create_test_suite, methods=["POST"]),
     Route("/testSuites/{suite_id}", get_test_suite, methods=["GET"]),
     Route("/templates", list_environment_templates, methods=["GET"]),
     Route("/templates/{template_id}", get_environment_template, methods=["GET"]),
@@ -714,4 +619,5 @@ routes = [
     Route("/endRun", end_run, methods=["POST"]),
     Route("/results/{run_id}", get_run_result, methods=["GET"]),
     Route("/env/{env_id}", delete_environment, methods=["DELETE"]),
+    Route("/tests", create_test, methods=["POST"]),
 ]

@@ -4,6 +4,7 @@ import requests
 from .models import (
     InitEnvRequestBody,
     InitEnvResponse,
+    CreateTestRequest,
     TestSuiteListResponse,
     TemplateEnvironmentListResponse,
     TemplateEnvironmentDetail,
@@ -95,10 +96,10 @@ class AgentDiff:
         response.raise_for_status()
         return response.json()
 
-    def create_test(self, test: AddTestRequest, testSuiteId: UUID):
+    def create_test(self, request: CreateTestRequest):
         response = requests.post(
             f"{self.base_url}/api/platform/tests",
-            json=test,
+            json=request.model_dump(mode="json"),
             headers={"X-API-Key": self.api_key},
             timeout=5,
         )

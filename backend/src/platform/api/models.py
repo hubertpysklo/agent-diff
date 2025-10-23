@@ -2,10 +2,21 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Literal
 from uuid import UUID
 
 from pydantic import BaseModel
+
+
+class Service(str, Enum):
+    slack = "slack"
+    linear = "linear"
+
+
+class OwnerScope(str, Enum):
+    public = "public"
+    org = "org"
+    user = "user"
 
 
 class Principal(BaseModel):
@@ -41,9 +52,18 @@ class TestSuite(BaseModel):
 class CreateTestRequest(BaseModel):
     name: str
     prompt: str
-    type: str
+    type: Literal["actionEval", "retriEval", "compositeEval"]
     expected_output: dict[str, Any]
-    testSuiteId: UUID
+    testSuite: UUID | str
+    environmentTemplate: UUID | str
+    impersonateUserId: Optional[str] = None
+
+
+class CreateTestSuiteRequest(BaseModel):
+    name: str
+    description: str
+    visibility: Literal["public", "private"] = "private"
+    tests: Optional[List[CreateTestRequest]]
 
 
 class Test(BaseModel):
@@ -168,7 +188,7 @@ class CreateTemplateFromEnvRequest(BaseModel):
     service: "Service"
     name: str
     description: Optional[str] = None
-    ownerScope: str = "org"  # one of: public, org, user
+    ownerScope: "OwnerScope" = OwnerScope.org
     version: str = "v1"  # optional
 
 
@@ -177,8 +197,3 @@ class CreateTemplateFromEnvResponse(BaseModel):
     schemaName: str
     service: "Service"
     name: str
-
-
-class Service(str, Enum):
-    slack = "slack"
-    linear = "linear"

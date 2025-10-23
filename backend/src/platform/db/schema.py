@@ -172,7 +172,9 @@ class Diff(PlatformBase):
     )
     before_suffix: Mapped[str] = mapped_column(String(255), nullable=False)
     after_suffix: Mapped[str] = mapped_column(String(255), nullable=False)
-    diff: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
+    diff: Mapped[dict] = mapped_column(
+        JSONB, nullable=False
+    )  # TODO: Add models for diff, expected output, and snapshots for run-time validation
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
@@ -189,7 +191,7 @@ class Test(PlatformBase):
         Enum("actionEval", "retriEval", "compositeEval", name="test_type"),
         nullable=False,
     )
-    expected_output: Mapped[JSONB] = mapped_column(JSONB, nullable=False)
+    expected_output: Mapped[dict] = mapped_column(JSONB, nullable=False)
     template_schema: Mapped[str] = mapped_column(String(255), nullable=False)
     impersonate_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
@@ -257,7 +259,7 @@ class TestRun(PlatformBase):
         nullable=False,
         default="pending",
     )
-    result: Mapped[JSONB | None] = mapped_column(JSONB, nullable=True)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     before_snapshot_suffix: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
