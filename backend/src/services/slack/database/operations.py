@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, exists, and_
+from sqlalchemy.exc import IntegrityError
 
 
 def _generate_slack_id(prefix: str) -> str:
@@ -102,15 +103,6 @@ def create_channel(
     if team is None:
         raise ValueError("Team not found")
 
-    # Check if channel name already exists in this team
-    existing = (
-        session.query(Channel)
-        .filter(Channel.team_id == team_id, Channel.channel_name == channel_name)
-        .first()
-    )
-    if existing:
-        raise ValueError("name_taken")
-
     # Generate channel_id if not provided
     if channel_id is None:
         channel_id = _generate_slack_id("C")
@@ -126,6 +118,13 @@ def create_channel(
     if created_at is not None:
         channel.created_at = created_at
     session.add(channel)
+
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        raise ValueError("name_taken")
+
     return channel
 
 
@@ -159,20 +158,14 @@ def rename_channel(session: Session, channel_id: str, new_name: str) -> Channel:
     if channel is None:
         raise ValueError("Channel not found")
 
-    # Check if another channel in the same team already has this name
-    existing = (
-        session.query(Channel)
-        .filter(
-            Channel.team_id == channel.team_id,
-            Channel.channel_name == new_name,
-            Channel.channel_id != channel_id,
-        )
-        .first()
-    )
-    if existing:
+    channel.channel_name = new_name
+
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
         raise ValueError("name_taken")
 
-    channel.channel_name = new_name
     return channel
 
 
@@ -473,13 +466,14 @@ def find_or_create_dm_channel(
         return dm
 
     channel_id = _generate_slack_id("D")
+    dm_name = f"dm-{a}-{b}"
 
     ch = Channel(
         channel_id=channel_id,
         is_dm=True,
         is_private=True,
         team_id=team_id,
-        channel_name=f"dm-{a}-{b}",
+        channel_name=dm_name,
     )
     session.add(ch)
     session.add_all(
@@ -488,6 +482,40 @@ def find_or_create_dm_channel(
             ChannelMember(channel_id=ch.channel_id, user_id=b),
         ]
     )
+
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        # Re-query the existing DM
+        dm = (
+            session.execute(
+                select(Channel)
+                .where(Channel.is_dm.is_(True), Channel.team_id == team_id)
+                .where(
+                    and_(
+                        exists().where(
+                            and_(
+                                ChannelMember.channel_id == Channel.channel_id,
+                                ChannelMember.user_id == a,
+                            )
+                        ),
+                        exists().where(
+                            and_(
+                                ChannelMember.channel_id == Channel.channel_id,
+                                ChannelMember.user_id == b,
+                            )
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if dm is None:
+            raise
+        return dm
+
     return ch
 
 

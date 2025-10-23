@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Awaitable, NoReturn
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -321,6 +322,8 @@ async def conversations_create(request: Request) -> JSONResponse:
         if "name_taken" in str(e):
             _slack_error("name_taken")
         raise
+    except IntegrityError:
+        _slack_error("name_taken")
 
     if is_private:
         channel_obj.is_private = True
