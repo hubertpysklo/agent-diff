@@ -126,8 +126,8 @@ class CoreTestManager:
         )
         if suite is None:
             raise ValueError("test suite not found")
-        if suite.visibility == "private":
-            require_resource_access(principal, suite.owner)
+
+        require_resource_access(principal, suite.owner)
 
         if len(items) != len(resolved_schemas):
             raise ValueError("items and resolved_schemas length mismatch")
@@ -161,6 +161,7 @@ class CoreTestManager:
         )
         if suite is None:
             return None
+
         if suite.visibility == "private":
             require_resource_access(principal, suite.owner)
         return suite

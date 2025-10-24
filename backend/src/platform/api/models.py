@@ -54,16 +54,6 @@ class TestSuite(BaseModel):
     updated_at: datetime
 
 
-class CreateTestRequest(BaseModel):
-    name: str
-    prompt: str
-    type: Literal["actionEval", "retriEval", "compositeEval"]
-    expected_output: dict[str, Any]
-    testSuite: UUID | str
-    environmentTemplate: UUID | str
-    impersonateUserId: Optional[str] = None
-
-
 class CreateTestSuiteRequest(BaseModel):
     name: str
     description: str
