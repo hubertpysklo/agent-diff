@@ -16,12 +16,14 @@ from src.platform.api.models import (
     TestSuiteListResponse,
     Test as TestModel,
     CreateTestSuiteRequest,
-    CreateTestRequest,
+    CreateTestSuiteResponse,
     StartRunRequest,
     StartRunResponse,
     EndRunRequest,
     EndRunResponse,
     TestResultResponse,
+    DiffRunRequest,
+    DiffRunResponse,
     DeleteEnvResponse,
     TestSuiteSummary,
     TestSuiteDetail,
@@ -32,6 +34,9 @@ from src.platform.api.models import (
     CreateTemplateFromEnvRequest,
     CreateTemplateFromEnvResponse,
     Service,
+    Visibility,
+    CreateTestsRequest,
+    CreateTestsResponse,
 )
 from src.platform.api.auth import (
     require_resource_access_with_org,
@@ -50,7 +55,6 @@ from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.testManager.core import CoreTestManager
 from src.platform.api.resolvers import (
-    resolve_test_suite,
     resolve_template_schema,
     list_templates_for_principal,
     require_environment_access,
@@ -58,6 +62,8 @@ from src.platform.api.resolvers import (
     require_run_access,
     parse_uuid,
     resolve_owner_ids,
+    resolve_and_validate_test_items,
+    to_bulk_test_items,
 )
 from src.platform.api.errors import bad_request, not_found, unauthorized
 
@@ -133,7 +139,9 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
     try:
         payload = CreateTemplateFromEnvRequest(**(await request.json()))
     except (json.JSONDecodeError, ValidationError) as e:
-        return bad_request(str(e))
+        return bad_request(
+            "invalid JSON" if isinstance(e, json.JSONDecodeError) else str(e)
+        )
 
     principal = _principal_from_request(request)
     session = request.state.db_session
@@ -162,6 +170,7 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
     try:
         owner_user_id, owner_org_id = resolve_owner_ids(principal, payload.ownerScope)
     except ValueError as e:
+        logger.warning(f"Validation error in create_template_from_environment: {e}")
         return bad_request(str(e))
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
@@ -177,66 +186,15 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
             version=payload.version or "v1",
         )
     except ValueError as e:
+        logger.warning(f"Template creation failed: {e}")
         return bad_request(str(e))
 
     return JSONResponse(
         CreateTemplateFromEnvResponse(
             templateId=result.template_id,
-            schemaName=result.schema_name,
+            templateName=result.name,
             service=Service(result.service),
-            name=result.name,
         ).model_dump(mode="json")
-    )
-
-
-async def create_test(request: Request) -> JSONResponse:
-    try:
-        body = CreateTestRequest(**(await request.json()))
-    except (json.JSONDecodeError, ValidationError) as e:
-        return bad_request(str(e))
-
-    session = request.state.db_session
-    principal = _principal_from_request(request)
-    core_tests: CoreTestManager = request.app.state.coreTestManager
-
-    try:
-        suite = resolve_test_suite(session, principal, str(body.testSuite))
-        template_schema = resolve_template_schema(
-            session, principal, str(body.environmentTemplate)
-        )
-    except ValueError as e:
-        return bad_request(str(e))
-    except PermissionError:
-        return unauthorized()
-
-    try:
-        test_row = core_tests.create_test(
-            session,
-            principal,
-            test_suite_id=str(suite.id),
-            name=body.name,
-            prompt=body.prompt,
-            type=body.type,
-            expected_output=body.expected_output,
-            template_schema=template_schema,
-            impersonate_user_id=body.impersonateUserId,
-        )
-    except PermissionError:
-        return unauthorized()
-    except ValueError as e:
-        return bad_request(str(e))
-
-    response = TestModel(
-        id=test_row.id,
-        name=test_row.name,
-        prompt=test_row.prompt,
-        type=test_row.type,
-        expected_output=test_row.expected_output,
-        created_at=test_row.created_at,
-        updated_at=test_row.updated_at,
-    )
-    return JSONResponse(
-        response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
     )
 
 
@@ -256,6 +214,7 @@ async def get_test(request: Request) -> JSONResponse:
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
+        logger.warning(f"Unauthorized test access: test_id={test_uuid}")
         return unauthorized()
 
     response = TestModel(
@@ -274,7 +233,9 @@ async def create_test_suite(request: Request) -> JSONResponse:
     try:
         body = CreateTestSuiteRequest(**(await request.json()))
     except (json.JSONDecodeError, ValidationError) as e:
-        return bad_request(str(e))
+        return bad_request(
+            "invalid JSON" if isinstance(e, json.JSONDecodeError) else str(e)
+        )
 
     session = request.state.db_session
     principal = _principal_from_request(request)
@@ -284,7 +245,7 @@ async def create_test_suite(request: Request) -> JSONResponse:
         principal,
         name=body.name,
         description=body.description,
-        visibility=body.visibility,
+        visibility=Visibility(body.visibility),
     )
     if body.tests:
         for t in body.tests:
@@ -304,14 +265,19 @@ async def create_test_suite(request: Request) -> JSONResponse:
                     impersonate_user_id=t.impersonateUserId,
                 )
             except ValueError as e:
+                logger.warning(f"Test creation in suite failed: {e}")
                 return bad_request(str(e))
             except PermissionError:
+                logger.warning("Unauthorized test creation in suite")
                 return unauthorized()
-    summary = TestSuiteSummary(
-        id=suite.id, name=suite.name, description=suite.description
+    response = CreateTestSuiteResponse(
+        id=suite.id,
+        name=suite.name,
+        description=suite.description,
+        visibility=Visibility(suite.visibility),
     )
     return JSONResponse(
-        summary.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
+        response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
     )
 
 
@@ -338,6 +304,8 @@ async def get_test_suite(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
+    expand_param = request.query_params.get("expand", "")
+    include_tests = "tests" in {p.strip() for p in expand_param.split(",") if p}
     try:
         suite, tests = core_tests.get_test_suite(session, principal, suite_id)
     except PermissionError:
@@ -349,21 +317,25 @@ async def get_test_suite(request: Request) -> JSONResponse:
         name=suite.name,
         description=suite.description,
         owner=suite.owner,
-        visibility=suite.visibility,
+        visibility=Visibility(suite.visibility),
         created_at=suite.created_at,
         updated_at=suite.updated_at,
-        tests=[
-            TestModel(
-                id=t.id,
-                name=t.name,
-                prompt=t.prompt,
-                type=t.type,
-                expected_output=t.expected_output,
-                created_at=t.created_at,
-                updated_at=t.updated_at,
-            )
-            for t in tests
-        ],
+        tests=(
+            [
+                TestModel(
+                    id=t.id,
+                    name=t.name,
+                    prompt=t.prompt,
+                    type=t.type,
+                    expected_output=t.expected_output,
+                    created_at=t.created_at,
+                    updated_at=t.updated_at,
+                )
+                for t in tests
+            ]
+            if include_tests
+            else []
+        ),
     )
     return JSONResponse(payload.model_dump(mode="json"))
 
@@ -387,8 +359,10 @@ async def init_environment(request: Request) -> JSONResponse:
             session, principal, body
         )
     except PermissionError:
+        logger.warning("Unauthorized template access in init_environment")
         return unauthorized()
     except ValueError as e:
+        logger.warning(f"Template resolution failed in init_environment: {e}")
         return bad_request(str(e))
 
     if not body.testId and not body.impersonateUserId and not body.impersonateEmail:
@@ -407,6 +381,7 @@ async def init_environment(request: Request) -> JSONResponse:
             impersonate_email=body.impersonateEmail,
         )
     except ValueError as e:
+        logger.warning(f"Environment creation failed: {e}")
         return bad_request(str(e))
 
     service = selected_template_service
@@ -418,6 +393,74 @@ async def init_environment(request: Request) -> JSONResponse:
         expiresAt=result.expires_at,
         schemaName=result.schema_name,
         service=Service(service),
+    )
+    return JSONResponse(
+        response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
+    )
+
+
+async def create_tests_in_suite(request: Request) -> JSONResponse:
+    suite_id = request.path_params["suite_id"]
+    session = request.state.db_session
+    principal = _principal_from_request(request)
+    core_tests: CoreTestManager = request.app.state.coreTestManager
+
+    try:
+        body = CreateTestsRequest(**(await request.json()))
+    except (json.JSONDecodeError, ValidationError) as e:
+        return bad_request(str(e))
+
+    try:
+        suite, _ = core_tests.get_test_suite(session, principal, suite_id)
+    except PermissionError:
+        return unauthorized()
+    if suite is None:
+        return not_found("test suite not found")
+
+    try:
+        resolved_schemas = resolve_and_validate_test_items(
+            session,
+            principal,
+            body.tests,
+            str(body.defaultEnvironmentTemplate)
+            if body.defaultEnvironmentTemplate
+            else None,
+        )
+    except ValueError as e:
+        logger.warning(f"Test item resolution/validation failed: {e}")
+        return bad_request(str(e))
+    except PermissionError:
+        logger.warning("Unauthorized template access in bulk test creation")
+        return unauthorized()
+
+    try:
+        created_tests = core_tests.create_tests_bulk(
+            session,
+            principal,
+            test_suite_id=str(suite.id),
+            items=to_bulk_test_items(body),
+            resolved_schemas=resolved_schemas,
+        )
+    except ValueError as e:
+        logger.warning(f"Bulk test persistence failed: {e}")
+        return bad_request(str(e))
+    except PermissionError:
+        logger.warning("Unauthorized bulk test creation")
+        return unauthorized()
+
+    response = CreateTestsResponse(
+        tests=[
+            TestModel(
+                id=t.id,
+                name=t.name,
+                prompt=t.prompt,
+                type=t.type,
+                expected_output=t.expected_output,
+                created_at=t.created_at,
+                updated_at=t.updated_at,
+            )
+            for t in created_tests
+        ]
     )
     return JSONResponse(
         response.model_dump(mode="json"), status_code=status.HTTP_201_CREATED
@@ -452,16 +495,16 @@ async def start_run(request: Request) -> JSONResponse:
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
+        logger.warning(
+            f"Unauthorized environment access in start_run: env_id={body.envId}"
+        )
         return unauthorized()
 
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
     schema = request.app.state.coreIsolationEngine.get_schema_for_environment(
         body.envId
     )
-    before_result = core_eval.take_before(
-        schema=schema,
-        environment_id=body.envId,
-    )
+    before_result = core_eval.take_before(schema=schema, environment_id=body.envId)
 
     run = TestRun(
         test_id=body.testId,
@@ -475,6 +518,7 @@ async def start_run(request: Request) -> JSONResponse:
         updated_at=datetime.now(),
     )
     session.add(run)
+    session.flush()
 
     logger.info(
         f"Started test run {run.id} for test {body.testId} in environment {body.envId}"
@@ -490,7 +534,7 @@ async def start_run(request: Request) -> JSONResponse:
     )
 
 
-async def end_run(request: Request) -> JSONResponse:
+async def evaluate_run(request: Request) -> JSONResponse:
     try:
         data = await request.json()
     except json.JSONDecodeError:
@@ -514,6 +558,7 @@ async def end_run(request: Request) -> JSONResponse:
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
+        logger.warning(f"Unauthorized run access in end_run: run_id={body.runId}")
         return unauthorized()
 
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
@@ -564,7 +609,7 @@ async def end_run(request: Request) -> JSONResponse:
             ],
         }
     if diff_payload is not None:
-        evaluation.setdefault("diff", diff_payload)
+        evaluation.setdefault("diff", diff_payload.model_dump(mode="python"))
     run.result = evaluation
     run.after_snapshot_suffix = after.suffix
     run.updated_at = datetime.now()
@@ -593,6 +638,7 @@ async def get_run_result(request: Request) -> JSONResponse:
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
+        logger.warning(f"Unauthorized run access in get_run_result: run_id={run_id}")
         return unauthorized()
 
     payload = TestResultResponse(
@@ -605,6 +651,75 @@ async def get_run_result(request: Request) -> JSONResponse:
         createdAt=run.created_at,
     )
     return JSONResponse(payload.model_dump(mode="json"))
+
+
+async def diff_run(request: Request) -> JSONResponse:
+    try:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return bad_request("invalid JSON in request body")
+
+    try:
+        body = DiffRunRequest(**data)
+    except ValidationError as e:
+        return bad_request(str(e))
+
+    session = request.state.db_session
+    principal = _principal_from_request(request)
+
+    core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
+
+    has_run = bool(body.runId)
+    has_pair = bool(body.envId and body.beforeSuffix)
+    if has_run == has_pair:
+        return bad_request("provide exactly one of runId or (envId and beforeSuffix)")
+
+    if body.runId:
+        try:
+            run_uuid = parse_uuid(body.runId)
+        except ValueError:
+            return bad_request("invalid run id")
+        try:
+            run = require_run_access(session, principal, str(run_uuid))
+        except ValueError as e:
+            return not_found(str(e))
+        except PermissionError:
+            return unauthorized()
+        env = (
+            session.query(RunTimeEnvironment)
+            .filter(RunTimeEnvironment.id == run.environment_id)
+            .one()
+        )
+        before_suffix = run.before_snapshot_suffix
+        if before_suffix is None:
+            return bad_request("before snapshot missing for run")
+    else:
+        try:
+            env_uuid = parse_uuid(body.envId or "")
+        except ValueError:
+            return bad_request("invalid environment id")
+        try:
+            env = require_environment_access(session, principal, str(env_uuid))
+        except ValueError as e:
+            return not_found(str(e))
+        except PermissionError:
+            return unauthorized()
+        before_suffix = body.beforeSuffix or ""
+
+    after = core_eval.take_after(schema=env.schema, environment_id=str(env.id))
+    diff_payload = core_eval.compute_diff(
+        schema=env.schema,
+        environment_id=str(env.id),
+        before_suffix=before_suffix,
+        after_suffix=after.suffix,
+    )
+
+    response = DiffRunResponse(
+        beforeSnapshot=before_suffix,
+        afterSnapshot=after.suffix,
+        diff=diff_payload,
+    )
+    return JSONResponse(response.model_dump(mode="json"))
 
 
 async def delete_environment(request: Request) -> JSONResponse:
@@ -622,6 +737,7 @@ async def delete_environment(request: Request) -> JSONResponse:
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
+        logger.warning(f"Unauthorized environment access: env_id={env_id}")
         return unauthorized()
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
@@ -648,6 +764,7 @@ routes = [
     Route("/testSuites", list_test_suites, methods=["GET"]),
     Route("/testSuites", create_test_suite, methods=["POST"]),
     Route("/testSuites/{suite_id}", get_test_suite, methods=["GET"]),
+    Route("/testSuites/{suite_id}/tests", create_tests_in_suite, methods=["POST"]),
     Route("/templates", list_environment_templates, methods=["GET"]),
     Route("/templates/{template_id}", get_environment_template, methods=["GET"]),
     Route(
@@ -657,9 +774,9 @@ routes = [
     ),
     Route("/initEnv", init_environment, methods=["POST"]),
     Route("/startRun", start_run, methods=["POST"]),
-    Route("/endRun", end_run, methods=["POST"]),
+    Route("/evaluateRun", evaluate_run, methods=["POST"]),
     Route("/results/{run_id}", get_run_result, methods=["GET"]),
+    Route("/diffRun", diff_run, methods=["POST"]),
     Route("/env/{env_id}", delete_environment, methods=["DELETE"]),
-    Route("/tests", create_test, methods=["POST"]),
     Route("/tests/{test_id}", get_test, methods=["GET"]),
 ]

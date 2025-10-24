@@ -4,8 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-
-from src.platform.api.models import Principal
+from src.platform.api.models import Principal, Visibility
 from src.platform.api.auth import require_resource_access
 from src.platform.db.schema import TestSuite, Test, TestMembership
 from src.platform.evaluationEngine.compiler import DSLCompiler
@@ -59,21 +58,24 @@ class CoreTestManager:
         *,
         name: str,
         description: str,
-        visibility: str = "private",
+        visibility: Visibility = Visibility.private,
     ) -> TestSuite:
         suite = TestSuite(
             id=uuid4(),
             name=name,
             description=description,
             owner=principal.user_id,
-            visibility=visibility,
+            visibility=visibility.value,
         )
         session.add(suite)
         return suite
 
     def validate_dsl(self, spec: dict[str, Any]) -> dict[str, Any]:
-        # Will raise on invalid
-        return self.compiler.compile(spec)
+        """Validate and compile DSL. Raises ValueError on invalid DSL."""
+        try:
+            return self.compiler.compile(spec)
+        except Exception as e:
+            raise ValueError(f"invalid DSL: {e}") from e
 
     def create_test(
         self,
@@ -109,6 +111,44 @@ class CoreTestManager:
         session.add(test)
         session.add(TestMembership(test_id=test.id, test_suite_id=suite.id))
         return test
+
+    def create_tests_bulk(
+        self,
+        session: Session,
+        principal: Principal,
+        *,
+        test_suite_id: str,
+        items: list[dict],
+        resolved_schemas: list[str],
+    ) -> List[Test]:
+        suite = (
+            session.query(TestSuite).filter(TestSuite.id == test_suite_id).one_or_none()
+        )
+        if suite is None:
+            raise ValueError("test suite not found")
+        if suite.visibility == "private":
+            require_resource_access(principal, suite.owner)
+
+        if len(items) != len(resolved_schemas):
+            raise ValueError("items and resolved_schemas length mismatch")
+
+        created: List[Test] = []
+        for idx, item in enumerate(items):
+            t = Test(
+                id=uuid4(),
+                name=item["name"],
+                prompt=item["prompt"],
+                type=item["type"],
+                expected_output=item["expected_output"],
+                template_schema=resolved_schemas[idx],
+                impersonate_user_id=item.get("impersonateUserId"),
+            )
+            session.add(t)
+            session.add(TestMembership(test_id=t.id, test_suite_id=suite.id))
+            created.append(t)
+
+        session.flush()  # Populate timestamps before returning
+        return created
 
     def get_test_suite_for_test(
         self, session: Session, principal: Principal, test_id: str

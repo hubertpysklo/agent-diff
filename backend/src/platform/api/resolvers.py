@@ -5,7 +5,13 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
-from src.platform.api.models import Principal, OwnerScope, InitEnvRequestBody
+from src.platform.api.models import (
+    Principal,
+    OwnerScope,
+    InitEnvRequestBody,
+    TestItem,
+    CreateTestsRequest,
+)
 from src.platform.api.auth import (
     require_resource_access,
     check_template_access,
@@ -274,3 +280,42 @@ def resolve_init_template(
     raise ValueError(
         "one of templateId, (templateService+templateName), templateSchema, or testId must be provided"
     )
+
+
+def resolve_and_validate_test_items(
+    session: Session,
+    principal: Principal,
+    items: list[TestItem],
+    default_template: str | None,
+) -> list[str]:
+    """Resolve environment template for each item and validate DSL. Returns list of schemas.
+    Raises ValueError/PermissionError on failure.
+    """
+    from src.platform.testManager.core import CoreTestManager
+
+    core = CoreTestManager()
+    resolved_schemas: list[str] = []
+    for idx, item in enumerate(items):
+        template_ref = item.environmentTemplate or default_template
+        if not template_ref:
+            raise ValueError(f"tests[{idx}]: environmentTemplate missing")
+        schema = resolve_template_schema(session, principal, str(template_ref))
+        core.validate_dsl(item.expected_output)
+        resolved_schemas.append(schema)
+    return resolved_schemas
+
+
+def to_bulk_test_items(body: CreateTestsRequest) -> list[dict]:
+    """Normalize CreateTestsRequest into list of dicts for bulk creation.
+    Keys: name, prompt, type, expected_output, impersonateUserId
+    """
+    return [
+        {
+            "name": item.name,
+            "prompt": item.prompt,
+            "type": item.type,
+            "expected_output": item.expected_output,
+            "impersonateUserId": item.impersonateUserId,
+        }
+        for item in body.tests
+    ]
