@@ -19,6 +19,11 @@ class OwnerScope(str, Enum):
     user = "user"
 
 
+class Visibility(str, Enum):
+    public = "public"
+    private = "private"
+
+
 class Principal(BaseModel):
     user_id: str
     org_ids: List[str]
@@ -44,26 +49,16 @@ class TestSuite(BaseModel):
     name: str
     description: str
     owner: str
-    visibility: str
+    visibility: Visibility
     created_at: datetime
     updated_at: datetime
-
-
-class CreateTestRequest(BaseModel):
-    name: str
-    prompt: str
-    type: Literal["actionEval", "retriEval", "compositeEval"]
-    expected_output: dict[str, Any]
-    testSuite: UUID | str
-    environmentTemplate: UUID | str
-    impersonateUserId: Optional[str] = None
 
 
 class CreateTestSuiteRequest(BaseModel):
     name: str
     description: str
-    visibility: Literal["public", "private"] = "private"
-    tests: Optional[List[CreateTestRequest]]
+    visibility: Visibility = Visibility.private
+    tests: Optional[List[TestItem]] = None
 
 
 class Test(BaseModel):
@@ -89,6 +84,13 @@ class TestSuiteSummary(BaseModel):
     description: str
 
 
+class CreateTestSuiteResponse(BaseModel):
+    id: UUID
+    name: str
+    description: str
+    visibility: Visibility
+
+
 class TestSuiteListResponse(BaseModel):
     testSuites: List[TestSuiteSummary]
 
@@ -98,9 +100,27 @@ class TestSuiteDetail(BaseModel):
     name: str
     description: str
     owner: str
-    visibility: str
+    visibility: Visibility
     created_at: datetime
     updated_at: datetime
+    tests: List[Test]
+
+
+class TestItem(BaseModel):
+    name: str
+    prompt: str
+    type: Literal["actionEval", "retriEval", "compositeEval"]
+    expected_output: dict[str, Any]
+    environmentTemplate: UUID | str
+    impersonateUserId: Optional[str] = None
+
+
+class CreateTestsRequest(BaseModel):
+    tests: List[TestItem]
+    defaultEnvironmentTemplate: Optional[UUID | str] = None
+
+
+class CreateTestsResponse(BaseModel):
     tests: List[Test]
 
 
@@ -178,6 +198,18 @@ class TestResultResponse(BaseModel):
     createdAt: datetime
 
 
+class DiffRunRequest(BaseModel):
+    runId: Optional[str] = None
+    envId: Optional[str] = None
+    beforeSuffix: Optional[str] = None
+
+
+class DiffRunResponse(BaseModel):
+    beforeSnapshot: str
+    afterSnapshot: str
+    diff: Any
+
+
 class DeleteEnvResponse(BaseModel):
     environmentId: str
     status: str
@@ -194,6 +226,5 @@ class CreateTemplateFromEnvRequest(BaseModel):
 
 class CreateTemplateFromEnvResponse(BaseModel):
     templateId: str
-    schemaName: str
+    templateName: str  # Name of the template in the database
     service: "Service"
-    name: str

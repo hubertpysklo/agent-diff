@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
+from enum import Enum
 from typing import Any, List, Optional, Union
 from uuid import UUID
 import json
@@ -7,14 +8,9 @@ from typing_extensions import Literal
 from pydantic import BaseModel, field_validator
 
 
-class Test(BaseModel):
-    id: UUID
-    name: str
-    prompt: str
-    type: str
-    expected_output: dict
-    created_at: datetime
-    updated_at: datetime
+class Visibility(str, Enum):
+    public = "public"
+    private = "private"
 
 
 class TestSummary(BaseModel):
@@ -30,11 +26,21 @@ class TestSuiteSummary(BaseModel):
     description: str
 
 
+class Test(BaseModel):
+    id: UUID
+    name: str
+    prompt: str
+    type: str
+    expected_output: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
 class CreateTestSuiteRequest(BaseModel):
     name: str
     description: str
     visibility: Literal["public", "private"] = "private"
-    tests: Optional[List[CreateTestRequest]]
+    tests: Optional[List[TestItem]] = None
 
 
 class CreateTestSuiteResponse(BaseModel):
@@ -42,16 +48,13 @@ class CreateTestSuiteResponse(BaseModel):
     name: str
     description: str
     visibility: Literal["public", "private"]
-    created_at: datetime
-    updated_at: datetime
 
 
-class CreateTestRequest(BaseModel):
+class TestItem(BaseModel):
     name: str
     prompt: str
     type: Literal["actionEval", "retriEval", "compositeEval"]
     expected_output: Union[dict[str, Any], str]
-    testSuite: UUID | str
     environmentTemplate: UUID | str
     impersonateUserId: Optional[str] = None
 
@@ -70,12 +73,21 @@ class CreateTestRequest(BaseModel):
         raise ValueError("expected_output must be a dict or JSON string")
 
 
+class CreateTestsRequest(BaseModel):
+    tests: List[TestItem]
+    defaultEnvironmentTemplate: Optional[UUID | str] = None
+
+
+class CreateTestsResponse(BaseModel):
+    tests: List[Test]
+
+
 class TestSuiteDetail(BaseModel):
     id: UUID
     name: str
     description: str
     owner: str
-    visibility: str
+    visibility: Visibility
     created_at: datetime
     updated_at: datetime
     tests: List[Test]
@@ -105,7 +117,7 @@ class InitEnvRequestBody(BaseModel):
     testId: Optional[UUID] = None
     # Preferred selectors
     templateId: Optional[UUID] = None
-    templateService: Optional[str] = None
+    templateService: Optional[Literal["slack", "linear"]] = None
     templateName: Optional[str] = None
     # Legacy fallback
     templateSchema: Optional[str] = None
@@ -156,6 +168,18 @@ class TestResultResponse(BaseModel):
     createdAt: datetime
 
 
+class DiffRunRequest(BaseModel):
+    runId: Optional[str] = None
+    envId: Optional[str] = None
+    beforeSuffix: Optional[str] = None
+
+
+class DiffRunResponse(BaseModel):
+    beforeSnapshot: str
+    afterSnapshot: str
+    diff: Any
+
+
 class DeleteEnvResponse(BaseModel):
     environmentId: str
     status: str
@@ -163,15 +187,14 @@ class DeleteEnvResponse(BaseModel):
 
 class CreateTemplateFromEnvRequest(BaseModel):
     environmentId: str
-    service: str
+    service: Literal["slack", "linear"]
     name: str
     description: Optional[str] = None
-    ownerScope: str = "org"
+    ownerScope: Literal["public", "org", "user"] = "org"
     version: str = "v1"
 
 
 class CreateTemplateFromEnvResponse(BaseModel):
     templateId: str
-    schemaName: str
-    service: str
-    name: str
+    templateName: str  # Name of the environment template in the database
+    service: Literal["slack", "linear"]

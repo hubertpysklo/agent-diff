@@ -4,13 +4,26 @@ import requests
 from .models import (
     InitEnvRequestBody,
     InitEnvResponse,
-    CreateTestRequest,
     TestSuiteListResponse,
     TemplateEnvironmentListResponse,
     TemplateEnvironmentDetail,
+    CreateTestSuiteRequest,
+    CreateTestSuiteResponse,
     TestSuiteDetail,
+    Test,
     CreateTemplateFromEnvRequest,
     CreateTemplateFromEnvResponse,
+    CreateTestsRequest,
+    CreateTestsResponse,
+    TestItem,
+    StartRunRequest,
+    StartRunResponse,
+    EndRunRequest,
+    EndRunResponse,
+    TestResultResponse,
+    DiffRunRequest,
+    DiffRunResponse,
+    DeleteEnvResponse,
 )
 
 
@@ -78,57 +91,100 @@ class AgentDiff:
         response.raise_for_status()
         return TestSuiteListResponse.model_validate(response.json())
 
-    def get_test_suite(self, suite_id: UUID) -> TestSuiteDetail:
+    def get_test_suite(
+        self, suite_id: UUID, include_tests: bool = True
+    ) -> TestSuiteDetail:
+        query = "?expand=tests" if include_tests else ""
         response = requests.get(
-            f"{self.base_url}/api/platform/testSuites/{suite_id}",
+            f"{self.base_url}/api/platform/testSuites/{suite_id}{query}",
             headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
         return TestSuiteDetail.model_validate(response.json())
 
-    def get_test(self, test_id: UUID):
+    def get_test(self, test_id: UUID) -> Test:
         response = requests.get(
             f"{self.base_url}/api/platform/tests/{test_id}",
             headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
-        return response.json()
+        return Test.model_validate(response.json())
 
-    def create_test(self, request: CreateTestRequest):
+    def create_tests(
+        self, suite_id: UUID, request: CreateTestsRequest
+    ) -> CreateTestsResponse:
         response = requests.post(
-            f"{self.base_url}/api/platform/tests",
+            f"{self.base_url}/api/platform/testSuites/{suite_id}/tests",
+            json=request.model_dump(mode="json"),
+            headers={"X-API-Key": self.api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return CreateTestsResponse.model_validate(response.json())
+
+    def create_test(self, suite_id: UUID, test_item: dict) -> Test:
+        req = CreateTestsRequest(tests=[TestItem(**test_item)])
+        resp = self.create_tests(suite_id, req)
+        return resp.tests[0]
+
+    def create_test_suite(
+        self, request: CreateTestSuiteRequest
+    ) -> CreateTestSuiteResponse:
+        response = requests.post(
+            f"{self.base_url}/api/platform/testSuites",
             json=request.model_dump(mode="json"),
             headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
-        return response.json()
-
-    def create_test_suite(self, test_suite):
-        pass
-
-    def take_before_snapshot(self, env_id: str):
-        pass
-
-    def take_after_snapshot(self, env_id: str):
-        pass
-
-    def get_diff(self, before_suffix: str, after_suffix: str):
-        pass  # This function should accept aither a runId or just pure test written in DSL
-
-    def evaluate(self, before_suffix: str, after_suffix: str, expected_output: dict):
-        pass  # This function should accept aither a runId or just pure test written in DSL
-
-    def start_run(self, run):
-        pass
-
-    def end_run(self, run_id: str):
-        pass
+        return CreateTestSuiteResponse.model_validate(response.json())
 
     def get_results_for_run(self, run_id: str):
-        pass
+        response = requests.get(
+            f"{self.base_url}/api/platform/results/{run_id}",
+            headers={"X-API-Key": self.api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return TestResultResponse.model_validate(response.json())
 
-    def delete_env(self, env_id: str):
-        pass
+    def delete_env(self, env_id: str) -> DeleteEnvResponse:
+        response = requests.delete(
+            f"{self.base_url}/api/platform/env/{env_id}",
+            headers={"X-API-Key": self.api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return DeleteEnvResponse.model_validate(response.json())
+
+    def start_run(self, request: StartRunRequest) -> StartRunResponse:
+        response = requests.post(
+            f"{self.base_url}/api/platform/startRun",
+            json=request.model_dump(mode="json"),
+            headers={"X-API-Key": self.api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return StartRunResponse.model_validate(response.json())
+
+    def evaluate_run(self, request: EndRunRequest) -> EndRunResponse:
+        response = requests.post(
+            f"{self.base_url}/api/platform/evaluateRun",
+            json=request.model_dump(mode="json"),
+            headers={"X-API-Key": self.api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return EndRunResponse.model_validate(response.json())
+
+    def diff_run(self, request: DiffRunRequest) -> DiffRunResponse:
+        response = requests.post(
+            f"{self.base_url}/api/platform/diffRun",
+            json=request.model_dump(mode="json"),
+            headers={"X-API-Key": self.api_key},
+            timeout=10,
+        )
+        response.raise_for_status()
+        return DiffRunResponse.model_validate(response.json())
