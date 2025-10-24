@@ -42,7 +42,12 @@ class AgentDiff:
                 "Base URL required. Set AGENT_DIFF_BASE_URL env var or pass base_url parameter"
             )
 
-    def init_env(self, request: InitEnvRequestBody) -> InitEnvResponse:
+    def init_env(
+        self, request: InitEnvRequestBody | None = None, **kwargs
+    ) -> InitEnvResponse:
+        """Initialize an isolated environment. Pass InitEnvRequestBody."""
+        if request is None:
+            request = InitEnvRequestBody(**kwargs)
         response = requests.post(
             f"{self.base_url}/api/platform/initEnv",
             json=request.model_dump(mode="json"),
@@ -53,8 +58,11 @@ class AgentDiff:
         return InitEnvResponse.model_validate(response.json())
 
     def create_template_from_environment(
-        self, request: CreateTemplateFromEnvRequest
+        self, request: CreateTemplateFromEnvRequest | None = None, **kwargs
     ) -> CreateTemplateFromEnvResponse:
+        """Create template from environment. Pass CreateTemplateFromEnvRequest."""
+        if request is None:
+            request = CreateTemplateFromEnvRequest(**kwargs)
         response = requests.post(
             f"{self.base_url}/api/platform/templates/from-environment",
             json=request.model_dump(mode="json"),
@@ -130,8 +138,11 @@ class AgentDiff:
         return resp.tests[0]
 
     def create_test_suite(
-        self, request: CreateTestSuiteRequest
+        self, request: CreateTestSuiteRequest | None = None, **kwargs
     ) -> CreateTestSuiteResponse:
+        """Create test suite. Pass CreateTestSuiteRequest."""
+        if request is None:
+            request = CreateTestSuiteRequest(**kwargs)
         response = requests.post(
             f"{self.base_url}/api/platform/testSuites",
             json=request.model_dump(mode="json"),
@@ -159,7 +170,12 @@ class AgentDiff:
         response.raise_for_status()
         return DeleteEnvResponse.model_validate(response.json())
 
-    def start_run(self, request: StartRunRequest) -> StartRunResponse:
+    def start_run(
+        self, request: StartRunRequest | None = None, **kwargs
+    ) -> StartRunResponse:
+        """Start a test run (takes initial environment snapshot). Pass StartRunRequest."""
+        if request is None:
+            request = StartRunRequest(**kwargs)
         response = requests.post(
             f"{self.base_url}/api/platform/startRun",
             json=request.model_dump(mode="json"),
@@ -169,7 +185,12 @@ class AgentDiff:
         response.raise_for_status()
         return StartRunResponse.model_validate(response.json())
 
-    def evaluate_run(self, request: EndRunRequest) -> EndRunResponse:
+    def evaluate_run(
+        self, request: EndRunRequest | None = None, **kwargs
+    ) -> EndRunResponse:
+        """Evaluate a test run (computes diff and comperes to expected output in test suite). Pass EndRunRequest or runId."""
+        if request is None:
+            request = EndRunRequest(**kwargs)
         response = requests.post(
             f"{self.base_url}/api/platform/evaluateRun",
             json=request.model_dump(mode="json"),
@@ -179,7 +200,12 @@ class AgentDiff:
         response.raise_for_status()
         return EndRunResponse.model_validate(response.json())
 
-    def diff_run(self, request: DiffRunRequest) -> DiffRunResponse:
+    def diff_run(
+        self, request: DiffRunRequest | None = None, **kwargs
+    ) -> DiffRunResponse:
+        """Compute diff. Pass DiffRunRequest or kwargs (env_id, run_id, before_suffix)."""
+        if request is None:
+            request = DiffRunRequest(**kwargs)
         response = requests.post(
             f"{self.base_url}/api/platform/diffRun",
             json=request.model_dump(mode="json"),
