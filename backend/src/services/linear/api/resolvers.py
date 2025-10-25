@@ -15593,9 +15593,9 @@ def apply_workflow_state_filter(query, filter_dict):
         if team_filter and isinstance(team_filter, dict):
             # Join with Team table if not already joined
             if not any(
-                str(mapper.class_) == str(Team)
-                for mapper in query.column_descriptions
-                if hasattr(mapper, "class_") or "entity" in mapper
+                desc.get("entity") is Team
+                for desc in query.column_descriptions
+                if isinstance(desc, dict) and "entity" in desc
             ):
                 query = query.join(Team, WorkflowState.teamId == Team.id)
             query = apply_team_filter(query, team_filter)
@@ -15781,7 +15781,7 @@ def resolve_workflowStateArchive(obj, info, **kwargs):
         unarchived_issues = (
             session.query(Issue)
             .filter(Issue.stateId == state_id)
-            .filter(Issue.archivedAt == None)
+            .filter(Issue.archivedAt.is_(None))
             .count()
         )
 
@@ -15794,8 +15794,6 @@ def resolve_workflowStateArchive(obj, info, **kwargs):
         workflow_state.archivedAt = datetime.now(timezone.utc)
         workflow_state.updatedAt = datetime.now(timezone.utc)
 
-        session.commit()
-
         # Return WorkflowStateArchivePayload structure
         return {
             "entity": workflow_state,
@@ -15804,8 +15802,7 @@ def resolve_workflowStateArchive(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
-        raise Exception(f"Failed to archive workflow state: {str(e)}")
+        raise Exception(f"Failed to archive workflow state: {e}") from e
 
 @mutation.field("workflowStateCreate")
 def resolve_workflowStateCreate(obj, info, **kwargs):
@@ -15877,7 +15874,6 @@ def resolve_workflowStateCreate(obj, info, **kwargs):
         )
 
         session.add(workflow_state)
-        session.commit()
 
         # Return WorkflowStatePayload structure
         return {
@@ -15929,8 +15925,6 @@ def resolve_workflowStateUpdate(obj, info, **kwargs):
 
         # Update the updatedAt timestamp
         workflow_state.updatedAt = datetime.now(timezone.utc)
-
-        session.commit()
 
         # Return WorkflowStatePayload structure
         return {
