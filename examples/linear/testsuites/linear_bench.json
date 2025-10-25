@@ -1,0 +1,271 @@
+{
+  "id": "linear-bench",
+  "name": "Linear Bench",
+  "description": "Benchmark tests for Linear MCP operations",
+  "service": "linear",
+  "tests": [
+    {
+      "id": "test_1",
+      "name": "Create a new issue",
+      "prompt": "Create a new issue in the Engineering team titled 'Fix login bug' with high priority",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "issues",
+          "where": {
+            "teamId": {
+              "eq": "TEAM01ENG"
+            },
+            "title": {
+              "contains": "login bug"
+            },
+            "priority": {
+              "eq": 2.0
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_2",
+      "name": "Update issue status to In Progress",
+      "prompt": "Move issue ENG-1 to 'In Progress' status",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "changed",
+          "entity": "issues",
+          "where": {
+            "identifier": {
+              "eq": "ENG-1"
+            }
+          },
+          "expected_changes": {
+            "stateId": {
+              "to": {
+                "eq": "WS_ENG_IN_PROGRESS"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "test_3",
+      "name": "Assign issue to user",
+      "prompt": "Assign issue ENG-1 to John Doe",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "changed",
+          "entity": "issues",
+          "where": {
+            "identifier": {
+              "eq": "ENG-1"
+            }
+          },
+          "expected_changes": {
+            "assigneeId": {
+              "to": {
+                "eq": "U02JOHN"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "test_4",
+      "name": "Add comment to issue",
+      "prompt": "Add a comment to issue ENG-1 saying 'I am working on this now'",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "comments",
+          "where": {
+            "issueId": {
+              "eq": "ISS_ENG_001"
+            },
+            "body": {
+              "contains": "working on this"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_5",
+      "name": "Create a new team",
+      "prompt": "Create a new team called 'Design'",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "teams",
+          "where": {
+            "name": {
+              "eq": "Design"
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "workflow_states",
+          "where": {
+            "name": {
+              "eq": "Backlog"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_6",
+      "name": "Change issue priority to Urgent",
+      "prompt": "Change the priority of issue ENG-1 to Urgent",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "changed",
+          "entity": "issues",
+          "where": {
+            "identifier": {
+              "eq": "ENG-1"
+            }
+          },
+          "expected_changes": {
+            "priority": {
+              "to": {
+                "eq": 1.0
+              }
+            },
+            "priorityLabel": {
+              "to": {
+                "eq": "Urgent"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "test_7",
+      "name": "Create issue with assignee and description",
+      "prompt": "Create a new issue 'Improve performance' in Engineering team, assign to John, with description 'Optimize database queries'",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "issues",
+          "where": {
+            "teamId": {
+              "eq": "TEAM01ENG"
+            },
+            "title": {
+              "contains": "performance"
+            },
+            "assigneeId": {
+              "eq": "U02JOHN"
+            },
+            "description": {
+              "contains": "database queries"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_8",
+      "name": "Update issue description",
+      "prompt": "Update the description of issue ENG-1 to include 'Root cause: session timeout issue'",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "changed",
+          "entity": "issues",
+          "where": {
+            "identifier": {
+              "eq": "ENG-1"
+            }
+          },
+          "expected_changes": {
+            "description": {
+              "to": {
+                "contains": "session timeout"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "test_9",
+      "name": "Create multiple issues in batch",
+      "prompt": "Create three new issues in the Engineering team: 'Update documentation', 'Refactor API endpoints', and 'Add unit tests'",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "issues",
+          "where": {
+            "teamId": {
+              "eq": "TEAM01ENG"
+            }
+          },
+          "expected_count": 3
+        }
+      ]
+    },
+    {
+      "id": "test_10",
+      "name": "Complete issue (move to Done)",
+      "prompt": "Mark issue ENG-1 as completed",
+      "type": "actionEval",
+      "seed_template": "linear_default",
+      "impersonate_user_id": "U01AGENT",
+      "assertions": [
+        {
+          "diff_type": "changed",
+          "entity": "issues",
+          "where": {
+            "identifier": {
+              "eq": "ENG-1"
+            }
+          },
+          "expected_changes": {
+            "stateId": {
+              "to": {
+                "eq": "WS_ENG_DONE"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

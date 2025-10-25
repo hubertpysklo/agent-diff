@@ -1045,10 +1045,10 @@ class Reaction(Base):
 
 class Team(Base):
     __tablename__ = "teams"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
     __table_args__ = (
         UniqueConstraint("organizationId", "key", name="uq_team_org_key"),
     )
-    id: Mapped[str] = mapped_column(String, primary_key=True)
     parentId: Mapped[Optional[str]] = mapped_column(
         String, ForeignKey("teams.id"), nullable=True
     )
@@ -1623,6 +1623,28 @@ class WorkflowState(Base):
         foreign_keys="Team.triageIssueStateId",
         uselist=False,
     )
+    archivedAt: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    color: Mapped[str] = mapped_column(String, nullable=False)
+    createdAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    inheritedFromId: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("workflow_states.id"), nullable=True
+    )
+    inheritedFrom: Mapped[Optional["WorkflowState"]] = relationship(
+        "WorkflowState",
+        back_populates="children",
+        foreign_keys=[inheritedFromId],
+        remote_side="WorkflowState.id",
+    )
+    children: Mapped[list["WorkflowState"]] = relationship(
+        "WorkflowState",
+        back_populates="inheritedFrom",
+        foreign_keys="WorkflowState.inheritedFromId",
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    position: Mapped[float] = mapped_column(Float, nullable=False)
+    type: Mapped[str] = mapped_column(String, nullable=False)
+    updatedAt: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class Draft(Base):
@@ -2360,3 +2382,4 @@ class UserSettings(Base):
     feedSummarySchedule: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     settings: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     usageWarningHistory: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    

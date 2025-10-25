@@ -44,7 +44,6 @@ mutation = MutationType()
 # Export query and mutation objects for use in schema binding
 __all__ = ["query", "mutation"]
 
-
 # Helper functions for cursor-based pagination
 def encode_cursor(item, order_field="createdAt"):
     """Encode a cursor for pagination"""
@@ -4067,36 +4066,57 @@ def apply_notification_filter(query, filter_dict):
 
     if "or" in filter_dict:
         # Build a list of conditions for OR
+        # Each sub_filter is a branch, and conditions within a branch are ANDed together
         or_conditions = []
         for sub_filter in filter_dict["or"]:
-            # Create a temporary query to extract the filters
-            # We'll use a subquery approach by building conditions
+            # Collect conditions for this specific OR branch
+            branch_conditions = []
+
+            # Build conditions for each field using helper functions
             if "archivedAt" in sub_filter:
-                or_conditions.append(
-                    build_date_condition(
-                        Notification.archivedAt, sub_filter["archivedAt"]
-                    )
+                cond = build_date_condition(
+                    Notification.archivedAt, sub_filter["archivedAt"]
                 )
+                if cond is not None:
+                    branch_conditions.append(cond)
+
             if "createdAt" in sub_filter:
-                or_conditions.append(
-                    build_date_condition(
-                        Notification.createdAt, sub_filter["createdAt"]
-                    )
+                cond = build_date_condition(
+                    Notification.createdAt, sub_filter["createdAt"]
                 )
+                if cond is not None:
+                    branch_conditions.append(cond)
+
             if "id" in sub_filter:
-                or_conditions.append(
-                    build_id_condition(Notification.id, sub_filter["id"])
-                )
+                cond = build_id_condition(Notification.id, sub_filter["id"])
+                if cond is not None:
+                    branch_conditions.append(cond)
+
             if "type" in sub_filter:
-                or_conditions.append(
-                    build_string_condition(Notification.type, sub_filter["type"])
-                )
+                cond = build_string_condition(Notification.type, sub_filter["type"])
+                if cond is not None:
+                    branch_conditions.append(cond)
+
             if "updatedAt" in sub_filter:
-                or_conditions.append(
-                    build_date_condition(
-                        Notification.updatedAt, sub_filter["updatedAt"]
-                    )
+                cond = build_date_condition(
+                    Notification.updatedAt, sub_filter["updatedAt"]
                 )
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            # Nested compound filters within OR
+            if "and" in sub_filter or "or" in sub_filter:
+                raise Exception(
+                    "Nested compound filters (AND/OR) within OR filters are not currently supported for notifications. "
+                    "Please restructure your query to avoid nesting."
+                )
+
+            # Combine conditions within this branch with AND
+            if branch_conditions:
+                if len(branch_conditions) == 1:
+                    or_conditions.append(branch_conditions[0])
+                else:
+                    or_conditions.append(and_(*branch_conditions))
 
         if or_conditions:
             query = query.filter(or_(*or_conditions))
@@ -4232,6 +4252,35 @@ def build_string_condition(column, comparator):
         conditions.append(column.ilike(f"{comparator['startsWithIgnoreCase']}%"))
     if "endsWithIgnoreCase" in comparator:
         conditions.append(column.ilike(f"%{comparator['endsWithIgnoreCase']}"))
+
+    return (
+        and_(*conditions)
+        if len(conditions) > 1
+        else conditions[0]
+        if conditions
+        else None
+    )
+
+
+def build_number_condition(column, comparator):
+    """Build a number comparison condition for use in OR filters."""
+    conditions = []
+    if "eq" in comparator:
+        conditions.append(column == comparator["eq"])
+    if "neq" in comparator:
+        conditions.append(column != comparator["neq"])
+    if "gt" in comparator:
+        conditions.append(column > comparator["gt"])
+    if "gte" in comparator:
+        conditions.append(column >= comparator["gte"])
+    if "lt" in comparator:
+        conditions.append(column < comparator["lt"])
+    if "lte" in comparator:
+        conditions.append(column <= comparator["lte"])
+    if "in" in comparator:
+        conditions.append(column.in_(comparator["in"]))
+    if "notIn" in comparator:
+        conditions.append(~column.in_(comparator["notIn"]))
 
     return (
         and_(*conditions)
@@ -9408,6 +9457,34 @@ def resolve_issueCreate(obj, info, **kwargs):
         project_id = input_data.get("projectId")
         project_milestone_id = input_data.get("projectMilestoneId")
         state_id = input_data.get("stateId")
+
+        # If stateId is not provided, set it to the team's default Backlog state
+        if not state_id:
+            # Query for the team's Backlog state (position 1.0)
+            backlog_state = (
+                session.query(WorkflowState)
+                .filter(WorkflowState.teamId == team_id)
+                .filter(WorkflowState.position == 1.0)
+                .first()
+            )
+            if backlog_state:
+                state_id = backlog_state.id
+            else:
+                # Fallback: get any state for this team (shouldn't happen with auto-creation)
+                fallback_state = (
+                    session.query(WorkflowState)
+                    .filter(WorkflowState.teamId == team_id)
+                    .order_by(WorkflowState.position)
+                    .first()
+                )
+                if fallback_state:
+                    state_id = fallback_state.id
+                else:
+                    raise Exception(
+                        f"No workflow states found for team {team_id}. "
+                        "Workflow states should be created automatically when a team is created."
+                    )
+
         description = input_data.get("description")
         description_data = input_data.get("descriptionData")
         last_applied_template_id = input_data.get("lastAppliedTemplateId")
@@ -9423,6 +9500,8 @@ def resolve_issueCreate(obj, info, **kwargs):
         # Numeric fields
         estimate = input_data.get("estimate")
         priority = input_data.get("priority", 0)  # Default to no priority
+        # Validate priority value (must be 0-4)
+        priority = _validate_priority(priority)
         board_order = input_data.get("boardOrder", 0.0)
         sort_order = input_data.get("sortOrder", 0.0)
         sub_issue_sort_order = input_data.get("subIssueSortOrder")
@@ -9478,7 +9557,7 @@ def resolve_issueCreate(obj, info, **kwargs):
             customerTicketCount=0,
             identifier="",  # Will be generated based on team + number
             number=0.0,  # Will be auto-incremented by the system
-            priorityLabel="",  # Will be derived from priority value
+            priorityLabel=_get_priority_label(priority),
             reactionData={},
             previousIdentifiers=[],
             url="",  # Will be generated from identifier
@@ -9554,6 +9633,34 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
             project_id = issue_input.get("projectId")
             project_milestone_id = issue_input.get("projectMilestoneId")
             state_id = issue_input.get("stateId")
+
+            # If stateId is not provided, set it to the team's default Backlog state
+            if not state_id:
+                # Query for the team's Backlog state (position 1.0)
+                backlog_state = (
+                    session.query(WorkflowState)
+                    .filter(WorkflowState.teamId == team_id)
+                    .filter(WorkflowState.position == 1.0)
+                    .first()
+                )
+                if backlog_state:
+                    state_id = backlog_state.id
+                else:
+                    # Fallback: get any state for this team
+                    fallback_state = (
+                        session.query(WorkflowState)
+                        .filter(WorkflowState.teamId == team_id)
+                        .order_by(WorkflowState.position)
+                        .first()
+                    )
+                    if fallback_state:
+                        state_id = fallback_state.id
+                    else:
+                        raise Exception(
+                            f"No workflow states found for team {team_id}. "
+                            "Workflow states should be created automatically when a team is created."
+                        )
+
             description = issue_input.get("description")
             description_data = issue_input.get("descriptionData")
 
@@ -9565,6 +9672,8 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
             # Numeric fields
             estimate = issue_input.get("estimate")
             priority = issue_input.get("priority", 0)  # Default to no priority
+            # Validate priority value (must be 0-4)
+            priority = _validate_priority(priority)
             board_order = issue_input.get("boardOrder", 0.0)
             sort_order = issue_input.get("sortOrder", 0.0)
             sub_issue_sort_order = issue_input.get("subIssueSortOrder")
@@ -9621,7 +9730,7 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
                 number=issue_input.get(
                     "number", 0.0
                 ),  # This should be generated by the system
-                priorityLabel=issue_input.get("priorityLabel", ""),
+                priorityLabel=_get_priority_label(priority),
                 reactionData={},
                 previousIdentifiers=[],
                 url=issue_input.get("url", ""),
@@ -12857,9 +12966,45 @@ def resolve_organizationUpdate(obj, info, **kwargs):
 # ============================================================================
 
 
+def _validate_priority(priority: float) -> int:
+    """Validate and convert priority to int
+
+    Linear priority values:
+    0 - No priority (default)
+    1 - Urgent
+    2 - High
+    3 - Medium
+    4 - Low
+
+    Args:
+        priority: Priority value (can be float)
+
+    Returns:
+        int: Validated priority value
+
+    Raises:
+        ValueError: If priority is not in valid range 0-4
+    """
+    priority_int = int(priority)
+    if priority_int < 0 or priority_int > 4:
+        raise ValueError(
+            f"Invalid priority value: {priority}. Priority must be between 0 (No priority) and 4 (Low). "
+            "Valid values: 0=No priority, 1=Urgent, 2=High, 3=Medium, 4=Low"
+        )
+    return priority_int
+
+
 def _get_priority_label(priority: int) -> str:
-    """Map priority number to label"""
-    priority_map = {0: "No priority", 1: "Urgent", 2: "High", 3: "Normal", 4: "Low"}
+    """Map priority number to label
+
+    Linear priority values:
+    0 - No priority (default)
+    1 - Urgent
+    2 - High
+    3 - Medium
+    4 - Low
+    """
+    priority_map = {0: "No priority", 1: "Urgent", 2: "High", 3: "Medium", 4: "Low"}
     return priority_map.get(priority, "No priority")
 
 
@@ -12909,8 +13054,10 @@ def resolve_projectCreate(obj, info, **kwargs):
         # Set defaults for non-nullable fields
         current_time = datetime.now(timezone.utc)
 
-        # Priority: 0 = No priority, 1 = Urgent, 2 = High, 3 = Normal, 4 = Low
+        # Priority: 0 = No priority, 1 = Urgent, 2 = High, 3 = Medium, 4 = Low
         priority = input_data.get("priority", 0)
+        # Validate priority value (must be 0-4)
+        priority = _validate_priority(priority)
 
         # Build the project entity
         project = Project(
@@ -14616,6 +14763,82 @@ def resolve_teamCreate(obj, info, **kwargs):
             )
             session.add(membership)
 
+        # Create default workflow states for the team
+        # Linear default states: Triage, Backlog, Todo, In Progress, In Review, Done, Canceled, Duplicate
+        default_states = [
+            {
+                "name": "Triage",
+                "color": "#95a2b3",
+                "type": "triage",
+                "position": 0.0,
+            },
+            {
+                "name": "Backlog",
+                "color": "#95a2b3",
+                "type": "backlog",
+                "position": 1.0,
+            },
+            {
+                "name": "Todo",
+                "color": "#e2e2e2",
+                "type": "unstarted",
+                "position": 2.0,
+            },
+            {
+                "name": "In Progress",
+                "color": "#f2c94c",
+                "type": "started",
+                "position": 3.0,
+            },
+            {
+                "name": "In Review",
+                "color": "#eb5757",
+                "type": "started",
+                "position": 4.0,
+            },
+            {
+                "name": "Done",
+                "color": "#5e6ad2",
+                "type": "completed",
+                "position": 5.0,
+            },
+            {
+                "name": "Canceled",
+                "color": "#95a2b3",
+                "type": "canceled",
+                "position": 6.0,
+            },
+            {
+                "name": "Duplicate",
+                "color": "#95a2b3",
+                "type": "canceled",
+                "position": 7.0,
+            },
+        ]
+
+        backlog_state_id = None
+        for state_config in default_states:
+            state_id = str(uuid.uuid4())
+            workflow_state = WorkflowState(
+                id=state_id,
+                name=state_config["name"],
+                color=state_config["color"],
+                type=state_config["type"],
+                position=state_config["position"],
+                teamId=team_id,
+                createdAt=now,
+                updatedAt=now,
+            )
+            session.add(workflow_state)
+
+            # Track the Backlog state ID (position 1) to set as default
+            if state_config["position"] == 1.0:
+                backlog_state_id = state_id
+
+        # Set the default issue state to Backlog
+        if backlog_state_id:
+            new_team.defaultIssueStateId = backlog_state_id
+
         # Return the team entity (TeamPayload structure expects just the entity)
         return new_team
 
@@ -15230,3 +15453,493 @@ def resolve_teamMembershipUpdate(obj, info, **kwargs):
 
     except Exception as e:
         raise Exception(f"Failed to update team membership: {str(e)}")
+
+
+def apply_workflow_state_filter(query, filter_dict):
+    """
+    Apply WorkflowStateFilter criteria to a SQLAlchemy query.
+
+    Args:
+        query: SQLAlchemy query object
+        filter_dict: Dictionary containing filter criteria
+
+    Returns:
+        Modified query with filters applied
+    """
+    if not filter_dict:
+        return query
+
+    # Handle compound filters
+    if "and" in filter_dict:
+        for sub_filter in filter_dict["and"]:
+            query = apply_workflow_state_filter(query, sub_filter)
+
+    if "or" in filter_dict:
+        # Build a list of conditions for OR
+        # Each sub_filter is a branch, and conditions within a branch are ANDed together
+        or_conditions = []
+        for sub_filter in filter_dict["or"]:
+            # Collect conditions for this specific OR branch
+            branch_conditions = []
+
+            # String comparators
+            if "name" in sub_filter:
+                cond = build_string_condition(WorkflowState.name, sub_filter["name"])
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            if "description" in sub_filter:
+                cond = build_string_condition(
+                    WorkflowState.description, sub_filter["description"]
+                )
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            if "type" in sub_filter:
+                cond = build_string_condition(WorkflowState.type, sub_filter["type"])
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            # Date comparators
+            if "createdAt" in sub_filter:
+                cond = build_date_condition(
+                    WorkflowState.createdAt, sub_filter["createdAt"]
+                )
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            if "updatedAt" in sub_filter:
+                cond = build_date_condition(
+                    WorkflowState.updatedAt, sub_filter["updatedAt"]
+                )
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            # ID comparator
+            if "id" in sub_filter:
+                cond = build_id_condition(WorkflowState.id, sub_filter["id"])
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            # Number comparator
+            if "position" in sub_filter:
+                cond = build_number_condition(
+                    WorkflowState.position, sub_filter["position"]
+                )
+                if cond is not None:
+                    branch_conditions.append(cond)
+
+            # Nested compound filters within OR
+            if "and" in sub_filter or "or" in sub_filter:
+                raise Exception(
+                    "Nested compound filters (AND/OR) within OR filters are not currently supported for workflow states. "
+                    "Please restructure your query to avoid nesting."
+                )
+
+            # Relationship filters within OR
+            if "team" in sub_filter or "issues" in sub_filter:
+                raise Exception(
+                    "Relationship filters (team, issues) within OR filters are not currently supported for workflow states. "
+                    "Please filter relationships at the top level and use OR only for direct field comparisons."
+                )
+
+            # Combine conditions within this branch with AND
+            if branch_conditions:
+                if len(branch_conditions) == 1:
+                    or_conditions.append(branch_conditions[0])
+                else:
+                    or_conditions.append(and_(*branch_conditions))
+
+        # Apply all OR conditions at once
+        if or_conditions:
+            query = query.filter(or_(*or_conditions))
+
+    # String comparators
+    if "name" in filter_dict:
+        query = apply_string_comparator(query, WorkflowState.name, filter_dict["name"])
+
+    if "description" in filter_dict:
+        query = apply_nullable_string_comparator(
+            query, WorkflowState.description, filter_dict["description"]
+        )
+
+    if "type" in filter_dict:
+        query = apply_string_comparator(query, WorkflowState.type, filter_dict["type"])
+
+    # Date comparators
+    if "createdAt" in filter_dict:
+        query = apply_date_comparator(
+            query, WorkflowState.createdAt, filter_dict["createdAt"]
+        )
+
+    if "updatedAt" in filter_dict:
+        query = apply_date_comparator(
+            query, WorkflowState.updatedAt, filter_dict["updatedAt"]
+        )
+
+    # ID comparator
+    if "id" in filter_dict:
+        query = apply_id_comparator(query, WorkflowState.id, filter_dict["id"])
+
+    # Number comparator
+    if "position" in filter_dict:
+        query = apply_number_comparator(
+            query, WorkflowState.position, filter_dict["position"]
+        )
+
+    # Nested relationship filters
+    if "team" in filter_dict:
+        team_filter = filter_dict["team"]
+        if team_filter and isinstance(team_filter, dict):
+            # Join with Team table if not already joined
+            if not any(
+                str(mapper.class_) == str(Team)
+                for mapper in query.column_descriptions
+                if hasattr(mapper, "class_") or "entity" in mapper
+            ):
+                query = query.join(Team, WorkflowState.teamId == Team.id)
+            query = apply_team_filter(query, team_filter)
+
+    if "issues" in filter_dict:
+        issues_filter = filter_dict["issues"]
+        if issues_filter and isinstance(issues_filter, dict):
+            # For collection filters, we need to check if ANY issue matches
+            # This requires EXISTS subquery
+            from sqlalchemy import exists
+
+            # Create correlated subquery
+            issue_exists = exists().where(Issue.stateId == WorkflowState.id)
+
+            # We need to build filter conditions directly
+            # Since apply_issue_filter needs a query object, we'll simplify for now
+            # and only support basic issue collection filters
+            raise Exception(
+                "Issue collection filters on workflow states are not currently supported. "
+                "Please filter issues directly using the issues query."
+            )
+
+    return query
+
+
+@query.field("workflowState")
+def resolve_workflowState(obj, info, id: str):
+    """
+    Query one specific workflow state by its id.
+
+    Args:
+        obj: Parent object (None for root queries)
+        info: GraphQL resolve info containing context
+        id: The workflow state id to look up
+
+    Returns:
+        WorkflowState: The workflow state with the specified id
+
+    Raises:
+        Exception: If the workflow state is not found
+    """
+    session: Session = info.context["session"]
+
+    # Query for the workflow state by id
+    workflow_state = session.query(WorkflowState).filter(WorkflowState.id == id).first()
+
+    if not workflow_state:
+        raise Exception(f"WorkflowState with id '{id}' not found")
+
+    return workflow_state
+
+
+@query.field("workflowStates")
+def resolve_workflowStates(
+    obj,
+    info,
+    after: Optional[str] = None,
+    before: Optional[str] = None,
+    filter: Optional[dict] = None,
+    first: Optional[int] = None,
+    includeArchived: bool = False,
+    last: Optional[int] = None,
+    orderBy: Optional[str] = None,
+):
+    """
+    Query all issue workflow states with filtering, sorting, and pagination.
+
+    Args:
+        obj: Parent object (None for root queries)
+        info: GraphQL resolve info containing context
+        after: Cursor for forward pagination
+        before: Cursor for backward pagination
+        filter: WorkflowStateFilter to apply to results
+        first: Number of items to return (forward pagination, defaults to 50)
+        includeArchived: Whether to include archived workflow states (default: false)
+        last: Number of items to return (backward pagination, defaults to 50)
+        orderBy: Field to order by (createdAt or updatedAt, default: createdAt)
+
+    Returns:
+        WorkflowStateConnection: Paginated list of workflow states
+    """
+
+    session: Session = info.context["session"]
+
+    # Validate pagination parameters
+    validate_pagination_params(after, before, first, last)
+
+    # Determine the order field
+    order_field = "createdAt"
+    if orderBy == "updatedAt":
+        order_field = "updatedAt"
+
+    # Build base query
+    base_query = session.query(WorkflowState)
+
+    # Apply archived filter
+    if not includeArchived:
+        base_query = base_query.filter(WorkflowState.archivedAt.is_(None))
+
+    # Apply additional filters if provided
+    if filter:
+        base_query = apply_workflow_state_filter(base_query, filter)
+
+    # Apply cursor-based pagination
+    if after:
+        cursor_data = decode_cursor(after)
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
+
+        # Convert cursor field value to datetime if needed
+        if order_field in ["createdAt", "updatedAt"]:
+            cursor_field_value = datetime.fromisoformat(cursor_field_value)
+
+        # Apply cursor filter for forward pagination
+        order_column = getattr(WorkflowState, order_field)
+        base_query = base_query.filter(
+            or_(
+                order_column > cursor_field_value,
+                and_(order_column == cursor_field_value, WorkflowState.id > cursor_id),
+            )
+        )
+
+    if before:
+        cursor_data = decode_cursor(before)
+        cursor_field_value = cursor_data["field"]
+        cursor_id = cursor_data["id"]
+
+        # Convert cursor field value to datetime if needed
+        if order_field in ["createdAt", "updatedAt"]:
+            cursor_field_value = datetime.fromisoformat(cursor_field_value)
+
+        # Apply cursor filter for backward pagination
+        order_column = getattr(WorkflowState, order_field)
+        base_query = base_query.filter(
+            or_(
+                order_column < cursor_field_value,
+                and_(order_column == cursor_field_value, WorkflowState.id < cursor_id),
+            )
+        )
+
+    # Apply ordering
+    order_column = getattr(WorkflowState, order_field)
+    if last or before:
+        # For backward pagination, reverse the order
+        base_query = base_query.order_by(order_column.desc(), WorkflowState.id.desc())
+    else:
+        base_query = base_query.order_by(order_column.asc(), WorkflowState.id.asc())
+
+    # Determine limit
+    limit = first if first else (last if last else 50)
+
+    # Fetch limit + 1 to detect if there are more pages
+    items = base_query.limit(limit + 1).all()
+
+    # Use the centralized pagination helper
+    return apply_pagination(items, after, before, first, last, order_field)
+
+@mutation.field("workflowStateArchive")
+def resolve_workflowStateArchive(obj, info, **kwargs):
+    """
+    Archives a workflow state. Only states with issues that have all been archived can be archived.
+
+    Args:
+        obj: The root object (unused)
+        info: GraphQL resolve info containing context
+        **kwargs: Contains 'id' (workflow state ID to archive)
+
+    Returns:
+        Dict containing WorkflowStateArchivePayload with entity, success, and lastSyncId
+    """
+    session: Session = info.context["session"]
+    state_id = kwargs.get("id")
+
+    try:
+        # Fetch the workflow state to archive
+        workflow_state = session.query(WorkflowState).filter_by(id=state_id).first()
+
+        if not workflow_state:
+            raise Exception(f"WorkflowState with id {state_id} not found")
+
+        # Check if all issues in this state have been archived
+        # Get all issues associated with this workflow state
+        unarchived_issues = (
+            session.query(Issue)
+            .filter(Issue.stateId == state_id)
+            .filter(Issue.archivedAt == None)
+            .count()
+        )
+
+        if unarchived_issues > 0:
+            raise Exception(
+                f"Cannot archive workflow state: {unarchived_issues} unarchived issue(s) still in this state"
+            )
+
+        # Soft archive by setting archivedAt timestamp
+        workflow_state.archivedAt = datetime.now(timezone.utc)
+        workflow_state.updatedAt = datetime.now(timezone.utc)
+
+        session.commit()
+
+        # Return WorkflowStateArchivePayload structure
+        return {
+            "entity": workflow_state,
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
+            "success": True,
+        }
+
+    except Exception as e:
+        session.rollback()
+        raise Exception(f"Failed to archive workflow state: {str(e)}")
+
+@mutation.field("workflowStateCreate")
+def resolve_workflowStateCreate(obj, info, **kwargs):
+    """
+    Creates a new state, adding it to the workflow of a team.
+
+    Args:
+        obj: The root object (unused)
+        info: GraphQL resolve info containing context
+        **kwargs: Contains 'input' (WorkflowStateCreateInput)
+
+    Returns:
+        Dict containing WorkflowStatePayload with entity, success, and lastSyncId
+    """
+    session: Session = info.context["session"]
+    input_data = kwargs.get("input", {})
+
+    try:
+        # Extract required fields
+        color = input_data.get("color")
+        name = input_data.get("name")
+        team_id = input_data.get("teamId")
+        type_value = input_data.get("type")
+
+        # Validate required fields
+        if not color:
+            raise Exception("Field 'color' is required")
+        if not name:
+            raise Exception("Field 'name' is required")
+        if not team_id:
+            raise Exception("Field 'teamId' is required")
+        if not type_value:
+            raise Exception("Field 'type' is required")
+
+        # Verify the team exists
+        team = session.query(Team).filter_by(id=team_id).first()
+        if not team:
+            raise Exception(f"Team with id {team_id} not found")
+
+        # Generate ID if not provided
+        workflow_state_id = input_data.get("id") or str(uuid.uuid4())
+
+        # Extract optional fields
+        description = input_data.get("description")
+        position = input_data.get("position")
+
+        # If position is not provided, set it to the next available position
+        if position is None:
+            max_position = (
+                session.query(WorkflowState)
+                .filter(WorkflowState.teamId == team_id)
+                .order_by(WorkflowState.position.desc())
+                .first()
+            )
+            position = (max_position.position + 1.0) if max_position else 0.0
+
+        # Create the new workflow state
+        now = datetime.now(timezone.utc)
+        workflow_state = WorkflowState(
+            id=workflow_state_id,
+            color=color,
+            name=name,
+            teamId=team_id,
+            type=type_value,
+            description=description,
+            position=position,
+            createdAt=now,
+            updatedAt=now,
+        )
+
+        session.add(workflow_state)
+        session.commit()
+
+        # Return WorkflowStatePayload structure
+        return {
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
+            "success": True,
+            "workflowState": workflow_state,
+        }
+
+    except Exception as e:
+        session.rollback()
+        raise Exception(f"Failed to create workflow state: {str(e)}")
+
+@mutation.field("workflowStateUpdate")
+def resolve_workflowStateUpdate(obj, info, **kwargs):
+    """
+    Updates a state.
+
+    Args:
+        obj: The root object (unused)
+        info: GraphQL resolve info containing context
+        **kwargs: Contains 'id' (workflow state ID) and 'input' (WorkflowStateUpdateInput)
+
+    Returns:
+        Dict containing WorkflowStatePayload with entity, success, and lastSyncId
+    """
+    session: Session = info.context["session"]
+    state_id = kwargs.get("id")
+    input_data = kwargs.get("input", {})
+
+    try:
+        # Fetch the workflow state to update
+        workflow_state = session.query(WorkflowState).filter_by(id=state_id).first()
+
+        if not workflow_state:
+            raise Exception(f"WorkflowState with id {state_id} not found")
+
+        # Update fields if provided in input
+        if "color" in input_data:
+            workflow_state.color = input_data["color"]
+
+        if "description" in input_data:
+            workflow_state.description = input_data["description"]
+
+        if "name" in input_data:
+            workflow_state.name = input_data["name"]
+
+        if "position" in input_data:
+            workflow_state.position = input_data["position"]
+
+        # Update the updatedAt timestamp
+        workflow_state.updatedAt = datetime.now(timezone.utc)
+
+        session.commit()
+
+        # Return WorkflowStatePayload structure
+        return {
+            "lastSyncId": 0.0,  # In a real implementation, this would come from a sync tracking system
+            "success": True,
+            "workflowState": workflow_state,
+        }
+
+    except Exception as e:
+        session.rollback()
+        raise Exception(f"Failed to update workflow state: {str(e)}")
+    

@@ -33,7 +33,8 @@
       "samlEnabled": false,
       "scimEnabled": false,
       "slaDayCount": "businessDays",
-      "userCount": 3
+      "userCount": 3,
+      "workingDays": [1.0, 2.0, 3.0, 4.0, 5.0]
     }
   ],
   "users": [
@@ -138,7 +139,6 @@
       "description": "Engineering team",
       "icon": "🚀",
       "color": "#3B82F6",
-      "private": false,
       "createdAt": "2025-01-01T00:00:00",
       "updatedAt": "2025-01-01T00:00:00",
       "aiThreadSummariesEnabled": false,
@@ -157,7 +157,7 @@
       "inheritIssueEstimation": false,
       "inheritWorkflowStatuses": false,
       "inviteHash": "eng-team-invite",
-      "issueCount": 0,
+      "issueCount": 1,
       "issueEstimationAllowZero": false,
       "issueEstimationExtended": false,
       "issueEstimationType": "notUsed",
@@ -184,7 +184,6 @@
       "description": "Product team",
       "icon": "💡",
       "color": "#10B981",
-      "private": false,
       "createdAt": "2025-01-01T00:00:00",
       "updatedAt": "2025-01-01T00:00:00",
       "aiThreadSummariesEnabled": false,
@@ -220,6 +219,114 @@
       "timezone": "America/Los_Angeles",
       "triageEnabled": false,
       "upcomingCycleCount": 3.0
+    }
+  ],
+  "workflow_states": [
+    {
+      "id": "WS_ENG_TRIAGE",
+      "teamId": "TEAM01ENG",
+      "name": "Triage",
+      "color": "#95a2b3",
+      "position": 0.0,
+      "type": "triage",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    },
+    {
+      "id": "WS_ENG_BACKLOG",
+      "teamId": "TEAM01ENG",
+      "name": "Backlog",
+      "color": "#95a2b3",
+      "position": 1.0,
+      "type": "backlog",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    },
+    {
+      "id": "WS_ENG_TODO",
+      "teamId": "TEAM01ENG",
+      "name": "Todo",
+      "color": "#e2e2e2",
+      "position": 2.0,
+      "type": "unstarted",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    },
+    {
+      "id": "WS_ENG_IN_PROGRESS",
+      "teamId": "TEAM01ENG",
+      "name": "In Progress",
+      "color": "#f2c94c",
+      "position": 3.0,
+      "type": "started",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    },
+    {
+      "id": "WS_ENG_IN_REVIEW",
+      "teamId": "TEAM01ENG",
+      "name": "In Review",
+      "color": "#eb5757",
+      "position": 4.0,
+      "type": "started",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    },
+    {
+      "id": "WS_ENG_DONE",
+      "teamId": "TEAM01ENG",
+      "name": "Done",
+      "color": "#5e6ad2",
+      "position": 5.0,
+      "type": "completed",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    },
+    {
+      "id": "WS_ENG_CANCELED",
+      "teamId": "TEAM01ENG",
+      "name": "Canceled",
+      "color": "#95a2b3",
+      "position": 6.0,
+      "type": "canceled",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    },
+    {
+      "id": "WS_ENG_DUPLICATE",
+      "teamId": "TEAM01ENG",
+      "name": "Duplicate",
+      "color": "#95a2b3",
+      "position": 7.0,
+      "type": "canceled",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
+    }
+  ],
+  "issues": [
+    {
+      "id": "ISS_ENG_001",
+      "identifier": "ENG-1",
+      "title": "Fix authentication bug in login flow",
+      "description": "Users are experiencing intermittent login failures. Need to investigate and fix the authentication service.",
+      "teamId": "TEAM01ENG",
+      "stateId": "WS_ENG_BACKLOG",
+      "assigneeId": "U02JOHN",
+      "creatorId": "U01AGENT",
+      "priority": 0.0,
+      "priorityLabel": "No priority",
+      "prioritySortOrder": 0.0,
+      "number": 1.0,
+      "boardOrder": 0.0,
+      "sortOrder": 0.0,
+      "customerTicketCount": 0,
+      "branchName": "eng-1-fix-authentication-bug",
+      "labelIds": [],
+      "previousIdentifiers": [],
+      "reactionData": {},
+      "url": "https://linear.app/test-org/issue/ENG-1",
+      "createdAt": "2025-01-01T00:00:00",
+      "updatedAt": "2025-01-01T00:00:00"
     }
   ]
 }
