@@ -15883,7 +15883,6 @@ def resolve_workflowStateCreate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to create workflow state: {str(e)}")
 
 @mutation.field("workflowStateUpdate")
@@ -15934,6 +15933,4 @@ def resolve_workflowStateUpdate(obj, info, **kwargs):
         }
 
     except Exception as e:
-        session.rollback()
         raise Exception(f"Failed to update workflow state: {str(e)}")
-    
