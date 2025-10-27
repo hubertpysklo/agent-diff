@@ -1,8 +1,8 @@
-"""convert ids to strings
+"""
 
-Revision ID: 624910da70e7
-Revises: 34aef68b938e
-Create Date: 2025-10-13 15:47:45.784834
+Revision ID: 8b00548301dc
+Revises: 0450f987819c
+Create Date: 2025-10-21 19:25:03.718773
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "624910da70e7"
-down_revision: Union[str, None] = "34aef68b938e"
+revision: str = "8b00548301dc"
+down_revision: Union[str, None] = "0450f987819c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -41,6 +41,7 @@ def upgrade() -> None:
         source_schema="public",
         referent_schema="public",
     )
+    op.add_column("environments", sa.Column("description", sa.Text(), nullable=True))
     op.drop_constraint(
         op.f("organization_memberships_user_id_fkey"),
         "organization_memberships",
@@ -54,8 +55,8 @@ def upgrade() -> None:
     op.create_foreign_key(
         None,
         "organization_memberships",
-        "users",
-        ["user_id"],
+        "organizations",
+        ["organization_id"],
         ["id"],
         source_schema="public",
         referent_schema="public",
@@ -63,8 +64,8 @@ def upgrade() -> None:
     op.create_foreign_key(
         None,
         "organization_memberships",
-        "organizations",
-        ["organization_id"],
+        "users",
+        ["user_id"],
         ["id"],
         source_schema="public",
         referent_schema="public",
@@ -94,8 +95,8 @@ def upgrade() -> None:
     op.create_foreign_key(
         None,
         "test_memberships",
-        "test_suites",
-        ["test_suite_id"],
+        "tests",
+        ["test_id"],
         ["id"],
         source_schema="public",
         referent_schema="public",
@@ -103,21 +104,30 @@ def upgrade() -> None:
     op.create_foreign_key(
         None,
         "test_memberships",
-        "tests",
-        ["test_id"],
+        "test_suites",
+        ["test_suite_id"],
         ["id"],
         source_schema="public",
         referent_schema="public",
     )
     op.drop_constraint(
-        op.f("test_runs_created_by_fkey"), "test_runs", type_="foreignkey"
+        op.f("test_runs_environment_id_fkey"), "test_runs", type_="foreignkey"
     )
     op.drop_constraint(op.f("test_runs_test_id_fkey"), "test_runs", type_="foreignkey")
     op.drop_constraint(
-        op.f("test_runs_environment_id_fkey"), "test_runs", type_="foreignkey"
+        op.f("test_runs_created_by_fkey"), "test_runs", type_="foreignkey"
     )
     op.drop_constraint(
         op.f("test_runs_test_suite_id_fkey"), "test_runs", type_="foreignkey"
+    )
+    op.create_foreign_key(
+        None,
+        "test_runs",
+        "tests",
+        ["test_id"],
+        ["id"],
+        source_schema="public",
+        referent_schema="public",
     )
     op.create_foreign_key(
         None,
@@ -133,15 +143,6 @@ def upgrade() -> None:
         "test_runs",
         "run_time_environments",
         ["environment_id"],
-        ["id"],
-        source_schema="public",
-        referent_schema="public",
-    )
-    op.create_foreign_key(
-        None,
-        "test_runs",
-        "tests",
-        ["test_id"],
         ["id"],
         source_schema="public",
         referent_schema="public",

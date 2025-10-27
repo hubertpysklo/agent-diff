@@ -11,7 +11,6 @@ import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
 from starlette.testclient import TestClient
 from uuid import uuid4
 
@@ -72,6 +71,7 @@ def core_evaluation_engine(session_manager):
 def test_client(session_manager):
     """Starlette TestClient with full application."""
     from src.platform.api.main import create_app
+
     app = create_app()
     return TestClient(app)
 
@@ -154,10 +154,12 @@ def cleanup_test_environments(session_manager, created_schemas):
 
 
 @pytest_asyncio.fixture
-async def slack_client(test_user_id, core_isolation_engine, session_manager, environment_handler):
+async def slack_client(
+    test_user_id, core_isolation_engine, session_manager, environment_handler
+):
     """Create an AsyncClient for testing Slack API as U01AGENBOT9 (agent1)."""
     from httpx import AsyncClient, ASGITransport
-    from src.services.slack.api.methods import SLACK_HANDLERS, slack_endpoint
+    from src.services.slack.api.methods import slack_endpoint
     from starlette.routing import Route
     from starlette.applications import Starlette
 
@@ -170,7 +172,9 @@ async def slack_client(test_user_id, core_isolation_engine, session_manager, env
     )
 
     async def add_db_session(request, call_next):
-        with session_manager.with_session_for_environment(env_result.environment_id) as session:
+        with session_manager.with_session_for_environment(
+            env_result.environment_id
+        ) as session:
             request.state.db_session = session
             request.state.impersonate_user_id = "U01AGENBOT9"
             request.state.impersonate_email = "agent@example.com"
@@ -189,7 +193,9 @@ async def slack_client(test_user_id, core_isolation_engine, session_manager, env
 
 
 @pytest_asyncio.fixture
-async def slack_client_john(test_user_id, core_isolation_engine, session_manager, environment_handler):
+async def slack_client_john(
+    test_user_id, core_isolation_engine, session_manager, environment_handler
+):
     """Create an AsyncClient for testing Slack API as U02JOHNDOE1 (johndoe)."""
     from httpx import AsyncClient, ASGITransport
     from src.services.slack.api.methods import slack_endpoint
@@ -205,7 +211,9 @@ async def slack_client_john(test_user_id, core_isolation_engine, session_manager
     )
 
     async def add_db_session(request, call_next):
-        with session_manager.with_session_for_environment(env_result.environment_id) as session:
+        with session_manager.with_session_for_environment(
+            env_result.environment_id
+        ) as session:
             request.state.db_session = session
             request.state.impersonate_user_id = "U02JOHNDOE1"
             request.state.impersonate_email = "john@example.com"
@@ -231,7 +239,6 @@ def create_test_environment(
     impersonate_user_id: str = "U01AGENBOT9",
     impersonate_email: str | None = None,
 ):
-    
     return core_isolation_engine.create_environment(
         template_schema=template_schema,
         ttl_seconds=ttl_seconds,
@@ -242,7 +249,9 @@ def create_test_environment(
 
 
 @pytest.fixture
-def differ_env(test_user_id, core_isolation_engine, session_manager, environment_handler):
+def differ_env(
+    test_user_id, core_isolation_engine, session_manager, environment_handler
+):
     """Create isolated environment with Differ instance for testing."""
     from src.platform.evaluationEngine.differ import Differ
 
@@ -277,3 +286,52 @@ def create_env(core_isolation_engine):
         return create_test_environment(core_isolation_engine, **kwargs)
 
     return _create
+
+
+@pytest.fixture(scope="session")
+def test_api_key(session_manager, test_user_id):
+    """Generate API key for SDK integration tests."""
+    from src.platform.api.auth import KeyHandler
+
+    key_handler = KeyHandler(session_manager)
+    result = key_handler.create_api_key(
+        user_id=test_user_id,
+        days_valid=1,
+        is_platform_admin=True,
+        is_organization_admin=True,
+    )
+    return result.token
+
+
+@pytest.fixture(scope="function")
+def cleanup_test_templates(session_manager, test_user_id):
+    """Auto-cleanup fixture that removes templates created during tests."""
+    from src.platform.db.schema import TemplateEnvironment
+
+    yield
+
+    # Delete all user-owned templates created during test
+    with session_manager.with_meta_session() as s:
+        s.query(TemplateEnvironment).filter(
+            TemplateEnvironment.owner_user_id == test_user_id
+        ).delete()
+        s.commit()
+
+
+@pytest.fixture(scope="function")
+def sdk_client(test_api_key, cleanup_test_templates):
+    """AgentDiff SDK client for integration tests."""
+    import sys
+
+    # Add SDK to path (mounted at /sdk in Docker)
+    sdk_path = "/sdk"
+    if sdk_path not in sys.path:
+        sys.path.insert(0, sdk_path)
+
+    from agent_diff.client import AgentDiff
+
+    # Use backend service name for inter-container communication
+    return AgentDiff(
+        api_key=test_api_key,
+        base_url="http://backend:8000",
+    )

@@ -31,6 +31,7 @@ services:
     volumes:
       - ../backend:/app
       - ../examples:/examples
+      - ../sdk:/sdk
     command: >
       sh -c "
         alembic upgrade head &&

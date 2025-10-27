@@ -15,6 +15,15 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select, exists, and_
+from sqlalchemy.exc import IntegrityError
+
+
+def _generate_slack_id(prefix: str) -> str:
+    """Generate a Slack-style ID: prefix + 10 random alphanumeric chars."""
+    chars = string.ascii_uppercase + string.digits
+    return prefix + "".join(secrets.choice(chars) for _ in range(10))
+
+
 # Create Team
 
 
@@ -27,17 +36,14 @@ def create_team(
 ):
     # Generate team_id if not provided
     if team_id is None:
-        # Generate Slack-style team ID: T + 10 alphanumeric chars
-        chars = string.ascii_uppercase + string.digits
-        team_id = "T" + "".join(secrets.choice(chars) for _ in range(10))
+        team_id = _generate_slack_id("T")
 
     team = Team(team_id=team_id, team_name=team_name)
     if created_at is not None:
         team.created_at = created_at
     session.add(team)
     if default_channel_name:
-        # Generate channel_id for default channel
-        channel_id = "C" + "".join(secrets.choice(chars) for _ in range(10))
+        channel_id = _generate_slack_id("C")
         channel = Channel(
             channel_id=channel_id,
             channel_name=default_channel_name,
@@ -66,9 +72,7 @@ def create_user(
 ):
     # Generate user_id if not provided
     if user_id is None:
-        # Generate Slack-style user ID: U + 10 alphanumeric chars
-        chars = string.ascii_uppercase + string.digits
-        user_id = "U" + "".join(secrets.choice(chars) for _ in range(10))
+        user_id = _generate_slack_id("U")
 
     user = User(
         user_id=user_id,
@@ -101,9 +105,7 @@ def create_channel(
 
     # Generate channel_id if not provided
     if channel_id is None:
-        # Generate Slack-style channel ID: C + 10 alphanumeric chars
-        chars = string.ascii_uppercase + string.digits
-        channel_id = "C" + "".join(secrets.choice(chars) for _ in range(10))
+        channel_id = _generate_slack_id("C")
 
     channel = Channel(
         channel_id=channel_id,
@@ -116,6 +118,13 @@ def create_channel(
     if created_at is not None:
         channel.created_at = created_at
     session.add(channel)
+
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        raise ValueError("name_taken")
+
     return channel
 
 
@@ -148,7 +157,15 @@ def rename_channel(session: Session, channel_id: str, new_name: str) -> Channel:
     channel = session.get(Channel, channel_id)
     if channel is None:
         raise ValueError("Channel not found")
+
     channel.channel_name = new_name
+
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        raise ValueError("name_taken")
+
     return channel
 
 
@@ -447,8 +464,16 @@ def find_or_create_dm_channel(
     )
     if dm:
         return dm
+
+    channel_id = _generate_slack_id("D")
+    dm_name = f"dm-{a}-{b}"
+
     ch = Channel(
-        is_dm=True, is_private=True, team_id=team_id, channel_name=f"dm-{a}-{b}"
+        channel_id=channel_id,
+        is_dm=True,
+        is_private=True,
+        team_id=team_id,
+        channel_name=dm_name,
     )
     session.add(ch)
     session.add_all(
@@ -457,6 +482,40 @@ def find_or_create_dm_channel(
             ChannelMember(channel_id=ch.channel_id, user_id=b),
         ]
     )
+
+    try:
+        session.flush()
+    except IntegrityError:
+        session.rollback()
+        # Re-query the existing DM
+        dm = (
+            session.execute(
+                select(Channel)
+                .where(Channel.is_dm.is_(True), Channel.team_id == team_id)
+                .where(
+                    and_(
+                        exists().where(
+                            and_(
+                                ChannelMember.channel_id == Channel.channel_id,
+                                ChannelMember.user_id == a,
+                            )
+                        ),
+                        exists().where(
+                            and_(
+                                ChannelMember.channel_id == Channel.channel_id,
+                                ChannelMember.user_id == b,
+                            )
+                        ),
+                    )
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if dm is None:
+            raise
+        return dm
+
     return ch
 
 
