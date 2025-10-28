@@ -119,7 +119,7 @@ def resolve_template_schema(
     matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
     if not matches:
         raise ValueError("template not found")
-    # Auto-pick the latest template if duplicates exist
+
     return matches[0].location
 
 
@@ -272,11 +272,11 @@ def resolve_init_template(
         matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
         if len(matches) == 0:
             raise ValueError("template not found")
-        # Auto-pick the latest template if duplicates exist
+
         t = matches[0]
         return t.location, t.service
 
-    # Path 4: legacy templateSchema (must be registered)
+    # Path 4: templateSchema
     if body.templateSchema:
         t = (
             session.query(TemplateEnvironment)
