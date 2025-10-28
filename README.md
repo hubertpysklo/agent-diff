@@ -3,12 +3,12 @@
 
 ## What This Is
 
-**A self-hosted interactive enviroments for testing AI agents & training LLMs against 3rd party services like Linear or Slack.** You run it locally (or deploy it), your agents call fake APIs, you get deterministic diffs. No external service, no API keys to manage, full control over test data.
+**A self-hosted interactive enviroments for testing AI agents & training LLMs against 3rd party services like Linear or Slack.** You run it locally (or deploy it), your agents call fake APIs, you get deterministic diffs. No external service, no rate limits, full control over test data and environments.
 
 Use it for:
 - RL training loops (reset state between episodes)
 - Integration tests (verify agent does what it should)
-- Regression tests (catch when changes break behavior)
+- Regression tests (catch when changes break behaviour)
 - Training data generation (prompt → actions → diff → outcome)
 
 
@@ -38,7 +38,7 @@ from agent_diff import AgentDiff
 
 client = AgentDiff(api_key="your-dev-key", base_url="http://localhost:8000")
 
-# Initialize isolated environment from template
+# Initialise isolated environment from template
 env = client.init_env(templateService="slack", templateName="slack_default", impersonateUserId="U01AGENBOT9")
 
 # Take before snapshot
@@ -48,7 +48,7 @@ run = client.start_run(envId=env.environmentId)
 # e.g., POST to env.url + "/services/slack/chat.postMessage"
 
 # Compute diff and get results
-diff = client.diff_run(envId=env.environmentId, runId=run.runId)
+diff = client.diff_run(runId=run.runId)
 
 # Inspect changes
 print(diff.diff['inserts'])   # New records
@@ -73,11 +73,11 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 
 ## Services
 
-- **Slack** (fully implemented - all core APIs)
-- **Linear** (Coming by end of october)
+- **Slack** (Core API methods)
+- **Linear** (Not well tested)
 - Gmail, GitHub, Jira (TBD). 
 
-If you have requests for specfic services + any feedback mail me at hubert@uni.minerva.edu
+If you have requests for specific services + any feedback, email me at hubert@uni.minerva.edu
 
 ## Documentation
 
