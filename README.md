@@ -12,31 +12,50 @@ Use it for:
 - Training data generation (prompt → actions → diff → outcome)
 
 
-## Flow
+## Quick Start
 
+### 1. Install SDK
+```bash
+uv add agent-diff
+```
+
+### 2. Set up backend
+```bash
+git clone https://github.com/hubertpysklo/agent-diff.git
+cd agent-diff
+cp env.example .env
+cd ops
+docker-compose up --build
+
+# Backend runs on http://localhost:8000
+# Get your API key from logs:
+docker-compose logs backend | grep "Dev API Key"
+```
+
+### 3. Flow
 ```python
 from agent_diff import AgentDiff
 
-client = AgentDiff(api_key="your-key", base_url="http://localhost:8000")
+client = AgentDiff(api_key="your-dev-key", base_url="http://localhost:8000")
 
-# 1. Initialize isolated environment from template
+# Initialize isolated environment from template
 env = client.init_env(templateService="slack", templateName="slack_default", impersonateUserId="U01AGENBOT9")
 
-# 2. Take before snapshot
+# Take before snapshot
 run = client.start_run(envId=env.environmentId)
 
-# 3. Your agent does stuff using the environment URL
+# Your agent does stuff using the environment URL
 # e.g., POST to env.url + "/services/slack/chat.postMessage"
 
-# 4. Compute diff and get results
+# Compute diff and get results
 diff = client.diff_run(envId=env.environmentId, runId=run.runId)
 
 # Inspect changes
-diff.diff['inserts']   # New records
-diff.diff['updates']   # Modified records
-diff.diff['deletes']   # Deleted records
+print(diff.diff['inserts'])   # New records
+print(diff.diff['updates'])   # Modified records
+print(diff.diff['deletes'])   # Deleted records
 
-# 5. Clean up
+# Clean up
 client.delete_env(envId=env.environmentId)
 ```
 
@@ -60,39 +79,12 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 
 If you have requests for specfic services + any feedback mail me at hubert@uni.minerva.edu
 
-## Quick Start
+## Documentation
 
-### Install SDK
-```bash
-uv add install agent-diff
-```
-
-### Set up self-hosted backend
-```bash
-git clone https://github.com/hubertpysklo/agent-diff.git
-cd agent-diff
-cp env.example .env
-cd ops
-docker-compose up --build
-
-# Backend runs on http://localhost:8000
-# The DEV API key is in logs:
-docker-compose logs backend | grep "Dev API Key"
-```
-
-### Use the SDK
-```python
-from agent_diff import AgentDiff
-
-client = AgentDiff(
-    api_key="your-dev-key",
-    base_url="http://localhost:8000"
-)
-
-# See flow above or docs/getting-started.md for full examples
-```
-
-See **[docs/getting-started.md](docs/getting-started.md)** for detailed setup and **[SDK README](sdk/agent_diff_pkg/README.md)** for API documentation.
+- **[Getting Started Guide](docs/getting-started.md)** - Detailed setup and configuration
+- **[SDK README](sdk/agent_diff_pkg/README.md)** - Complete API reference
+- **[Evaluation DSL](docs/evaluation-dsl.md)** - Write test assertions
+- **[API Reference](docs/api-reference.md)** - REST API documentation
 
 
 ## Contributing
