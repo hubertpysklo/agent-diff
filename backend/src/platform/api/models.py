@@ -167,8 +167,8 @@ class InitEnvResponse(BaseModel):
 
 class StartRunRequest(BaseModel):
     envId: str
-    testId: UUID
-    testSuiteId: Optional[UUID]
+    testId: Optional[UUID] = None
+    testSuiteId: Optional[UUID] = None
 
 
 class StartRunResponse(BaseModel):
@@ -208,6 +208,10 @@ class DiffRunResponse(BaseModel):
     beforeSnapshot: str
     afterSnapshot: str
     diff: Any
+
+
+class DeleteEnvRequest(BaseModel):
+    environmentId: str
 
 
 class DeleteEnvResponse(BaseModel):

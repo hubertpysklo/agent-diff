@@ -1,8 +1,5 @@
 # Agent Diff
 
-> **AI agents are bad at using APIs and MCPs**
-
- When I interned at a YC comapny last summer, I was running tests on our new agent implementation and it sent an email to a company investor, signed as CEO. **We could not run evals on 3rd party services for production**
 
 ## What This Is
 
@@ -15,25 +12,63 @@ Use it for:
 - Training data generation (prompt → actions → diff → outcome)
 
 
-## Flow
+## Quick Start
 
-```
-1. Use a template for Slack workspace & tests or add your own (see DSL below) 
-2. Create isolated environment and get URL for replica of a service  → POST /api/platform/initEnv
-3. Swap URL in your slack MCP or agent tools (proxy package coming soon)
-4. Snapshot initial state       → POST /api/platform/startRun
-5. Agent does stuff             → POST /api/env/{envId}/services/slack/chat.postMessage
-6. Snapshot final state + diff  → POST /api/platform/endRun
-7. Get results                  → GET /api/platform/results/{runId}
+### 1. Install SDK
+```bash
+uv add agent-diff
 ```
 
-Every environment gets its own PostgreSQL schema. URLs bind requests to schemas. Snapshots diff exactly what changed in this specfic isolated enviroment.
+### 2. Set up backend
+```bash
+git clone https://github.com/hubertpysklo/agent-diff.git
+cd agent-diff
+cp env.example .env
+cd ops
+docker-compose up --build
 
-### Slack-Bench (DSL)
-Sample test scenarios for Slack agents:
+# Backend runs on http://localhost:8000
+# Get your API key from logs:
+docker-compose logs backend | grep "Dev API Key"
+```
+
+### 3. Flow
+```python
+from agent_diff import AgentDiff
+
+client = AgentDiff(api_key="your-dev-key", base_url="http://localhost:8000")
+
+# Initialize isolated environment from template
+env = client.init_env(templateService="slack", templateName="slack_default", impersonateUserId="U01AGENBOT9")
+
+# Take before snapshot
+run = client.start_run(envId=env.environmentId)
+
+# Your agent does stuff using the environment URL
+# e.g., POST to env.url + "/services/slack/chat.postMessage"
+
+# Compute diff and get results
+diff = client.diff_run(envId=env.environmentId, runId=run.runId)
+
+# Inspect changes
+print(diff.diff['inserts'])   # New records
+print(diff.diff['updates'])   # Modified records
+print(diff.diff['deletes'])   # Deleted records
+
+# Clean up
+client.delete_env(envId=env.environmentId)
+```
+
+Every environment gets its own PostgreSQL schema. URLs bind requests to schemas. Snapshots diff exactly what changed in this specific isolated environment.
+
+## Templates & Test Suites
+
+### Sample Templates
+- **[slack_base](examples/slack/seeds/)** - Empty Slack workspace (no seed data)
+- **[slack_default](examples/slack/seeds/slack_default.json)** - Seeded with 3 users, 2 channels, 3 messages
+
+### Test Suites (DSL)
 - **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - 11 test cases covering message sending, channel ops, reactions, threading
-- **[slack_default.json](examples/slack/seeds/slack_default.json)** - Seed data (3 users, 2 channels, 3 messages)
-
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Check DSL docs on how it works.
 
 ## Services
@@ -44,21 +79,12 @@ Sample test scenarios for Slack agents:
 
 If you have requests for specfic services + any feedback mail me at hubert@uni.minerva.edu
 
-## Quick Start
+## Documentation
 
-```bash
-git clone https://github.com/hubertpysklo/agent-diff.git
-cd agent-diff
-cp env.example .env
-cd ops
-docker-compose up --build
-
-# Backend runs on http://localhost:8000
-# The DEV API key is in logs:
-docker-compose logs backend | grep "Dev API Key"
-```
-
-See **[docs/getting-started.md](docs/getting-started.md)** for setup.
+- **[Getting Started Guide](docs/getting-started.md)** - Detailed setup and configuration
+- **[SDK README](sdk/agent_diff_pkg/README.md)** - Complete API reference
+- **[Evaluation DSL](docs/evaluation-dsl.md)** - Write test assertions
+- **[API Reference](docs/api-reference.md)** - REST API documentation
 
 
 ## Contributing

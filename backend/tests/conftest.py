@@ -323,8 +323,7 @@ def sdk_client(test_api_key, cleanup_test_templates):
     """AgentDiff SDK client for integration tests."""
     import sys
 
-    # Add SDK to path (mounted at /sdk in Docker)
-    sdk_path = "/sdk"
+    sdk_path = "/sdk/agent_diff_pkg"
     if sdk_path not in sys.path:
         sys.path.insert(0, sdk_path)
 

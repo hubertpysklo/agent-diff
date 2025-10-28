@@ -76,6 +76,27 @@ def register_public_template(
     conn, *, service: str, name: str, location: str, description: str | None = None
 ):
     """Register a template in platform meta DB as public (owner_scope='public')."""
+    # Check if template already exists
+    check_sql = text(
+        """
+        SELECT id FROM public.environments
+        WHERE service = :service
+          AND name = :name
+          AND version = :version
+          AND owner_scope = 'public'
+          AND owner_org_id IS NULL
+          AND owner_user_id IS NULL
+        LIMIT 1
+        """
+    )
+    existing = conn.execute(
+        check_sql, {"service": service, "name": name, "version": "v1"}
+    ).fetchone()
+
+    if existing:
+        print(f"Template {name} already exists, skipping")
+        return
+
     sql = text(
         """
         INSERT INTO public.environments (
@@ -85,7 +106,6 @@ def register_public_template(
             :id, :service, :name, :version, 'public', :description,
             NULL, NULL, 'schema', :location, NOW(), NOW()
         )
-        ON CONFLICT ON CONSTRAINT uq_environments_identity DO NOTHING
         """
     )
     params = {

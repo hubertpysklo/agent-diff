@@ -481,9 +481,10 @@ async def start_run(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal = _principal_from_request(request)
 
-    test = session.query(Test).filter(Test.id == body.testId).one_or_none()
-    if test is None:
-        return not_found("test not found")
+    if body.testId:
+        test = session.query(Test).filter(Test.id == body.testId).one_or_none()
+        if test is None:
+            return not_found("test not found")
 
     try:
         env_uuid = parse_uuid(body.envId)
