@@ -167,7 +167,7 @@ class InitEnvResponse(BaseModel):
 
 class StartRunRequest(BaseModel):
     envId: str
-    testId: UUID
+    testId: Optional[UUID] = None
     testSuiteId: Optional[UUID]
 
 
