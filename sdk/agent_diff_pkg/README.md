@@ -76,7 +76,7 @@ List and create environment templates:
 # List available templates
 templates = client.list_templates()
 
-# Create custom template - you can populate the replica and turn it into a template with custom data data
+# Create custom template - you can populate the replica and turn it into a template with custom data
 custom = client.create_template_from_environment(
     environmentId=env.environmentId,
     service="slack",
