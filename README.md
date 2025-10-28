@@ -44,9 +44,10 @@ env = client.init_env(templateService="slack", templateName="slack_default", imp
 # Take before snapshot
 run = client.start_run(envId=env.environmentId)
 
-# Your agent does stuff using the environment URL. You can either use a sidecar proxy (package coming soon) or swap the URLs directly in MCPs
-# Swap slack.api with env.url and use the same slack methods as on real API
-# e.g. GET to [https://slack.com/api/]conversations.list --> [http://localhost:8000/api/env/c49bc3c27a4d468ea12a572c6b0b5bd0/services/slack/]conversations.list 
+# Your agent does stuff using the environment URL.
+# You can either use a sidecar proxy (package coming soon) or swap the URLs directly in MCPs
+# e.g. GET to [https://slack.com/api/]conversations.list -->
+# --> [http://localhost:8000/api/env/c49bc3c27a4d468ea12a572c6b0b5bd0/services/slack/]conversations.list 
 
 # Compute diff and get results
 diff = client.diff_run(runId=run.runId)
