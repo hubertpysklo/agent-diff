@@ -24,6 +24,7 @@ from .models import (
     DiffRunRequest,
     DiffRunResponse,
     DeleteEnvResponse,
+    DeleteEnvRequest,
 )
 
 
@@ -111,9 +112,13 @@ class AgentDiff:
         response.raise_for_status()
         return TestSuiteDetail.model_validate(response.json())
 
-    def get_test(self, test_id: UUID) -> Test:
+    def get_test(self, test_id: UUID | None = None, **kwargs) -> Test:
+        """Get a test by ID. Pass test_id or testId kwarg."""
+        tid = test_id or kwargs.get("testId")
+        if not tid:
+            raise ValueError("test_id or testId required")
         response = requests.get(
-            f"{self.base_url}/api/platform/tests/{test_id}",
+            f"{self.base_url}/api/platform/tests/{tid}",
             headers={"X-API-Key": self.api_key},
             timeout=5,
         )
@@ -152,18 +157,28 @@ class AgentDiff:
         response.raise_for_status()
         return CreateTestSuiteResponse.model_validate(response.json())
 
-    def get_results_for_run(self, run_id: str):
+    def get_results_for_run(
+        self, run_id: str | None = None, **kwargs
+    ) -> TestResultResponse:
+        """Get results for a run by ID. Pass run_id or runId kwarg."""
+        rid = run_id or kwargs.get("runId")
+        if not rid:
+            raise ValueError("run_id or runId required")
         response = requests.get(
-            f"{self.base_url}/api/platform/results/{run_id}",
+            f"{self.base_url}/api/platform/results/{rid}",
             headers={"X-API-Key": self.api_key},
             timeout=10,
         )
         response.raise_for_status()
         return TestResultResponse.model_validate(response.json())
 
-    def delete_env(self, env_id: str) -> DeleteEnvResponse:
+    def delete_env(self, env_id: str | None = None, **kwargs) -> DeleteEnvResponse:
+        """Delete an environment. Pass env_id or envId kwarg."""
+        eid = env_id or kwargs.get("envId")
+        if not eid:
+            raise ValueError("env_id or envId required")
         response = requests.delete(
-            f"{self.base_url}/api/platform/env/{env_id}",
+            f"{self.base_url}/api/platform/env/{eid}",
             headers={"X-API-Key": self.api_key},
             timeout=10,
         )

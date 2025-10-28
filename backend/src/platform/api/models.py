@@ -210,6 +210,10 @@ class DiffRunResponse(BaseModel):
     diff: Any
 
 
+class DeleteEnvRequest(BaseModel):
+    environmentId: str
+
+
 class DeleteEnvResponse(BaseModel):
     environmentId: str
     status: str

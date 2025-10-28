@@ -239,7 +239,7 @@ class TestRun(PlatformBase):
         PgUUID(as_uuid=True), primary_key=True, default=uuid4
     )
     test_id: Mapped[PyUUID] = mapped_column(
-        ForeignKey("public.tests.id"), nullable=False
+        ForeignKey("public.tests.id"), nullable=True
     )
     test_suite_id: Mapped[PyUUID | None] = mapped_column(
         ForeignKey("public.test_suites.id"), nullable=True

@@ -135,10 +135,14 @@ class InitEnvResponse(BaseModel):
     expiresAt: Optional[datetime]
 
 
+class DeleteEnvRequest(BaseModel):
+    environmentId: str
+
+
 class StartRunRequest(BaseModel):
     envId: str
     testId: Optional[UUID] = None
-    testSuiteId: Optional[UUID]
+    testSuiteId: Optional[UUID] = None
 
 
 class StartRunResponse(BaseModel):
