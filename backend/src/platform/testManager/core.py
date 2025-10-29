@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from src.platform.api.models import Principal, Visibility
+from src.platform.api.models import Visibility
 from src.platform.api.auth import require_resource_access
 from src.platform.db.schema import TestSuite, Test, TestMembership
 from src.platform.evaluationEngine.compiler import DSLCompiler
@@ -18,7 +18,7 @@ class CoreTestManager:
         self.compiler = DSLCompiler()
 
     def list_test_suites(
-        self, session: Session, principal: Principal
+        self, session: Session, principal_id: str
     ) -> List[TestSuite]:
         suites = (
             session.query(TestSuite)
@@ -26,7 +26,7 @@ class CoreTestManager:
             .filter(
                 or_(
                     TestSuite.visibility == "public",
-                    TestSuite.owner == principal.user_id,
+                    TestSuite.owner == principal_id,
                 )
             )
             .all()
@@ -34,14 +34,14 @@ class CoreTestManager:
         return suites
 
     def get_test_suite(
-        self, session: Session, principal: Principal, suite_id: str
+        self, session: Session, principal_id: str, suite_id: str
     ) -> Tuple[TestSuite | None, List[Test]]:
         suite = session.query(TestSuite).filter(TestSuite.id == suite_id).one_or_none()
         if suite is None:
             return None, []
 
         if suite.visibility == "private":
-            require_resource_access(principal, suite.owner)
+            require_resource_access(principal_id, suite.owner)
 
         tests = (
             session.query(Test)
@@ -54,7 +54,7 @@ class CoreTestManager:
     def create_test_suite(
         self,
         session: Session,
-        principal: Principal,
+        principal_id: str,
         *,
         name: str,
         description: str,
@@ -64,14 +64,13 @@ class CoreTestManager:
             id=uuid4(),
             name=name,
             description=description,
-            owner=principal.user_id,
+            owner=principal_id,
             visibility=visibility.value,
         )
         session.add(suite)
         return suite
 
     def validate_dsl(self, spec: dict[str, Any]) -> dict[str, Any]:
-        """Validate and compile DSL. Raises ValueError on invalid DSL."""
         try:
             return self.compiler.compile(spec)
         except Exception as e:
@@ -80,7 +79,7 @@ class CoreTestManager:
     def create_test(
         self,
         session: Session,
-        principal: Principal,
+        principal_id: str,
         *,
         test_suite_id: str,
         name: str,
@@ -95,7 +94,7 @@ class CoreTestManager:
         )
         if suite is None:
             raise ValueError("test suite not found")
-        require_resource_access(principal, suite.owner)
+        require_resource_access(principal_id, suite.owner)
 
         self.validate_dsl(expected_output)
 
@@ -115,7 +114,7 @@ class CoreTestManager:
     def create_tests_bulk(
         self,
         session: Session,
-        principal: Principal,
+        principal_id: str,
         *,
         test_suite_id: str,
         items: list[dict],
@@ -127,7 +126,7 @@ class CoreTestManager:
         if suite is None:
             raise ValueError("test suite not found")
 
-        require_resource_access(principal, suite.owner)
+        require_resource_access(principal_id, suite.owner)
 
         if len(items) != len(resolved_schemas):
             raise ValueError("items and resolved_schemas length mismatch")
@@ -147,11 +146,11 @@ class CoreTestManager:
             session.add(TestMembership(test_id=t.id, test_suite_id=suite.id))
             created.append(t)
 
-        session.flush()  # Populate timestamps before returning
+        session.flush()
         return created
 
     def get_test_suite_for_test(
-        self, session: Session, principal: Principal, test_id: str
+        self, session: Session, principal_id: str, test_id: str
     ) -> TestSuite | None:
         suite = (
             session.query(TestSuite)
@@ -163,13 +162,13 @@ class CoreTestManager:
             return None
 
         if suite.visibility == "private":
-            require_resource_access(principal, suite.owner)
+            require_resource_access(principal_id, suite.owner)
         return suite
 
-    def get_test(self, session: Session, principal: Principal, test_id: str) -> Test:
+    def get_test(self, session: Session, principal_id: str, test_id: str) -> Test:
         test = session.query(Test).filter(Test.id == test_id).one_or_none()
         if test is None:
             raise ValueError("test not found")
 
-        self.get_test_suite_for_test(session, principal, test_id)
+        self.get_test_suite_for_test(session, principal_id, test_id)
         return test

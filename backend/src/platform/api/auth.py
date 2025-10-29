@@ -1,194 +1,90 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
 import logging
 import os
-import secrets
-from datetime import datetime, timedelta
-from typing import Optional, Tuple, List
-from uuid import UUID, uuid4
+from typing import Optional
 
-from sqlalchemy.orm import Session
+import httpx
 
-from src.platform.api.models import Principal, ApiKeyResponse
-from src.platform.isolationEngine.session import SessionManager
-from src.platform.db.schema import (
-    ApiKey,
-    OrganizationMembership,
-    User,
-    TemplateEnvironment,
-)
+from src.platform.db.schema import TemplateEnvironment
 
 logger = logging.getLogger(__name__)
 
 
-def _pbkdf2_hash(secret: str, *, salt_bytes: bytes) -> bytes:
-    return hashlib.pbkdf2_hmac("sha256", secret.encode(), salt_bytes, 120_000)
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+CONTROL_PLANE_URL = os.getenv("CONTROL_PLANE_URL")
 
 
-def hash_secret(secret: str, *, salt_b64: Optional[str] = None) -> Tuple[str, str]:
-    salt_bytes = os.urandom(16) if salt_b64 is None else base64.b64decode(salt_b64)
-    dk = _pbkdf2_hash(secret, salt_bytes=salt_bytes)
-    return base64.b64encode(dk).decode(), base64.b64encode(salt_bytes).decode()
+def is_dev_mode() -> bool:
+    """Check if running in development mode."""
+    return ENVIRONMENT == "development"
 
 
-def verify_secret(secret: str, stored_hash_b64: str, stored_salt_b64: str) -> bool:
-    derived_b64, _ = hash_secret(secret, salt_b64=stored_salt_b64)
-    return hmac.compare_digest(derived_b64, stored_hash_b64)
+async def validate_with_control_plane(api_key: str) -> str:
+    """
+    Validate API key with control plane and return principal_id.
+    """
+    if not CONTROL_PLANE_URL:
+        raise RuntimeError("CONTROL_PLANE_URL not configured for production mode")
 
-
-class KeyHandler:
-    def __init__(self, session_manager: SessionManager):
-        self.session_manager = session_manager
-
-    def create_api_key(
-        self,
-        *,
-        user_id: str,
-        days_valid: int = 90,
-        is_platform_admin: bool = False,
-        is_organization_admin: bool = False,
-    ) -> ApiKeyResponse:
-        key_uuid = uuid4()
-        key_id = key_uuid.hex
-        secret = secrets.token_urlsafe(32)
-        token = f"ak_{key_id}_{secret}"
-
-        key_hash_b64, key_salt_b64 = hash_secret(secret)
-        expires_at = datetime.now() + timedelta(days=days_valid)
-
-        with self.session_manager.with_meta_session() as session:
-            session.add(
-                ApiKey(
-                    id=key_uuid,
-                    key_hash=key_hash_b64,
-                    key_salt=key_salt_b64,
-                    expires_at=expires_at,
-                    user_id=user_id,
-                    last_used_at=None,
-                )
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{CONTROL_PLANE_URL}/validate",
+                json={"api_key": api_key},
+                timeout=2.0,
             )
 
-        return ApiKeyResponse(
-            token=token,
-            key_id=key_id,
-            expires_at=expires_at,
-            user_id=user_id,
-            is_platform_admin=is_platform_admin,
-            is_organization_admin=is_organization_admin,
-        )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("valid"):
+                    return data["user_id"]
+                else:
+                    raise PermissionError(data.get("reason", "access denied"))
+            elif response.status_code == 401:
+                raise PermissionError("invalid api key")
+            elif response.status_code == 429:
+                raise PermissionError("rate limit exceeded")
+            else:
+                raise PermissionError(f"authorization failed: {response.status_code}")
+
+    except httpx.TimeoutException:
+        raise PermissionError("control plane timeout - try again")
+    except httpx.RequestError as e:
+        raise RuntimeError(f"control plane unavailable: {e}")
 
 
-def parse_api_key(header: Optional[str]) -> Optional[Tuple[str, str]]:
-    if not header:
-        return None
-    token = (
-        header.split(" ", 1)[1].strip()
-        if header.startswith("ApiKey ")
-        else header.strip()
-    )
-    try:
-        prefix, key_id, secret = token.split("_", 2)
-        if prefix != "ak":
-            return None
-        return key_id, secret
-    except ValueError:
-        return None
+async def get_principal_id(api_key: Optional[str]) -> str:
+    """
+    Get principal_id for the request.
+
+    In dev mode: returns "dev-user"
+    In production: validates with control plane
+    """
+    if is_dev_mode():
+        return "dev-user"
+
+    if not api_key:
+        raise PermissionError("api key required in production mode")
+
+    return await validate_with_control_plane(api_key)
 
 
-def validate_api_key(header: Optional[str], session: Session) -> Principal:
-    parsed = parse_api_key(header)
-    if not parsed:
-        raise PermissionError("invalid api key format")
-    key_id, secret = parsed
-
-    key_uuid = UUID(key_id)
-    key: Optional[ApiKey] = (
-        session.query(ApiKey).filter(ApiKey.id == key_uuid).one_or_none()
-    )
-    if (
-        not key
-        or key.revoked_at
-        or (key.expires_at and key.expires_at <= datetime.now())
-    ):
-        raise PermissionError("invalid or expired api key")
-
-    if not verify_secret(secret, key.key_hash, key.key_salt):
-        raise PermissionError("invalid api key")
-
-    user = session.query(User).filter(User.id == key.user_id).one_or_none()
-    if not user:
-        logger.error(f"API key references non-existent user {key.user_id}")
-        raise PermissionError("api key references non-existent user")
-
-    key.last_used_at = datetime.now()
-
-    org_ids = [
-        m.organization_id
-        for m in session.query(OrganizationMembership).filter_by(user_id=key.user_id)
-    ]
-
-    return Principal(
-        user_id=key.user_id,
-        org_ids=org_ids,
-        is_platform_admin=user.is_platform_admin,
-        is_organization_admin=user.is_organization_admin,
-    )
+def check_resource_access(principal_id: str, owner_id: str) -> bool:
+    """Check if principal can access resource owned by owner_id."""
+    return principal_id == owner_id
 
 
-def check_resource_access(principal: Principal, owner_id: str) -> bool:
-    if principal.is_platform_admin:
-        return True
-    if principal.user_id == owner_id:
-        return True
-    return False
-
-
-def require_resource_access(principal: Principal, owner_id: str) -> None:
-    if not check_resource_access(principal, owner_id):
+def require_resource_access(principal_id: str, owner_id: str) -> None:
+    """Require principal can access resource, raise PermissionError if not."""
+    if not check_resource_access(principal_id, owner_id):
         raise PermissionError("unauthorized")
 
 
-def check_resource_access_with_org(
-    principal: Principal, creator_id: str, creator_org_ids: List[str]
-) -> bool:
-    if principal.is_platform_admin:
-        return True
-    if principal.user_id == creator_id:
-        return True
-    user_org_ids = set(principal.org_ids)
-    creator_orgs = set(creator_org_ids)
-    if user_org_ids & creator_orgs:
-        return True
-    return False
-
-
-def require_resource_access_with_org(
-    principal: Principal, creator_id: str, creator_org_ids: List[str]
-) -> None:
-    if not check_resource_access_with_org(principal, creator_id, creator_org_ids):
-        raise PermissionError("unauthorized")
-
-
-def check_template_access(principal: Principal, template: TemplateEnvironment) -> None:
-    if principal.is_platform_admin:
+def check_template_access(principal_id: str, template: TemplateEnvironment) -> None:
+    """Check if principal can access template."""
+    if template.visibility == "public":
         return
-    if template.owner_scope == "public":
-        return
-    if template.owner_scope == "user":
-        if not template.owner_user_id:
-            raise PermissionError("unauthorized")
-        require_resource_access(principal, template.owner_user_id)
-        return
-    if template.owner_scope == "org" and not template.owner_org_id:
-        raise PermissionError("unauthorized")
-    if template.owner_scope == "org":
-        require_resource_access_with_org(
-            principal,
-            "",
-            [template.owner_org_id] if template.owner_org_id else [],
-        )
+    if template.owner_id and template.owner_id == principal_id:
         return
     raise PermissionError("unauthorized")

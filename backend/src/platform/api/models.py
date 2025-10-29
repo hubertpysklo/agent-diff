@@ -13,31 +13,9 @@ class Service(str, Enum):
     linear = "linear"
 
 
-class OwnerScope(str, Enum):
-    public = "public"
-    org = "org"
-    user = "user"
-
-
 class Visibility(str, Enum):
     public = "public"
     private = "private"
-
-
-class Principal(BaseModel):
-    user_id: str
-    org_ids: List[str]
-    is_platform_admin: bool
-    is_organization_admin: bool
-
-
-class ApiKeyResponse(BaseModel):
-    token: str
-    key_id: str
-    expires_at: datetime
-    user_id: str
-    is_platform_admin: bool
-    is_organization_admin: bool
 
 
 class APIError(BaseModel):
@@ -224,7 +202,7 @@ class CreateTemplateFromEnvRequest(BaseModel):
     service: "Service"
     name: str
     description: Optional[str] = None
-    ownerScope: "OwnerScope" = OwnerScope.org
+    visibility: "Visibility" = Visibility.private
     version: str = "v1"  # optional
 
 

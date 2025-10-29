@@ -83,9 +83,8 @@ def register_public_template(
         WHERE service = :service
           AND name = :name
           AND version = :version
-          AND owner_scope = 'public'
-          AND owner_org_id IS NULL
-          AND owner_user_id IS NULL
+          AND visibility = 'public'
+          AND owner_id IS NULL
         LIMIT 1
         """
     )
@@ -100,11 +99,11 @@ def register_public_template(
     sql = text(
         """
         INSERT INTO public.environments (
-            id, service, name, version, owner_scope, description,
-            owner_org_id, owner_user_id, kind, location, created_at, updated_at
+            id, service, name, version, visibility, description,
+            owner_id, kind, location, created_at, updated_at
         ) VALUES (
             :id, :service, :name, :version, 'public', :description,
-            NULL, NULL, 'schema', :location, NOW(), NOW()
+            NULL, 'schema', :location, NOW(), NOW()
         )
         """
     )

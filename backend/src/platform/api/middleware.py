@@ -7,16 +7,17 @@ from starlette.requests import Request
 from starlette.responses import Response, JSONResponse
 from starlette import status
 
-from src.platform.api.models import Principal
 from src.platform.isolationEngine.session import SessionManager
 from src.platform.isolationEngine.core import CoreIsolationEngine
-from src.platform.api.auth import validate_api_key
+from src.platform.api.auth import get_principal_id, is_dev_mode
 from src.platform.db.schema import RunTimeEnvironment
 
 logger = logging.getLogger(__name__)
 
 
 class PlatformMiddleware(BaseHTTPMiddleware):
+    """Middleware for platform API authentication."""
+
     def __init__(self, app, *, session_manager: SessionManager):
         super().__init__(app)
         self.session_manager = session_manager
@@ -29,16 +30,18 @@ class PlatformMiddleware(BaseHTTPMiddleware):
         api_key_hdr = request.headers.get("X-API-Key") or request.headers.get(
             "Authorization"
         )
-        if not api_key_hdr:
+
+        if not api_key_hdr and not is_dev_mode():
             return JSONResponse(
                 {"detail": "missing api key"},
                 status_code=status.HTTP_401_UNAUTHORIZED,
             )
 
         try:
+            principal_id = await get_principal_id(api_key_hdr)
+
             with self.session_manager.with_meta_session() as meta_session:
-                principal: Principal = validate_api_key(api_key_hdr, meta_session)
-                request.state.principal = principal
+                request.state.principal_id = principal_id
                 request.state.db_session = meta_session
 
                 response = await call_next(request)
@@ -51,6 +54,12 @@ class PlatformMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 {"detail": str(exc)},
                 status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        except RuntimeError as exc:
+            logger.error(f"Control plane error: {exc}")
+            return JSONResponse(
+                {"detail": str(exc)},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception:
             logger.exception("Unhandled exception in PlatformMiddleware")
@@ -91,15 +100,17 @@ class IsolationMiddleware(BaseHTTPMiddleware):
             api_key_hdr = request.headers.get("X-API-Key") or request.headers.get(
                 "Authorization"
             )
-            if not api_key_hdr:
+
+            if not api_key_hdr and not is_dev_mode():
                 return JSONResponse(
                     {"ok": False, "error": "not_authed"},
                     status_code=status.HTTP_401_UNAUTHORIZED,
                 )
 
+            principal_id = await get_principal_id(api_key_hdr)
+
             with self.session_manager.with_meta_session() as meta_session:
-                principal: Principal = validate_api_key(api_key_hdr, meta_session)
-                request.state.principal = principal
+                request.state.principal_id = principal_id
 
                 try:
                     env_uuid = self.session_manager._to_uuid(env_id)
@@ -129,6 +140,12 @@ class IsolationMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 {"ok": False, "error": str(exc)},
                 status_code=status.HTTP_401_UNAUTHORIZED,
+            )
+        except RuntimeError as exc:
+            logger.error(f"Control plane error: {exc}")
+            return JSONResponse(
+                {"ok": False, "error": str(exc)},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception:
             logger.exception("Unhandled exception in IsolationMiddleware")
