@@ -230,7 +230,7 @@ async def create_test_suite(request: Request) -> JSONResponse:
     core_tests: CoreTestManager = request.app.state.coreTestManager
     suite = core_tests.create_test_suite(
         session,
-        principal,
+        principal_id,
         name=body.name,
         description=body.description,
         visibility=Visibility(body.visibility),
@@ -243,7 +243,7 @@ async def create_test_suite(request: Request) -> JSONResponse:
                 )
                 core_tests.create_test(
                     session,
-                    principal,
+                    principal_id,
                     test_suite_id=str(suite.id),
                     name=t.name,
                     prompt=t.prompt,
@@ -408,7 +408,7 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
     try:
         resolved_schemas = resolve_and_validate_test_items(
             session,
-            principal,
+            principal_id,
             body.tests,
             str(body.defaultEnvironmentTemplate)
             if body.defaultEnvironmentTemplate
@@ -424,7 +424,7 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
     try:
         created_tests = core_tests.create_tests_bulk(
             session,
-            principal,
+            principal_id,
             test_suite_id=str(suite.id),
             items=to_bulk_test_items(body),
             resolved_schemas=resolved_schemas,

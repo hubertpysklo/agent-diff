@@ -43,13 +43,7 @@ class PlatformMiddleware(BaseHTTPMiddleware):
             with self.session_manager.with_meta_session() as meta_session:
                 request.state.principal_id = principal_id
                 request.state.db_session = meta_session
-
-                response = await call_next(request)
-
-                if not (200 <= response.status_code < 400):
-                    meta_session.rollback()
-
-                return response
+                return await call_next(request)
         except PermissionError as exc:
             return JSONResponse(
                 {"detail": str(exc)},
@@ -128,13 +122,7 @@ class IsolationMiddleware(BaseHTTPMiddleware):
             with self.session_manager.with_session_for_environment(env_id) as session:
                 request.state.db_session = session
                 request.state.environment_id = env_id
-
-                response = await call_next(request)
-
-                if not (200 <= response.status_code < 400):
-                    session.rollback()
-
-                return response
+                return await call_next(request)
 
         except PermissionError as exc:
             return JSONResponse(

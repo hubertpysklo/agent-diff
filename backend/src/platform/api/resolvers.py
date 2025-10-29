@@ -23,13 +23,6 @@ from src.platform.db.schema import (
 from uuid import UUID
 
 
-def _try_parse_uuid(value: str) -> UUID | None:
-    try:
-        return UUID(value)
-    except Exception:
-        return None
-
-
 def parse_uuid(value: str) -> UUID:
     try:
         return UUID(value)
@@ -40,7 +33,7 @@ def parse_uuid(value: str) -> UUID:
 def resolve_test_suite(
     session: Session, principal_id: str, suite_ref: str
 ) -> TestSuite:
-    maybe_uuid = _try_parse_uuid(suite_ref)
+    maybe_uuid = parse_uuid(suite_ref)
     if maybe_uuid:
         suite = (
             session.query(TestSuite).filter(TestSuite.id == maybe_uuid).one_or_none()
@@ -70,7 +63,7 @@ def resolve_test_suite(
 def resolve_template_schema(
     session: Session, principal_id: str, template_ref: str
 ) -> str:
-    maybe_uuid = _try_parse_uuid(template_ref)
+    maybe_uuid = parse_uuid(template_ref)
     if maybe_uuid:
         t = (
             session.query(TemplateEnvironment)

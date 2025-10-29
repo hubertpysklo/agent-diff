@@ -55,12 +55,6 @@ async def validate_with_control_plane(api_key: str) -> str:
 
 
 async def get_principal_id(api_key: Optional[str]) -> str:
-    """
-    Get principal_id for the request.
-
-    In dev mode: returns "dev-user"
-    In production: validates with control plane
-    """
     if is_dev_mode():
         return "dev-user"
 
@@ -70,14 +64,9 @@ async def get_principal_id(api_key: Optional[str]) -> str:
     return await validate_with_control_plane(api_key)
 
 
-def check_resource_access(principal_id: str, owner_id: str) -> bool:
-    """Check if principal can access resource owned by owner_id."""
-    return principal_id == owner_id
-
-
 def require_resource_access(principal_id: str, owner_id: str) -> None:
     """Require principal can access resource, raise PermissionError if not."""
-    if not check_resource_access(principal_id, owner_id):
+    if principal_id != owner_id:
         raise PermissionError("unauthorized")
 
 
