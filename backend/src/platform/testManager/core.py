@@ -18,20 +18,31 @@ class CoreTestManager:
         self.compiler = DSLCompiler()
 
     def list_test_suites(
-        self, session: Session, principal_id: str
+        self,
+        session: Session,
+        principal_id: str,
+        *,
+        name: Optional[str] = None,
+        suite_id: Optional[str] = None,
+        visibility: Optional[str] = None,
     ) -> List[TestSuite]:
-        suites = (
-            session.query(TestSuite)
-            .order_by(TestSuite.created_at.desc())
-            .filter(
-                or_(
-                    TestSuite.visibility == "public",
-                    TestSuite.owner == principal_id,
-                )
+        query = session.query(TestSuite).filter(
+            or_(
+                TestSuite.visibility == "public",
+                TestSuite.owner == principal_id,
             )
-            .all()
         )
-        return suites
+
+        if suite_id:
+            query = query.filter(TestSuite.id == suite_id)
+
+        if name:
+            query = query.filter(TestSuite.name.ilike(f"%{name}%"))
+
+        if visibility:
+            query = query.filter(TestSuite.visibility == visibility)
+
+        return query.order_by(TestSuite.created_at.desc()).all()
 
     def get_test_suite(
         self, session: Session, principal_id: str, suite_id: str

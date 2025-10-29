@@ -32,6 +32,12 @@ class TestSuite(BaseModel):
     updated_at: datetime
 
 
+class ListTestSuiteRequest(BaseModel):
+    name: Optional[str] = None
+    id: Optional[str] = None
+    visibility: Optional[Visibility] = None
+
+
 class CreateTestSuiteRequest(BaseModel):
     name: str
     description: str

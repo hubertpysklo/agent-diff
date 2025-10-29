@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime
 
-from pydantic import ValidationError
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -34,6 +32,7 @@ from src.platform.api.models import (
     CreateTemplateFromEnvResponse,
     Service,
     Visibility,
+    ListTestSuiteRequest,
     CreateTestsRequest,
     CreateTestsResponse,
 )
@@ -62,7 +61,12 @@ from src.platform.api.resolvers import (
     resolve_and_validate_test_items,
     to_bulk_test_items,
 )
-from src.platform.api.errors import bad_request, not_found, unauthorized
+from src.platform.api.errors import (
+    bad_request,
+    not_found,
+    unauthorized,
+    parse_request_body,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -135,11 +139,9 @@ async def get_environment_template(
 
 async def create_template_from_environment(request: Request) -> JSONResponse:
     try:
-        payload = CreateTemplateFromEnvRequest(**(await request.json()))
-    except (json.JSONDecodeError, ValidationError) as e:
-        return bad_request(
-            "invalid JSON" if isinstance(e, json.JSONDecodeError) else str(e)
-        )
+        payload = await parse_request_body(request, CreateTemplateFromEnvRequest)
+    except ValueError as e:
+        return bad_request(str(e))
 
     principal_id = _principal_id_from_request(request)
     session = request.state.db_session
@@ -219,11 +221,9 @@ async def get_test(request: Request) -> JSONResponse:
 
 async def create_test_suite(request: Request) -> JSONResponse:
     try:
-        body = CreateTestSuiteRequest(**(await request.json()))
-    except (json.JSONDecodeError, ValidationError) as e:
-        return bad_request(
-            "invalid JSON" if isinstance(e, json.JSONDecodeError) else str(e)
-        )
+        body = await parse_request_body(request, CreateTestSuiteRequest)
+    except ValueError as e:
+        return bad_request(str(e))
 
     session = request.state.db_session
     principal_id = _principal_id_from_request(request)
@@ -270,10 +270,22 @@ async def create_test_suite(request: Request) -> JSONResponse:
 
 
 async def list_test_suites(request: Request) -> JSONResponse:
+    try:
+        body = await parse_request_body(request, ListTestSuiteRequest)
+    except ValueError as e:
+        return bad_request(str(e))
+
     session = request.state.db_session
     principal_id = _principal_id_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
-    suites = core_tests.list_test_suites(session, principal_id)
+
+    suites = core_tests.list_test_suites(
+        session,
+        principal_id,
+        name=body.name,
+        suite_id=body.id,
+        visibility=body.visibility.value if body.visibility else None,
+    )
     response = TestSuiteListResponse(
         testSuites=[
             TestSuiteSummary(
@@ -330,13 +342,8 @@ async def get_test_suite(request: Request) -> JSONResponse:
 
 async def init_environment(request: Request) -> JSONResponse:
     try:
-        data = await request.json()
-    except json.JSONDecodeError:
-        return bad_request("invalid JSON in request body")
-
-    try:
-        body = InitEnvRequestBody(**data)
-    except ValidationError as e:
+        body = await parse_request_body(request, InitEnvRequestBody)
+    except ValueError as e:
         return bad_request(str(e))
 
     session = request.state.db_session
@@ -394,8 +401,8 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
     core_tests: CoreTestManager = request.app.state.coreTestManager
 
     try:
-        body = CreateTestsRequest(**(await request.json()))
-    except (json.JSONDecodeError, ValidationError) as e:
+        body = await parse_request_body(request, CreateTestsRequest)
+    except ValueError as e:
         return bad_request(str(e))
 
     try:
@@ -457,13 +464,8 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
 
 async def start_run(request: Request) -> JSONResponse:
     try:
-        data = await request.json()
-    except json.JSONDecodeError:
-        return bad_request("invalid JSON in request body")
-
-    try:
-        body = StartRunRequest(**data)
-    except ValidationError as e:
+        body = await parse_request_body(request, StartRunRequest)
+    except ValueError as e:
         return bad_request(str(e))
 
     session = request.state.db_session
@@ -525,13 +527,8 @@ async def start_run(request: Request) -> JSONResponse:
 
 async def evaluate_run(request: Request) -> JSONResponse:
     try:
-        data = await request.json()
-    except json.JSONDecodeError:
-        return bad_request("invalid JSON in request body")
-
-    try:
-        body = EndRunRequest(**data)
-    except ValidationError as e:
+        body = await parse_request_body(request, EndRunRequest)
+    except ValueError as e:
         return bad_request(str(e))
 
     session = request.state.db_session
@@ -644,13 +641,8 @@ async def get_run_result(request: Request) -> JSONResponse:
 
 async def diff_run(request: Request) -> JSONResponse:
     try:
-        data = await request.json()
-    except json.JSONDecodeError:
-        return bad_request("invalid JSON in request body")
-
-    try:
-        body = DiffRunRequest(**data)
-    except ValidationError as e:
+        body = await parse_request_body(request, DiffRunRequest)
+    except ValueError as e:
         return bad_request(str(e))
 
     session = request.state.db_session

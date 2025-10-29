@@ -30,36 +30,6 @@ def parse_uuid(value: str) -> UUID:
         raise ValueError("invalid uuid") from exc
 
 
-def resolve_test_suite(
-    session: Session, principal_id: str, suite_ref: str
-) -> TestSuite:
-    maybe_uuid = parse_uuid(suite_ref)
-    if maybe_uuid:
-        suite = (
-            session.query(TestSuite).filter(TestSuite.id == maybe_uuid).one_or_none()
-        )
-        if suite is None:
-            raise ValueError("test suite not found")
-        if suite.visibility == "private":
-            require_resource_access(principal_id, suite.owner)
-        return suite
-
-    query = (
-        session.query(TestSuite)
-        .filter(TestSuite.name == suite_ref)
-        .filter(or_(TestSuite.owner == principal_id, TestSuite.visibility == "public"))
-    )
-    suites = query.order_by(TestSuite.created_at.desc()).all()
-    if not suites:
-        raise ValueError("test suite not found")
-    if len(suites) > 1:
-        raise ValueError("multiple suites match name; use suite id")
-    suite = suites[0]
-    if suite.visibility == "private":
-        require_resource_access(principal_id, suite.owner)
-    return suite
-
-
 def resolve_template_schema(
     session: Session, principal_id: str, template_ref: str
 ) -> str:
