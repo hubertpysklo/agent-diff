@@ -116,8 +116,8 @@ class IsolationMiddleware(BaseHTTPMiddleware):
                     if env is not None:
                         request.state.impersonate_user_id = env.impersonate_user_id
                         request.state.impersonate_email = env.impersonate_email
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Could not load impersonation data for env {env_id}: {e}")
 
             with self.session_manager.with_session_for_environment(env_id) as session:
                 request.state.db_session = session
