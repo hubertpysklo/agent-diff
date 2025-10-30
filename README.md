@@ -28,20 +28,15 @@ cd ops
 docker-compose up --build
 
 # Backend runs on http://localhost:8000
+# Get your API key from logs:
+docker-compose logs backend | grep "Dev API Key"
 ```
 
 ### 3. Flow
 ```python
 from agent_diff import AgentDiff
 
-# For self-hosting (no API key)
-client = AgentDiff(base_url="http://localhost:8000")
-
-# For service (with API key)
-client = AgentDiff(
-    api_key="your-api-key",
-    base_url="https://api.yourdomain.com"
-)
+client = AgentDiff(api_key="your-dev-key", base_url="http://localhost:8000")
 
 # Initialise isolated environment from template
 env = client.init_env(templateService="slack", templateName="slack_default", impersonateUserId="U01AGENBOT9")

@@ -194,7 +194,7 @@ class CreateTemplateFromEnvRequest(BaseModel):
     service: Literal["slack", "linear"]
     name: str
     description: Optional[str] = None
-    visibility: Literal["public", "private"] = "private"
+    ownerScope: Literal["public", "org", "user"] = "org"
     version: str = "v1"
 
 

@@ -24,22 +24,24 @@ from .models import (
     DiffRunRequest,
     DiffRunResponse,
     DeleteEnvResponse,
+    DeleteEnvRequest,
 )
 
 
 class AgentDiff:
     def __init__(self, api_key: str | None = None, base_url: str | None = None):
         self.api_key = api_key or os.getenv("AGENT_DIFF_API_KEY")
-        self.base_url = (
-            base_url or os.getenv("AGENT_DIFF_BASE_URL") or "http://localhost:8000"
+        self.base_url = base_url or os.getenv(
+            "AGENT_DIFF_BASE_URL",
         )
-
-    def _headers(self) -> dict[str, str]:
-        """Build request headers, including API key if provided."""
-        headers = {}
-        if self.api_key:
-            headers["X-API-Key"] = self.api_key
-        return headers
+        if not self.api_key:
+            raise ValueError(
+                "API key required. Set AGENT_DIFF_API_KEY env var or pass api_key parameter"
+            )
+        if not self.base_url:
+            raise ValueError(
+                "Base URL required. Set AGENT_DIFF_BASE_URL env var or pass base_url parameter"
+            )
 
     def init_env(
         self, request: InitEnvRequestBody | None = None, **kwargs
@@ -50,7 +52,7 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/initEnv",
             json=request.model_dump(mode="json"),
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=30,
         )
         response.raise_for_status()
@@ -65,7 +67,7 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/templates/from-environment",
             json=request.model_dump(mode="json"),
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=30,
         )
         response.raise_for_status()
@@ -74,7 +76,7 @@ class AgentDiff:
     def list_templates(self) -> TemplateEnvironmentListResponse:
         response = requests.get(
             f"{self.base_url}/api/platform/templates",
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
@@ -83,7 +85,7 @@ class AgentDiff:
     def get_template(self, template_id: UUID) -> TemplateEnvironmentDetail:
         response = requests.get(
             f"{self.base_url}/api/platform/templates/{template_id}",
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
@@ -92,7 +94,7 @@ class AgentDiff:
     def list_test_suites(self) -> TestSuiteListResponse:
         response = requests.get(
             f"{self.base_url}/api/platform/testSuites",
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
@@ -104,7 +106,7 @@ class AgentDiff:
         query = "?expand=tests" if include_tests else ""
         response = requests.get(
             f"{self.base_url}/api/platform/testSuites/{suite_id}{query}",
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
@@ -117,7 +119,7 @@ class AgentDiff:
             raise ValueError("test_id or testId required")
         response = requests.get(
             f"{self.base_url}/api/platform/tests/{tid}",
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
@@ -129,7 +131,7 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/testSuites/{suite_id}/tests",
             json=request.model_dump(mode="json"),
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=10,
         )
         response.raise_for_status()
@@ -149,7 +151,7 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/testSuites",
             json=request.model_dump(mode="json"),
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=5,
         )
         response.raise_for_status()
@@ -164,7 +166,7 @@ class AgentDiff:
             raise ValueError("run_id or runId required")
         response = requests.get(
             f"{self.base_url}/api/platform/results/{rid}",
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=10,
         )
         response.raise_for_status()
@@ -177,7 +179,7 @@ class AgentDiff:
             raise ValueError("env_id or envId required")
         response = requests.delete(
             f"{self.base_url}/api/platform/env/{eid}",
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=10,
         )
         response.raise_for_status()
@@ -192,7 +194,7 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/startRun",
             json=request.model_dump(mode="json"),
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=10,
         )
         response.raise_for_status()
@@ -207,7 +209,7 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/evaluateRun",
             json=request.model_dump(mode="json"),
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=10,
         )
         response.raise_for_status()
@@ -222,7 +224,7 @@ class AgentDiff:
         response = requests.post(
             f"{self.base_url}/api/platform/diffRun",
             json=request.model_dump(mode="json"),
-            headers=self._headers(),
+            headers={"X-API-Key": self.api_key},
             timeout=10,
         )
         response.raise_for_status()

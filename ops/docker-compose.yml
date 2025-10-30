@@ -35,6 +35,7 @@ services:
     command: >
       sh -c "
         alembic upgrade head &&
+        python utils/seed_dev.py &&
         python utils/seed_slack_template.py &&
         python utils/seed_tests.py &&
         uvicorn src.platform.api.main:app --host 0.0.0.0 --port 8000 --reload
