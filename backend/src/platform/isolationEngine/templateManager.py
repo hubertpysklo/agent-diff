@@ -118,14 +118,22 @@ class TemplateManager:
                 require_resource_access(principal_id, suite.owner)
 
             schema = body.templateSchema or test.template_schema
-            t = (
+            query = (
                 session.query(TemplateEnvironment)
                 .filter(TemplateEnvironment.location == schema)
-                .order_by(TemplateEnvironment.created_at.desc())
-                .first()
+                .filter(
+                    or_(
+                        TemplateEnvironment.visibility == "public",
+                        TemplateEnvironment.owner_id == principal_id,
+                    )
+                )
             )
-            if t is None:
+            matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
+            if not matches:
                 raise ValueError("template schema not registered")
+
+            t = matches[0]
+            check_template_access(principal_id, t)
             return t.location, t.service
 
         # Path 2: templateId
@@ -157,14 +165,22 @@ class TemplateManager:
 
         # Path 4: templateSchema
         if body.templateSchema:
-            t = (
+            query = (
                 session.query(TemplateEnvironment)
                 .filter(TemplateEnvironment.location == body.templateSchema)
-                .order_by(TemplateEnvironment.created_at.desc())
-                .first()
+                .filter(
+                    or_(
+                        TemplateEnvironment.visibility == "public",
+                        TemplateEnvironment.owner_id == principal_id,
+                    )
+                )
             )
-            if t is None:
+            matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
+            if not matches:
                 raise ValueError("template schema not registered")
+
+            t = matches[0]
+            check_template_access(principal_id, t)
             return t.location, t.service
 
         raise ValueError(

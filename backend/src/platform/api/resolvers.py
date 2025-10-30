@@ -14,11 +14,11 @@ from src.platform.db.schema import (
 from uuid import UUID
 
 
-def parse_uuid(value: str) -> UUID:
+def parse_uuid(value: str) -> UUID | None:
     try:
         return UUID(value)
-    except Exception as exc:
-        raise ValueError("invalid uuid") from exc
+    except Exception:
+        return None
 
 
 
@@ -27,9 +27,13 @@ def require_environment_access(
     session: Session, principal_id: str, env_id: str
 ) -> RunTimeEnvironment:
     """Check environment access and return environment."""
+    env_uuid = parse_uuid(env_id)
+    if env_uuid is None:
+        raise ValueError("invalid environment id")
+
     env = (
         session.query(RunTimeEnvironment)
-        .filter(RunTimeEnvironment.id == env_id)
+        .filter(RunTimeEnvironment.id == env_uuid)
         .one_or_none()
     )
     if env is None:
@@ -41,7 +45,11 @@ def require_environment_access(
 
 def require_run_access(session: Session, principal_id: str, run_id: str) -> TestRun:
     """Check test run access and return run."""
-    run = session.query(TestRun).filter(TestRun.id == run_id).one_or_none()
+    run_uuid = parse_uuid(run_id)
+    if run_uuid is None:
+        raise ValueError("invalid run id")
+
+    run = session.query(TestRun).filter(TestRun.id == run_uuid).one_or_none()
     if run is None:
         raise ValueError("run not found")
 

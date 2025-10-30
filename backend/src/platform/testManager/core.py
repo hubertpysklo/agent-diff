@@ -181,5 +181,7 @@ class CoreTestManager:
         if test is None:
             raise ValueError("test not found")
 
-        self.get_test_suite_for_test(session, principal_id, test_id)
+        suite = self.get_test_suite_for_test(session, principal_id, test_id)
+        if suite is None:
+            raise ValueError("test has no suite membership")
         return test
