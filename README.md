@@ -82,7 +82,7 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 
 ## Services
 
-- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.MD`](backend/src/services/slack/READEME.MD). A few examples:
+- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.MD`](backend/src/services/slack/READEME.md). A few examples:
 
   ```python
   "chat.postMessage"  # post messages in seeded channels/DMs
