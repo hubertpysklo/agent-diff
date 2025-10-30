@@ -74,7 +74,7 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 
 ### Sample Templates
 - **[slack_base](examples/slack/seeds/)** - Empty Slack workspace (no seed data)
-- **[slack_default](examples/slack/seeds/slack_default.json)** - Seeded with sample users and messages 
+- **[slack_default](examples/slack/seeds/slack_bench_default.json)** - Seeded with sample users and messages for Slack Bench.
 
 ### Test Suites (DSL)
 - **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - test cases covering message sending, channel ops, reactions, threading
