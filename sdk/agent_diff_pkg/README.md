@@ -86,7 +86,7 @@ custom = client.create_template_from_environment(
     service="slack",
     name="my_template",
     description="Custom template",
-    ownerScope="user" # user means only you can view the template 
+    visibility="private"  # "private" means only you can view the template
 )
 ```
 
