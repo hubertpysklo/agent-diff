@@ -21,11 +21,11 @@
       "email": "artem@example.com"
     },
     {
-      "user_id": "U03HUBERT23",
-      "username": "hubertmarek",
-      "display_name": "Hubert",
-      "real_name": "Hubert Marek",
-      "email": "hubert@example.com"
+      "user_id": "U03ROBERT23",
+      "username": "robertwalsh",
+      "display_name": "Robert",
+      "real_name": "Robert Walsh",
+      "email": "robert@example.com"
     },
     {
       "user_id": "U04OMER23",
@@ -40,6 +40,13 @@
       "display_name": "Morgan",
       "real_name": "Morgan Stanley",
       "email": "morgan@example.com"
+    },
+    {
+      "user_id": "U06HUBERT23",
+      "username": "hubertmarek",
+      "display_name": "Hubert",
+      "real_name": "Hubert Marek",
+      "email": "hubert@example.com"
     }
   ],
   "channels": [
@@ -62,6 +69,26 @@
       "is_gc": false,
       "topic_text": "Non-work banter and water cooler conversation",
       "purpose_text": "A place for non-work-related chat and random things."
+    },
+    {
+      "channel_id": "C03IJKL9012",
+      "channel_name": "engineering",
+      "team_id": "T01WORKSPACE",
+      "is_private": false,
+      "is_dm": false,
+      "is_gc": false,
+      "topic_text": "Engineering Team",
+      "purpose_text": "This channel is for the Engineering Team."
+    },
+    {
+      "channel_id": "C04MNOP3456",
+      "channel_name": "growth",
+      "team_id": "T01WORKSPACE",
+      "is_private": false,
+      "is_dm": false,
+      "is_gc": false,
+      "topic_text": "Growth Team",
+      "purpose_text": "This channel is for the Growth Team."
     }
   ],
   "user_teams": [
@@ -89,6 +116,11 @@
       "user_id": "U03ROBERT23",
       "team_id": "T01WORKSPACE",
       "role": "admin"
+    },
+    {
+      "user_id": "U06HUBERT23",
+      "team_id": "T01WORKSPACE",
+      "role": "member"
     }
   ],
   "channel_members": [
@@ -115,6 +147,30 @@
     {
       "channel_id": "C02EFGH5678",
       "user_id": "U03ROBERT23"
+    },
+    {
+      "channel_id": "C02EFGH5678",
+      "user_id": "U06HUBERT23"
+    },
+    {
+      "channel_id": "C03IJKL9012",
+      "user_id": "U01AGENBOT9"
+    },
+    {
+      "channel_id": "C03IJKL9012",
+      "user_id": "U02JOHNDOE1"
+    },
+    {
+      "channel_id": "C03IJKL9012",
+      "user_id": "U03ROBERT23"
+    },
+    {
+      "channel_id": "C03IJKL9012",
+      "user_id": "U05MORGAN23"
+    },
+    {
+      "channel_id": "C03IJKL9012",
+      "user_id": "U06HUBERT23"
     }
   ],
   "messages": [
@@ -125,16 +181,52 @@
       "message_text": "Hey team, we just shipped the new feature!"
     },
     {
-      "message_id": "1699568400.000456",
-      "channel_id": "C01ABCD1234",
-      "user_id": "U03ROBERT23",
-      "message_text": "Does anyone know when the deployment will be done?"
-    },
-    {
       "message_id": "1699572000.000789",
       "channel_id": "C02EFGH5678",
       "user_id": "U02JOHNDOE1",
       "message_text": "Anyone up for lunch?"
+    },
+    {
+      "message_id": "1699651200.000321",
+      "channel_id": "C03IJKL9012",
+      "user_id": "U01AGENBOT9",
+      "message_text": "Login service returning '500 errors' for several users since 08:00—investigating backend rollout."
+    },
+    {
+      "message_id": "1699737600.000654",
+      "channel_id": "C03IJKL9012",
+      "user_id": "U02JOHNDOE1",
+      "message_text": "FYI: Google SSO login flow fails with 'invalid_grant' for new accounts; auth team looped in."
+    },
+    {
+      "message_id": "1699824000.000987",
+      "channel_id": "C03IJKL9012",
+      "user_id": "U03ROBERT23",
+      "message_text": "Crash report: retrying wrong password 3 times triggers 'login rate limit' not allowing users to login."
+    },
+    {
+      "message_id": "1699910400.000246",
+      "channel_id": "C03IJKL9012",
+      "user_id": "U05MORGAN23",
+      "message_text": "Around 19:00 the 'login endpoint' slows to 12s response time; suspect nightly ETL job contention."
+    },
+    {
+      "message_id": "1699996800.000777",
+      "channel_id": "C01ABCD1234",
+      "user_id": "U02ARTEM23",
+      "message_text": "UX note: login form still lets users submit empty password—should throw validation instead."
+    },
+    {
+      "message_id": "1700083200.000888",
+      "channel_id": "C01ABCD1234",
+      "user_id": "U06HUBERT23",
+      "message_text": "Reminder: auth improvements next sprint must cover captcha for repeated login failures."
+    },
+    {
+      "message_id": "1700173200.000456",
+      "channel_id": "C01ABCD1234",
+      "user_id": "U03ROBERT23",
+      "message_text": "Does anyone know when the MCP deployment will be done?"
     }
   ]
 }

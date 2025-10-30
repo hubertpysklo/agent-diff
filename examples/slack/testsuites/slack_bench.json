@@ -3,6 +3,13 @@
   "name": "Slack Bench",
   "description": "Benchmark tests for Slack MCP operations",
   "service": "slack",
+  "ignore_fields": {
+    "global": [
+      "created_at",
+      "updated_at",
+      "message_id"
+    ]
+  },
   "tests": [
     {
       "id": "test_1",
@@ -62,8 +69,8 @@
     },
     {
       "id": "test_3",
-      "name": "Send direct message Artem, and Hubert ",
-      "prompt": "Send a DM to Artem and Hubert saying 'Hey, I've took a look at the presentation and I have some questions. Can you help me?'",
+      "name": "Send direct message Artem, and Hubert (Create group conversation + send message)",
+      "prompt": "Send a DM (group conversation not channel) to Artem and Hubert saying 'Hey, I've took a look at the presentation and I have some questions. Can you help me?'",
       "type": "actionEval",
       "seed_template": "slack_default",
       "impersonate_user_id": "U01AGENBOT9",
@@ -96,7 +103,7 @@
     {
       "id": "test_4",
       "name": "Create a new channel",
-      "prompt": "Create a new channel called 'RL Project'",
+      "prompt": "Create a new channel called 'rl-project'",
       "type": "actionEval",
       "seed_template": "slack_default",
       "impersonate_user_id": "U01AGENBOT9",
@@ -106,7 +113,7 @@
           "entity": "channels",
           "where": {
             "channel_name": {
-              "eq": "RL Project"
+              "i_contains": "rl-project"
             }
           },
           "expected_count": 1
@@ -139,7 +146,7 @@
     {
       "id": "test_6",
       "name": "Create a new channel and add user to it ",
-      "prompt": "Create a new channel called 'RL Project' and add Morgan to it",
+      "prompt": "Create a new channel called 'rl-project' and add Morgan to it",
       "type": "actionEval",
       "seed_template": "slack_default",
       "impersonate_user_id": "U01AGENBOT9",
@@ -149,7 +156,7 @@
           "entity": "channels",
           "where": {
             "channel_name": {
-              "i_contains": "RL Project"
+              "i_contains": "rl-project"
             }
           },
           "expected_count": 1
@@ -179,7 +186,7 @@
           "entity": "messages",
           "where": {
             "parent_id": {
-              "eq": "1699568400.000456"
+              "eq": "1700173200.000456"
             },
             "channel_id": {
               "eq": "C01ABCD1234"
@@ -194,8 +201,34 @@
     },
     {
       "id": "test_8",
+      "name": "Reply in a thread",
+      "prompt": "Reply 'Next monday.' to the to MCP deployment questions in #general",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "parent_id": {
+              "eq": "1700173200.000456"
+            },
+            "channel_id": {
+              "eq": "C01ABCD1234"
+            },
+            "message_text": {
+              "contains": "Next monday"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_9",
       "name": "Add emoji reaction",
-      "prompt": "React with :thumbsup: to the newest message in #general",
+      "prompt": "React with :thumbsup: to the question about lunch in #random",
       "type": "actionEval",
       "seed_template": "slack_default",
       "impersonate_user_id": "U01AGENBOT9",
@@ -205,7 +238,7 @@
           "entity": "message_reactions",
           "where": {
             "message_id": {
-              "eq": "1699568400.000456"
+              "eq": "1699572000.000789"
             },
             "user_id": {
               "eq": "U01AGENBOT9"
@@ -219,7 +252,33 @@
       ]
     },
     {
-      "id": "test_9",
+      "id": "test_10",
+      "name": "Add emoji reaction",
+      "prompt": "React with :thumbsup: to the newest message in #general",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "message_reactions",
+          "where": {
+            "message_id": {
+              "eq": "1700173200.000456"
+            },
+            "user_id": {
+              "eq": "U01AGENBOT9"
+            },
+            "reaction_type": {
+              "eq": "thumbsup"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_11",
       "name": "Update channel topic",
       "prompt": "Change the #general channel topic to 'Weekly standup discussions'",
       "type": "actionEval",
@@ -245,7 +304,7 @@
       ]
     },
     {
-      "id": "test_10",
+      "id": "test_12",
       "name": "Edit existing message",
       "prompt": "Find the message that says 'Hey team' and edit it to say 'Hello everyone'",
       "type": "actionEval",
@@ -274,9 +333,9 @@
       ]
     },
     {
-      "id": "test_11",
+      "id": "test_13",
       "name": "Mention user in message",
-      "prompt": "Post to #general mentioning John with text 'Please review the pull request'",
+      "prompt": "Post to #general mentioning Artem with text 'Please review the pull request'",
       "type": "actionEval",
       "seed_template": "slack_default",
       "impersonate_user_id": "U01AGENBOT9",
@@ -289,7 +348,7 @@
               "eq": "C01ABCD1234"
             },
             "message_text": {
-              "contains": "@johndoe"
+              "contains": "<@U02ARTEM23>"
             }
           },
           "expected_count": 1
@@ -297,7 +356,7 @@
       ]
     },
     {
-      "id": "test_12",
+      "id": "test_14",
       "name": "Multi-channel send",
       "prompt": "Send 'System maintenance tonight at 10pm' to both #general and #random",
       "type": "actionEval",
@@ -333,7 +392,7 @@
       ]
     },
     {
-      "id": "test_13",
+      "id": "test_15",
       "name": "Delete old message",
       "prompt": "Delete the message about deployment from #general",
       "type": "actionEval",
@@ -356,7 +415,7 @@
       ]
     },
     {
-      "id": "test_14",
+      "id": "test_16",
       "name": "Forward message to another channel",
       "prompt": "Copy the question from #random and also post it to #general",
       "type": "actionEval",
@@ -379,9 +438,117 @@
       ]
     },
     {
-      "id": "test_12",
-      "name": "Create a new channel",
-      "prompt": "Create a new channel called 'project-alpha'",
+      "id": "test_17",
+      "name": "Search messages in a channel and combine results into a new message as DM",
+      "prompt": "Search for all messages (4 messages) in the #engineering channel related to login issues and combine them into a single new message as DM to Hubert. Do not change the meaning of the original messages just combine them.",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "channels",
+          "where": {
+            "is_dm": {
+              "eq": true
+            },
+            "channel_id": {
+              "regex": "^D"
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "channel_members",
+          "where": {
+            "user_id": {
+              "eq": "U06HUBERT23"
+            },
+            "channel_id": {
+              "regex": "^D"
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "channel_members",
+          "where": {
+            "user_id": {
+              "eq": "U01AGENBOT9"
+            },
+            "channel_id": {
+              "regex": "^D"
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "user_id": {
+              "eq": "U01AGENBOT9"
+            },
+            "channel_id": {
+              "regex": "^D"
+            },
+            "message_text": {
+              "regex": "(?=.*'500 errors')(?=.*'invalid_grant')(?=.*'login rate limit')(?=.*'login endpoint')"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_18",
+      "name": "Search messages in multiple channels and combine results into a new message as DM",
+      "prompt": "Search for all messages (6 messages) related to login issues and auth improvments. Combine them into a single new message as DM to Hubert. Do not change the meaning of the original messages just combine them.",
+      "type": "actionEval",
+      "seed_template": "slack_default",
+      "impersonate_user_id": "U01AGENBOT9",
+      "assertions": [
+        {
+          "diff_type": "added",
+          "entity": "channels",
+          "where": {
+            "is_dm": {
+              "eq": true
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "channel_members",
+          "where": {
+            "user_id": {
+              "eq": "U06HUBERT23"
+            }
+          },
+          "expected_count": 1
+        },
+        {
+          "diff_type": "added",
+          "entity": "messages",
+          "where": {
+            "user_id": {
+              "eq": "U01AGENBOT9"
+            },
+            "message_text": {
+              "regex": "(?=.*'500 errors')(?=.*'invalid_grant')(?=.*'login rate limit')(?=.*'login endpoint')(?=.*'captcha')(?=.*'empty password')"
+            }
+          },
+          "expected_count": 1
+        }
+      ]
+    },
+    {
+      "id": "test_17",
+      "name": "Search messages in multiple channels and edit a message in a channel with info about them",
+      "prompt": "Create a new channel called 'rl-project' and add Morgan to it",
       "type": "actionEval",
       "seed_template": "slack_default",
       "impersonate_user_id": "U01AGENBOT9",
@@ -391,7 +558,7 @@
           "entity": "channels",
           "where": {
             "channel_name": {
-              "eq": "project-alpha"
+              "i_contains": "rl-project"
             }
           },
           "expected_count": 1
