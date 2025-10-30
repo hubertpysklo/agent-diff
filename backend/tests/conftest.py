@@ -169,6 +169,102 @@ async def slack_client(
 
 
 @pytest_asyncio.fixture
+async def slack_client_with_differ(
+    test_user_id, core_isolation_engine, session_manager, environment_handler
+):
+    """Create AsyncClient and Differ for the same environment."""
+    from httpx import AsyncClient, ASGITransport
+    from src.services.slack.api.methods import slack_endpoint
+    from starlette.routing import Route
+    from starlette.applications import Starlette
+    from src.platform.evaluationEngine.differ import Differ
+
+    env_result = core_isolation_engine.create_environment(
+        template_schema="slack_default",
+        ttl_seconds=3600,
+        created_by=test_user_id,
+        impersonate_user_id="U01AGENBOT9",
+        impersonate_email="agent@example.com",
+    )
+
+    async def add_db_session(request, call_next):
+        with session_manager.with_session_for_environment(
+            env_result.environment_id
+        ) as session:
+            request.state.db_session = session
+            request.state.impersonate_user_id = "U01AGENBOT9"
+            request.state.impersonate_email = "agent@example.com"
+            response = await call_next(request)
+            return response
+
+    routes = [Route("/{endpoint}", slack_endpoint, methods=["GET", "POST"])]
+    app = Starlette(routes=routes, middleware=[])
+    app.middleware("http")(add_db_session)
+
+    transport = ASGITransport(app=app)
+
+    # Create differ for same environment
+    differ = Differ(
+        schema=env_result.schema_name,
+        environment_id=env_result.environment_id,
+        session_manager=session_manager,
+    )
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield {"client": client, "differ": differ, "env_id": env_result.environment_id}
+
+    environment_handler.drop_schema(env_result.schema_name)
+
+
+@pytest_asyncio.fixture
+async def slack_bench_client_with_differ(
+    test_user_id, core_isolation_engine, session_manager, environment_handler
+):
+    """Create AsyncClient and Differ for slack_bench_default environment."""
+    from httpx import AsyncClient, ASGITransport
+    from src.services.slack.api.methods import slack_endpoint
+    from starlette.routing import Route
+    from starlette.applications import Starlette
+    from src.platform.evaluationEngine.differ import Differ
+
+    env_result = core_isolation_engine.create_environment(
+        template_schema="slack_bench_default",
+        ttl_seconds=3600,
+        created_by=test_user_id,
+        impersonate_user_id="U01AGENBOT9",
+        impersonate_email="agent@example.com",
+    )
+
+    async def add_db_session(request, call_next):
+        with session_manager.with_session_for_environment(
+            env_result.environment_id
+        ) as session:
+            request.state.db_session = session
+            request.state.impersonate_user_id = "U01AGENBOT9"
+            request.state.impersonate_email = "agent@example.com"
+            response = await call_next(request)
+            return response
+
+    routes = [Route("/{endpoint}", slack_endpoint, methods=["GET", "POST"])]
+    app = Starlette(routes=routes, middleware=[])
+    app.middleware("http")(add_db_session)
+
+    transport = ASGITransport(app=app)
+
+    # Create differ for same environment
+    differ = Differ(
+        schema=env_result.schema_name,
+        environment_id=env_result.environment_id,
+        session_manager=session_manager,
+    )
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield {"client": client, "differ": differ, "env_id": env_result.environment_id}
+
+    environment_handler.drop_schema(env_result.schema_name)
+
+
+@pytest_asyncio.fixture
 async def slack_client_john(
     test_user_id, core_isolation_engine, session_manager, environment_handler
 ):

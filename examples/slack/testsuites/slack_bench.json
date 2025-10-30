@@ -6,8 +6,7 @@
   "ignore_fields": {
     "global": [
       "created_at",
-      "updated_at",
-      "message_id"
+      "updated_at"
     ]
   },
   "tests": [
@@ -16,7 +15,7 @@
       "name": "Send message to general channel",
       "prompt": "Send a 'hello' message to the general channel",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -39,7 +38,7 @@
       "name": "Send direct message",
       "prompt": "Send a DM to John saying 'Can we sync later?'",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -72,7 +71,7 @@
       "name": "Send direct message Artem, and Hubert (Create group conversation + send message)",
       "prompt": "Send a DM (group conversation not channel) to Artem and Hubert saying 'Hey, I've took a look at the presentation and I have some questions. Can you help me?'",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -105,7 +104,7 @@
       "name": "Create a new channel",
       "prompt": "Create a new channel called 'rl-project'",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -125,7 +124,7 @@
       "name": "Add user to channel",
       "prompt": "Add Morgan to the 'random' channel",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -148,7 +147,7 @@
       "name": "Create a new channel and add user to it ",
       "prompt": "Create a new channel called 'rl-project' and add Morgan to it",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -167,6 +166,9 @@
           "where": {
             "user_id": {
               "eq": "U05MORGAN23"
+            },
+            "channel_name": {
+              "i_contains": "rl-project"
             }
           },
           "expected_count": 1
@@ -178,7 +180,7 @@
       "name": "Reply in a thread",
       "prompt": "Reply 'Next monday.' to the most recent message in #general",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -204,7 +206,7 @@
       "name": "Reply in a thread",
       "prompt": "Reply 'Next monday.' to the to MCP deployment questions in #general",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -230,7 +232,7 @@
       "name": "Add emoji reaction",
       "prompt": "React with :thumbsup: to the question about lunch in #random",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -256,7 +258,7 @@
       "name": "Add emoji reaction",
       "prompt": "React with :thumbsup: to the newest message in #general",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -282,7 +284,7 @@
       "name": "Update channel topic",
       "prompt": "Change the #general channel topic to 'Weekly standup discussions'",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -308,7 +310,7 @@
       "name": "Edit existing message",
       "prompt": "Find the message that says 'Hey team' and edit it to say 'Hello everyone'",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U02JOHNDOE1",
       "assertions": [
         {
@@ -337,7 +339,7 @@
       "name": "Mention user in message",
       "prompt": "Post to #general mentioning Artem with text 'Please review the pull request'",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -360,7 +362,7 @@
       "name": "Multi-channel send",
       "prompt": "Send 'System maintenance tonight at 10pm' to both #general and #random",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -396,11 +398,11 @@
       "name": "Delete old message",
       "prompt": "Delete the message about deployment from #general",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
-          "diff_type": "deleted",
+          "diff_type": "removed",
           "entity": "messages",
           "where": {
             "channel_id": {
@@ -419,7 +421,7 @@
       "name": "Forward message to another channel",
       "prompt": "Copy the question from #random and also post it to #general",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -442,7 +444,7 @@
       "name": "Search messages in a channel and combine results into a new message as DM",
       "prompt": "Search for all messages (4 messages) in the #engineering channel related to login issues and combine them into a single new message as DM to Hubert. Do not change the meaning of the original messages just combine them.",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -507,7 +509,7 @@
       "name": "Search messages in multiple channels and combine results into a new message as DM",
       "prompt": "Search for all messages (6 messages) related to login issues and auth improvments. Combine them into a single new message as DM to Hubert. Do not change the meaning of the original messages just combine them.",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
@@ -550,7 +552,7 @@
       "name": "Search messages in multiple channels and edit message in a channel with the combined results",
       "prompt": "Search for all messages (6 messages) related to login issues and auth improvments. Edit the message in the #engineering channel you sent before without details about issues and add the details about the issues and improvements. Do not change the meaning/ woring of the original messages just combine them.",
       "type": "actionEval",
-      "seed_template": "slack_default",
+      "seed_template": "slack_bench_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
