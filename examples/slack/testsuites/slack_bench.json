@@ -546,22 +546,31 @@
       ]
     },
     {
-      "id": "test_17",
-      "name": "Search messages in multiple channels and edit a message in a channel with info about them",
-      "prompt": "Create a new channel called 'rl-project' and add Morgan to it",
+      "id": "test_19",
+      "name": "Search messages in multiple channels and edit message in a channel with the combined results",
+      "prompt": "Search for all messages (6 messages) related to login issues and auth improvments. Edit the message in the #engineering channel you sent before without details about issues and add the details about the issues and improvements. Do not change the meaning/ woring of the original messages just combine them.",
       "type": "actionEval",
       "seed_template": "slack_default",
       "impersonate_user_id": "U01AGENBOT9",
       "assertions": [
         {
-          "diff_type": "added",
-          "entity": "channels",
+          "diff_type": "changed",
+          "entity": "messages",
           "where": {
-            "channel_name": {
-              "i_contains": "rl-project"
+            "channel_id": {
+              "eq": "C03IJKL9012"
+            },
+            "message_id": {
+              "eq": "1700143200.000999"
             }
           },
-          "expected_count": 1
+          "expected_changes": {
+            "message_text": {
+              "to": {
+                "regex": "(?=.*'500 errors')(?=.*'invalid_grant')(?=.*'login rate limit')(?=.*'login endpoint')(?=.*'captcha')(?=.*'empty password')"
+              }
+            }
+          }
         }
       ]
     }
