@@ -15,9 +15,13 @@ pip install agent-diff
 ```python
 from agent_diff import AgentDiff
 
+# Self-hosted (defaults to http://localhost:8000)
+client = AgentDiff()
+
+# With authentication 
 client = AgentDiff(
     api_key="your-api-key",
-    base_url="https://api.yourdomain.com"
+    base_url="https://your-instance.com"
 )
 
 # 1. Create an isolated environment
@@ -82,7 +86,7 @@ custom = client.create_template_from_environment(
     service="slack",
     name="my_template",
     description="Custom template",
-    ownerScope="user" # user means only you can view the template 
+    visibility="private"  # "private" means only you can view the template
 )
 ```
 
