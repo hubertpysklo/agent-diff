@@ -8,12 +8,7 @@ class TestDSLSchemaValidation:
         compiler = DSLCompiler()
         spec = {
             "version": "0.1",
-            "assertions": [
-                {
-                    "diff_type": "added",
-                    "entity": "messages"
-                }
-            ]
+            "assertions": [{"diff_type": "added", "entity": "messages"}],
         }
         compiler.validate(spec)
 
@@ -21,34 +16,23 @@ class TestDSLSchemaValidation:
         compiler = DSLCompiler()
         spec = {
             "version": "999.0",
-            "assertions": [
-                {
-                    "diff_type": "added",
-                    "entity": "messages"
-                }
-            ]
+            "assertions": [{"diff_type": "added", "entity": "messages"}],
         }
         with pytest.raises(ValidationError):
             compiler.validate(spec)
 
-    def test_missing_version_rejected(self):
+    def test_missing_version_allowed(self):
+        """Version field is optional - validation should pass without it."""
         compiler = DSLCompiler()
-        spec = {
-            "assertions": [
-                {
-                    "diff_type": "added",
-                    "entity": "messages"
-                }
-            ]
-        }
-        with pytest.raises(ValidationError):
-            compiler.validate(spec)
+        spec = {"assertions": [{"diff_type": "added", "entity": "messages"}]}
+        # Should not raise - version is optional
+        compiler.validate(spec)
+        compiled = compiler.compile(spec)
+        assert compiled is not None
 
     def test_missing_assertions_rejected(self):
         compiler = DSLCompiler()
-        spec = {
-            "version": "0.1"
-        }
+        spec = {"version": "0.1"}
         with pytest.raises(ValidationError):
             compiler.validate(spec)
 
@@ -56,12 +40,7 @@ class TestDSLSchemaValidation:
         compiler = DSLCompiler()
         spec = {
             "version": "0.1",
-            "assertions": [
-                {
-                    "diff_type": "modified",
-                    "entity": "messages"
-                }
-            ]
+            "assertions": [{"diff_type": "modified", "entity": "messages"}],
         }
         with pytest.raises(ValidationError):
             compiler.validate(spec)
@@ -74,11 +53,9 @@ class TestDSLSchemaValidation:
                 {
                     "diff_type": "added",
                     "entity": "messages",
-                    "where": {
-                        "text": {"invalid_op": "value"}
-                    }
+                    "where": {"text": {"invalid_op": "value"}},
                 }
-            ]
+            ],
         }
         with pytest.raises(ValidationError):
             compiler.validate(spec)
@@ -91,11 +68,9 @@ class TestDSLSchemaValidation:
                 {
                     "diff_type": "changed",
                     "entity": "messages",
-                    "expected_changes": {
-                        "text": {"to": "new value"}
-                    }
+                    "expected_changes": {"text": {"to": "new value"}},
                 }
-            ]
+            ],
         }
         compiler.validate(spec)
 
@@ -103,13 +78,8 @@ class TestDSLSchemaValidation:
         compiler = DSLCompiler()
         spec = {
             "version": "0.1",
-            "assertions": [
-                {
-                    "diff_type": "added",
-                    "entity": "messages"
-                }
-            ],
-            "unknown_field": "should fail"
+            "assertions": [{"diff_type": "added", "entity": "messages"}],
+            "unknown_field": "should fail",
         }
         with pytest.raises(ValidationError):
             compiler.validate(spec)
@@ -124,12 +94,9 @@ class TestDSLNormalization:
                 {
                     "diff_type": "added",
                     "entity": "messages",
-                    "where": {
-                        "channel_id": "C123",
-                        "user_id": "U456"
-                    }
+                    "where": {"channel_id": "C123", "user_id": "U456"},
                 }
-            ]
+            ],
         }
         normalized = compiler.normalize(spec)
         assertion = normalized["assertions"][0]
@@ -145,12 +112,9 @@ class TestDSLNormalization:
                 {
                     "diff_type": "added",
                     "entity": "messages",
-                    "where": {
-                        "text": {"contains": "hello"},
-                        "count": 5
-                    }
+                    "where": {"text": {"contains": "hello"}, "count": 5},
                 }
-            ]
+            ],
         }
         normalized = compiler.normalize(spec)
         assertion = normalized["assertions"][0]
@@ -167,13 +131,10 @@ class TestDSLNormalization:
                     "diff_type": "changed",
                     "entity": "channels",
                     "expected_changes": {
-                        "topic": {
-                            "from": "old topic",
-                            "to": {"contains": "new"}
-                        }
-                    }
+                        "topic": {"from": "old topic", "to": {"contains": "new"}}
+                    },
                 }
-            ]
+            ],
         }
         normalized = compiler.normalize(spec)
         assertion = normalized["assertions"][0]
@@ -189,11 +150,9 @@ class TestDSLNormalization:
                 {
                     "diff_type": "changed",
                     "entity": "messages",
-                    "expected_changes": {
-                        "text": "Updated text"
-                    }
+                    "expected_changes": {"text": "Updated text"},
                 }
-            ]
+            ],
         }
         normalized = compiler.normalize(spec)
         assertion = normalized["assertions"][0]
@@ -206,15 +165,11 @@ class TestDSLNormalization:
             "version": "0.1",
             "ignore_fields": {
                 "global": ["created_at", "updated_at"],
-                "messages": ["id"]
+                "messages": ["id"],
             },
             "assertions": [
-                {
-                    "diff_type": "added",
-                    "entity": "messages",
-                    "ignore": ["temp_field"]
-                }
-            ]
+                {"diff_type": "added", "entity": "messages", "ignore": ["temp_field"]}
+            ],
         }
         normalized = compiler.normalize(spec)
 
@@ -232,11 +187,9 @@ class TestDSLCompile:
                 {
                     "diff_type": "added",
                     "entity": "messages",
-                    "where": {
-                        "channel_id": "C123"
-                    }
+                    "where": {"channel_id": "C123"},
                 }
-            ]
+            ],
         }
         compiled = compiler.compile(spec)
 
@@ -247,12 +200,7 @@ class TestDSLCompile:
         compiler = DSLCompiler()
         spec = {
             "version": "0.1",
-            "assertions": [
-                {
-                    "diff_type": "invalid_type",
-                    "entity": "messages"
-                }
-            ]
+            "assertions": [{"diff_type": "invalid_type", "entity": "messages"}],
         }
         with pytest.raises(ValidationError):
             compiler.compile(spec)

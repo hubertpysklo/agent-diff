@@ -74,19 +74,33 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 
 ### Sample Templates
 - **[slack_base](examples/slack/seeds/)** - Empty Slack workspace (no seed data)
-- **[slack_default](examples/slack/seeds/slack_default.json)** - Seeded with 3 users, 2 channels, 3 messages
+- **[slack_default](examples/slack/seeds/slack_bench_default.json)** - Seeded with sample users and messages for Slack Bench.
 
 ### Test Suites (DSL)
-- **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - 11 test cases covering message sending, channel ops, reactions, threading
+- **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - test cases covering message sending, channel ops, reactions, threading
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Check DSL docs on how it works.
 
 ## Services
 
-- **Slack** (Core API methods)
-- **Linear** (Not well tested)
-- Gmail, GitHub, Jira (TBD). 
+- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.MD`](backend/src/services/slack/READEME.md). A few examples:
 
-If you have requests for specific services + any feedback, email me at hubert@uni.minerva.edu
+  ```python
+  "chat.postMessage"  # post messages in seeded channels/DMs
+  "conversations.open"  # spin up IM/MPIM threads
+  "reactions.add"  # add emoji reactions to seeded messages
+  ```
+
+- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/READEME.MD`](backend/src/services/linear/READEME.MD). Sample operations:
+
+  ```python
+  "issues"            # query issues (list/pagination)
+  "issueCreate"       # mutation to create an issue
+  "projectUpdate"     # mutation to update project metadata
+  ```
+
+- Gmail, GitHub, Jira (TBD).
+
+If you have requests for specific services + any feedback, mail me at hubert@uni.minerva.edu
 
 ## Documentation
 
@@ -94,18 +108,4 @@ If you have requests for specific services + any feedback, email me at hubert@un
 - **[SDK README](sdk/agent_diff_pkg/README.md)** - Complete API reference
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Write test assertions
 - **[API Reference](docs/api-reference.md)** - REST API documentation
-
-
-## Contributing
-
-**Want to add a service?**
-1. Copy `backend/src/services/slack/` structure
-2. Implement your service's APIs
-3. Add seed data to `examples/yourservice/seeds/`
-4. Write tests in `backend/tests/integration/`
-
-**Want to add a testsuite?**
-1. Take a look at [Evaluation DSL](docs/evaluation-dsl.md)
-2. Copy examples/slack/testsuites/slack_bench.json and follow the pattern.
-
 

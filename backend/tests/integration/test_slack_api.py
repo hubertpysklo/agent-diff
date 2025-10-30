@@ -53,9 +53,7 @@ class TestChatPostMessage:
         assert data["channel"] == CHANNEL_RANDOM
 
     async def test_post_message_no_channel(self, slack_client: AsyncClient):
-        response = await slack_client.post(
-            "/chat.postMessage", json={"text": "Hello!"}
-        )
+        response = await slack_client.post("/chat.postMessage", json={"text": "Hello!"})
         assert response.status_code == 400
         data = response.json()
         assert data["ok"] is False
@@ -85,8 +83,6 @@ class TestChatPostMessage:
 
 @pytest.mark.asyncio
 class TestChatUpdate:
-    
-
     async def test_update_message_success(self, slack_client: AsyncClient):
         # Agent posted MESSAGE_1, so can update it
         response = await slack_client.post(
@@ -144,16 +140,12 @@ class TestChatUpdate:
 
 @pytest.mark.asyncio
 class TestChatDelete:
-    
-
     async def test_delete_message_success(self, slack_client: AsyncClient):
-
         post_response = await slack_client.post(
             "/chat.postMessage",
             json={"channel": CHANNEL_GENERAL, "text": "To be deleted"},
         )
         ts = post_response.json()["ts"]
-
 
         response = await slack_client.post(
             "/chat.delete", json={"channel": CHANNEL_GENERAL, "ts": ts}
@@ -185,8 +177,6 @@ class TestChatDelete:
 
 @pytest.mark.asyncio
 class TestConversationsCreate:
-    
-
     async def test_create_public_channel(self, slack_client: AsyncClient):
         response = await slack_client.post(
             "/conversations.create",
@@ -250,8 +240,6 @@ class TestConversationsCreate:
 
 @pytest.mark.asyncio
 class TestConversationsList:
-    
-
     async def test_list_conversations_default(self, slack_client: AsyncClient):
         response = await slack_client.get("/conversations.list")
         assert response.status_code == 200
@@ -269,13 +257,9 @@ class TestConversationsList:
         assert len(data["channels"]) == 1
         assert data["response_metadata"]["next_cursor"] != ""
 
-    async def test_list_conversations_exclude_archived(
-        self, slack_client: AsyncClient
-    ):
+    async def test_list_conversations_exclude_archived(self, slack_client: AsyncClient):
         """Test excluding archived channels."""
-        response = await slack_client.get(
-            "/conversations.list?exclude_archived=true"
-        )
+        response = await slack_client.get("/conversations.list?exclude_archived=true")
         assert response.status_code == 200
         data = response.json()
         assert data["ok"] is True
@@ -283,21 +267,15 @@ class TestConversationsList:
         assert all(not ch["is_archived"] for ch in data["channels"])
 
     async def test_list_conversations_filter_types(self, slack_client: AsyncClient):
-        response = await slack_client.get(
-            "/conversations.list?types=public_channel"
-        )
+        response = await slack_client.get("/conversations.list?types=public_channel")
         assert response.status_code == 200
         data = response.json()
         assert data["ok"] is True
-        assert all(
-            ch["is_channel"] and not ch["is_private"] for ch in data["channels"]
-        )
+        assert all(ch["is_channel"] and not ch["is_private"] for ch in data["channels"])
 
 
 @pytest.mark.asyncio
 class TestConversationsHistory:
-    
-
     async def test_get_channel_history(self, slack_client: AsyncClient):
         response = await slack_client.get(
             f"/conversations.history?channel={CHANNEL_GENERAL}"
@@ -349,8 +327,6 @@ class TestConversationsHistory:
 
 @pytest.mark.asyncio
 class TestConversationsJoin:
-    
-
     async def test_join_channel_already_member(self, slack_client: AsyncClient):
         response = await slack_client.post(
             "/conversations.join", json={"channel": CHANNEL_GENERAL}
@@ -390,8 +366,6 @@ class TestConversationsJoin:
 
 @pytest.mark.asyncio
 class TestConversationsInvite:
-    
-
     async def test_invite_user_to_channel(self, slack_client: AsyncClient):
         # Create a private channel
         create_resp = await slack_client.post(
@@ -456,8 +430,6 @@ class TestConversationsInvite:
 
 @pytest.mark.asyncio
 class TestConversationsOpen:
-    
-
     async def test_open_dm_channel(self, slack_client: AsyncClient):
         response = await slack_client.post(
             "/conversations.open", json={"users": USER_JOHN}
@@ -469,10 +441,14 @@ class TestConversationsOpen:
         assert "id" in data["channel"]
 
     async def test_open_dm_returns_existing(self, slack_client: AsyncClient):
-        resp1 = await slack_client.post("/conversations.open", json={"users": USER_JOHN})
+        resp1 = await slack_client.post(
+            "/conversations.open", json={"users": USER_JOHN}
+        )
         channel_id_1 = resp1.json()["channel"]["id"]
 
-        resp2 = await slack_client.post("/conversations.open", json={"users": USER_JOHN})
+        resp2 = await slack_client.post(
+            "/conversations.open", json={"users": USER_JOHN}
+        )
         channel_id_2 = resp2.json()["channel"]["id"]
 
         assert channel_id_1 == channel_id_2
@@ -507,8 +483,6 @@ class TestConversationsOpen:
 
 @pytest.mark.asyncio
 class TestConversationsInfo:
-    
-
     async def test_get_channel_info(self, slack_client: AsyncClient):
         response = await slack_client.get(
             f"/conversations.info?channel={CHANNEL_GENERAL}"
@@ -520,9 +494,7 @@ class TestConversationsInfo:
         assert data["channel"]["id"] == CHANNEL_GENERAL
         assert data["channel"]["name"] == "general"
 
-    async def test_get_channel_info_with_num_members(
-        self, slack_client: AsyncClient
-    ):
+    async def test_get_channel_info_with_num_members(self, slack_client: AsyncClient):
         """Test include_num_members parameter."""
         response = await slack_client.get(
             f"/conversations.info?channel={CHANNEL_GENERAL}&include_num_members=true"
@@ -547,9 +519,7 @@ class TestConversationsInfo:
         assert data["channel"]["is_im"] is True
 
     async def test_get_info_channel_not_found(self, slack_client: AsyncClient):
-        response = await slack_client.get(
-            "/conversations.info?channel=C_NONEXISTENT"
-        )
+        response = await slack_client.get("/conversations.info?channel=C_NONEXISTENT")
         assert response.status_code == 400
         data = response.json()
         assert data["ok"] is False
@@ -558,8 +528,6 @@ class TestConversationsInfo:
 
 @pytest.mark.asyncio
 class TestConversationsArchive:
-    
-
     async def test_archive_channel_success(self, slack_client: AsyncClient):
         # Create a test channel
         create_resp = await slack_client.post(
@@ -626,8 +594,6 @@ class TestConversationsArchive:
 
 @pytest.mark.asyncio
 class TestConversationsRename:
-    
-
     async def test_rename_channel_success(self, slack_client: AsyncClient):
         create_resp = await slack_client.post(
             "/conversations.create", json={"name": "test-old-name"}
@@ -671,8 +637,6 @@ class TestConversationsRename:
 
 @pytest.mark.asyncio
 class TestConversationsSetTopic:
-    
-
     async def test_set_topic_success(self, slack_client: AsyncClient):
         response = await slack_client.post(
             "/conversations.setTopic",
@@ -694,8 +658,6 @@ class TestConversationsSetTopic:
 
 @pytest.mark.asyncio
 class TestConversationsKickLeave:
-    
-
     async def test_leave_channel_success(self, slack_client: AsyncClient):
         # Create and join a test channel
         create_resp = await slack_client.post(
@@ -761,8 +723,6 @@ class TestConversationsKickLeave:
 
 @pytest.mark.asyncio
 class TestConversationsMembers:
-    
-
     async def test_get_channel_members(self, slack_client: AsyncClient):
         response = await slack_client.get(
             f"/conversations.members?channel={CHANNEL_GENERAL}"
@@ -786,12 +746,14 @@ class TestConversationsMembers:
 
 @pytest.mark.asyncio
 class TestReactions:
-    
-
     async def test_add_reaction_success(self, slack_client: AsyncClient):
         response = await slack_client.post(
             "/reactions.add",
-            json={"name": "thumbsup", "channel": CHANNEL_GENERAL, "timestamp": MESSAGE_1},
+            json={
+                "name": "thumbsup",
+                "channel": CHANNEL_GENERAL,
+                "timestamp": MESSAGE_1,
+            },
         )
         assert response.status_code == 200
         data = response.json()
@@ -800,7 +762,11 @@ class TestReactions:
     async def test_add_reaction_with_colons(self, slack_client: AsyncClient):
         response = await slack_client.post(
             "/reactions.add",
-            json={"name": ":heart:", "channel": CHANNEL_GENERAL, "timestamp": MESSAGE_1},
+            json={
+                "name": ":heart:",
+                "channel": CHANNEL_GENERAL,
+                "timestamp": MESSAGE_1,
+            },
         )
         assert response.status_code == 200
         data = response.json()
@@ -839,11 +805,11 @@ class TestReactions:
         # First add a reaction
         await slack_client.post(
             "/reactions.add",
-            json={"name": "rocket", "channel": CHANNEL_GENERAL, "timestamp": MESSAGE_3},
+            json={"name": "rocket", "channel": CHANNEL_RANDOM, "timestamp": MESSAGE_3},
         )
 
         response = await slack_client.get(
-            f"/reactions.get?channel={CHANNEL_GENERAL}&timestamp={MESSAGE_3}"
+            f"/reactions.get?channel={CHANNEL_RANDOM}&timestamp={MESSAGE_3}"
         )
         assert response.status_code == 200
         data = response.json()
@@ -877,8 +843,6 @@ class TestReactions:
 
 @pytest.mark.asyncio
 class TestUsers:
-    
-
     async def test_get_user_info(self, slack_client: AsyncClient):
         response = await slack_client.get(f"/users.info?user={USER_AGENT}")
         assert response.status_code == 200
@@ -923,8 +887,6 @@ class TestUsers:
 
 @pytest.mark.asyncio
 class TestCompositeScenario:
-    
-
     async def test_full_message_lifecycle(self, slack_client: AsyncClient):
         post_resp = await slack_client.post(
             "/chat.postMessage",
@@ -969,9 +931,7 @@ class TestCompositeScenario:
         )
         assert delete_resp.status_code == 200
 
-    async def test_channel_creation_and_collaboration(
-        self, slack_client: AsyncClient
-    ):
+    async def test_channel_creation_and_collaboration(self, slack_client: AsyncClient):
         """Test: create channel → invite users → post messages → set topic."""
         # 1. Create a new channel
         create_resp = await slack_client.post(
@@ -999,7 +959,6 @@ class TestCompositeScenario:
         )
         assert msg_resp.status_code == 200
 
-
         members_resp = await slack_client.get(
             f"/conversations.members?channel={channel_id}"
         )
@@ -1021,9 +980,7 @@ class TestCompositeScenario:
         )
         assert msg_resp.status_code == 200
 
-        history_resp = await slack_client.get(
-            f"/conversations.history?channel={dm_id}"
-        )
+        history_resp = await slack_client.get(f"/conversations.history?channel={dm_id}")
         assert history_resp.status_code == 200
         messages = history_resp.json()["messages"]
         assert len(messages) >= 1
