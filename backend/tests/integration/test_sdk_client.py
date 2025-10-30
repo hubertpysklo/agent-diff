@@ -915,7 +915,7 @@ class TestTemplateCreation:
     """Test SDK template creation from environments."""
 
     def test_create_template_from_environment_success(
-        self, sdk_client, session_manager, test_user_id, cleanup_test_environments
+        self, sdk_client, session_manager, cleanup_test_environments
     ):
         """Create template from environment should register new template."""
         from agent_diff.models import (
@@ -939,7 +939,7 @@ class TestTemplateCreation:
             service="slack",
             name="my_custom_template",
             description="Custom template from test",
-            visibility="private",
+            ownerScope="user",
             version="v1",
         )
         tmpl_resp = sdk_client.create_template_from_environment(tmpl_req)
@@ -957,8 +957,7 @@ class TestTemplateCreation:
             )
             assert tmpl.name == "my_custom_template"
             assert tmpl.service == "slack"
-            assert tmpl.visibility == "private"
-            assert tmpl.owner_id == test_user_id
+            assert tmpl.owner_scope == "user"
             assert tmpl.description == "Custom template from test"
             assert tmpl.kind == "schema"
             assert tmpl.location is not None

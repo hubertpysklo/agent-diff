@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime
 
+from pydantic import ValidationError
 from starlette import status
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -25,6 +27,7 @@ from src.platform.api.models import (
     DeleteEnvResponse,
     TestSuiteSummary,
     TestSuiteDetail,
+    Principal,
     TemplateEnvironmentSummary,
     TemplateEnvironmentListResponse,
     TemplateEnvironmentDetail,
@@ -36,13 +39,14 @@ from src.platform.api.models import (
     CreateTestsResponse,
 )
 from src.platform.api.auth import (
-    require_resource_access,
+    require_resource_access_with_org,
     check_template_access,
 )
 from src.platform.db.schema import (
     Test,
     TestRun,
     RunTimeEnvironment,
+    OrganizationMembership,
     TemplateEnvironment,
 )
 from src.platform.evaluationEngine.core import CoreEvaluationEngine
@@ -50,43 +54,36 @@ from src.platform.evaluationEngine.differ import Differ
 from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.testManager.core import CoreTestManager
-from src.platform.isolationEngine.templateManager import TemplateManager
 from src.platform.api.resolvers import (
+    resolve_template_schema,
+    list_templates_for_principal,
     require_environment_access,
+    resolve_init_template,
     require_run_access,
     parse_uuid,
+    resolve_owner_ids,
     resolve_and_validate_test_items,
     to_bulk_test_items,
 )
-from src.platform.api.errors import (
-    bad_request,
-    not_found,
-    unauthorized,
-    parse_request_body,
-)
+from src.platform.api.errors import bad_request, not_found, unauthorized
 
 logger = logging.getLogger(__name__)
 
 
-def _principal_id_from_request(request: Request) -> str:
-    """Extract principal_id from request state."""
-    principal_id = getattr(request.state, "principal_id", None)
-    if not principal_id:
-        raise PermissionError("missing principal_id context")
-    return principal_id
+def _principal_from_request(request: Request) -> Principal:
+    principal = getattr(request.state, "principal", None)
+    if not principal:
+        raise PermissionError("missing principal context")
+    return principal
 
 
 async def list_environment_templates(
     request: Request,
 ) -> JSONResponse:
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
-    template_manager: TemplateManager = request.app.state.templateManager
+    principal = _principal_from_request(request)
 
-    templates = template_manager.list_templates(session, principal_id)
+    templates = list_templates_for_principal(session, principal)
 
     response = TemplateEnvironmentListResponse(
         templates=[
@@ -107,13 +104,11 @@ async def get_environment_template(
 ) -> JSONResponse:
     template_id = request.path_params["template_id"]
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
 
-    parsed_id = parse_uuid(template_id)
-    if parsed_id is None:
+    try:
+        parsed_id = parse_uuid(template_id)
+    except ValueError:
         return bad_request("invalid template id")
 
     template = (
@@ -125,7 +120,7 @@ async def get_environment_template(
         return not_found("template not found")
 
     try:
-        check_template_access(principal_id, template)
+        check_template_access(principal, template)
     except PermissionError:
         return unauthorized()
 
@@ -142,18 +137,18 @@ async def get_environment_template(
 
 async def create_template_from_environment(request: Request) -> JSONResponse:
     try:
-        payload = await parse_request_body(request, CreateTemplateFromEnvRequest)
-    except ValueError as e:
-        return bad_request(str(e))
+        payload = CreateTemplateFromEnvRequest(**(await request.json()))
+    except (json.JSONDecodeError, ValidationError) as e:
+        return bad_request(
+            "invalid JSON" if isinstance(e, json.JSONDecodeError) else str(e)
+        )
 
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
     session = request.state.db_session
 
-    env_uuid = parse_uuid(payload.environmentId)
-    if env_uuid is None:
+    try:
+        env_uuid = parse_uuid(payload.environmentId)
+    except ValueError:
         return bad_request("invalid environment id")
 
     env = (
@@ -163,11 +158,20 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
     )
     if env is None:
         return not_found("environment not found")
-
+    creator_org_ids = [
+        m.organization_id
+        for m in session.query(OrganizationMembership).filter_by(user_id=env.created_by)
+    ]
     try:
-        require_resource_access(principal_id, env.created_by)
+        require_resource_access_with_org(principal, env.created_by, creator_org_ids)
     except PermissionError:
         return unauthorized()
+
+    try:
+        owner_user_id, owner_org_id = resolve_owner_ids(principal, payload.ownerScope)
+    except ValueError as e:
+        logger.warning(f"Validation error in create_template_from_environment: {e}")
+        return bad_request(str(e))
 
     core: CoreIsolationEngine = request.app.state.coreIsolationEngine
     try:
@@ -176,8 +180,9 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
             service=payload.service.value,
             name=payload.name,
             description=payload.description,
-            visibility=payload.visibility.value,
-            owner_id=principal_id,
+            owner_scope=payload.ownerScope.value,
+            owner_user_id=owner_user_id,
+            owner_org_id=owner_org_id,
             version=payload.version or "v1",
         )
     except ValueError as e:
@@ -196,18 +201,16 @@ async def create_template_from_environment(request: Request) -> JSONResponse:
 async def get_test(request: Request) -> JSONResponse:
     test_id = request.path_params["test_id"]
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
 
-    test_uuid = parse_uuid(test_id)
-    if test_uuid is None:
+    try:
+        test_uuid = parse_uuid(test_id)
+    except ValueError:
         return bad_request("invalid test id")
 
     try:
-        test = core_tests.get_test(session, principal_id, str(test_uuid))
+        test = core_tests.get_test(session, principal, str(test_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
@@ -228,20 +231,18 @@ async def get_test(request: Request) -> JSONResponse:
 
 async def create_test_suite(request: Request) -> JSONResponse:
     try:
-        body = await parse_request_body(request, CreateTestSuiteRequest)
-    except ValueError as e:
-        return bad_request(str(e))
+        body = CreateTestSuiteRequest(**(await request.json()))
+    except (json.JSONDecodeError, ValidationError) as e:
+        return bad_request(
+            "invalid JSON" if isinstance(e, json.JSONDecodeError) else str(e)
+        )
 
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
-    template_manager: TemplateManager = request.app.state.templateManager
     suite = core_tests.create_test_suite(
         session,
-        principal_id,
+        principal,
         name=body.name,
         description=body.description,
         visibility=Visibility(body.visibility),
@@ -249,12 +250,12 @@ async def create_test_suite(request: Request) -> JSONResponse:
     if body.tests:
         for t in body.tests:
             try:
-                schema = template_manager.resolve_template_schema(
-                    session, principal_id, str(t.environmentTemplate)
+                schema = resolve_template_schema(
+                    session, principal, str(t.environmentTemplate)
                 )
                 core_tests.create_test(
                     session,
-                    principal_id,
+                    principal,
                     test_suite_id=str(suite.id),
                     name=t.name,
                     prompt=t.prompt,
@@ -282,36 +283,9 @@ async def create_test_suite(request: Request) -> JSONResponse:
 
 async def list_test_suites(request: Request) -> JSONResponse:
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
-
-    name = request.query_params.get("name")
-    suite_id = request.query_params.get("id")
-    visibility_str = request.query_params.get("visibility")
-
-    if suite_id:
-        parsed_suite_id = parse_uuid(suite_id)
-        if parsed_suite_id is None:
-            return bad_request(f"invalid id: {suite_id}")
-        suite_id = str(parsed_suite_id)
-
-    visibility = None
-    if visibility_str:
-        try:
-            visibility = Visibility(visibility_str).value
-        except ValueError:
-            return bad_request(f"invalid visibility: {visibility_str}")
-
-    suites = core_tests.list_test_suites(
-        session,
-        principal_id,
-        name=name,
-        suite_id=suite_id,
-        visibility=visibility,
-    )
+    suites = core_tests.list_test_suites(session, principal)
     response = TestSuiteListResponse(
         testSuites=[
             TestSuiteSummary(
@@ -328,15 +302,12 @@ async def list_test_suites(request: Request) -> JSONResponse:
 async def get_test_suite(request: Request) -> JSONResponse:
     suite_id = request.path_params["suite_id"]
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
     expand_param = request.query_params.get("expand", "")
     include_tests = "tests" in {p.strip() for p in expand_param.split(",") if p}
     try:
-        suite, tests = core_tests.get_test_suite(session, principal_id, suite_id)
+        suite, tests = core_tests.get_test_suite(session, principal, suite_id)
     except PermissionError:
         return unauthorized()
     if suite is None:
@@ -371,20 +342,21 @@ async def get_test_suite(request: Request) -> JSONResponse:
 
 async def init_environment(request: Request) -> JSONResponse:
     try:
-        body = await parse_request_body(request, InitEnvRequestBody)
-    except ValueError as e:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return bad_request("invalid JSON in request body")
+
+    try:
+        body = InitEnvRequestBody(**data)
+    except ValidationError as e:
         return bad_request(str(e))
 
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
-    template_manager: TemplateManager = request.app.state.templateManager
+    principal = _principal_from_request(request)
 
     try:
-        schema, selected_template_service = template_manager.resolve_init_template(
-            session, principal_id, body
+        schema, selected_template_service = resolve_init_template(
+            session, principal, body
         )
     except PermissionError:
         logger.warning("Unauthorized template access in init_environment")
@@ -404,7 +376,7 @@ async def init_environment(request: Request) -> JSONResponse:
         result = core.create_environment(
             template_schema=schema,
             ttl_seconds=body.ttlSeconds or 1800,
-            created_by=principal_id,
+            created_by=principal.user_id,
             impersonate_user_id=body.impersonateUserId,
             impersonate_email=body.impersonateEmail,
         )
@@ -430,20 +402,16 @@ async def init_environment(request: Request) -> JSONResponse:
 async def create_tests_in_suite(request: Request) -> JSONResponse:
     suite_id = request.path_params["suite_id"]
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
-    template_manager: TemplateManager = request.app.state.templateManager
 
     try:
-        body = await parse_request_body(request, CreateTestsRequest)
-    except ValueError as e:
+        body = CreateTestsRequest(**(await request.json()))
+    except (json.JSONDecodeError, ValidationError) as e:
         return bad_request(str(e))
 
     try:
-        suite, _ = core_tests.get_test_suite(session, principal_id, suite_id)
+        suite, _ = core_tests.get_test_suite(session, principal, suite_id)
     except PermissionError:
         return unauthorized()
     if suite is None:
@@ -452,12 +420,11 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
     try:
         resolved_schemas = resolve_and_validate_test_items(
             session,
-            principal_id,
+            principal,
             body.tests,
             str(body.defaultEnvironmentTemplate)
             if body.defaultEnvironmentTemplate
             else None,
-            template_manager,
         )
     except ValueError as e:
         logger.warning(f"Test item resolution/validation failed: {e}")
@@ -469,7 +436,7 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
     try:
         created_tests = core_tests.create_tests_bulk(
             session,
-            principal_id,
+            principal,
             test_suite_id=str(suite.id),
             items=to_bulk_test_items(body),
             resolved_schemas=resolved_schemas,
@@ -502,27 +469,30 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
 
 async def start_run(request: Request) -> JSONResponse:
     try:
-        body = await parse_request_body(request, StartRunRequest)
-    except ValueError as e:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return bad_request("invalid JSON in request body")
+
+    try:
+        body = StartRunRequest(**data)
+    except ValidationError as e:
         return bad_request(str(e))
 
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
 
     if body.testId:
         test = session.query(Test).filter(Test.id == body.testId).one_or_none()
         if test is None:
             return not_found("test not found")
 
-    env_uuid = parse_uuid(body.envId)
-    if env_uuid is None:
+    try:
+        env_uuid = parse_uuid(body.envId)
+    except ValueError:
         return bad_request("invalid environment id")
 
     try:
-        _ = require_environment_access(session, principal_id, str(env_uuid))
+        _ = require_environment_access(session, principal, str(env_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
@@ -544,7 +514,7 @@ async def start_run(request: Request) -> JSONResponse:
         status="running",
         result=None,
         before_snapshot_suffix=before_result.suffix,
-        created_by=principal_id,
+        created_by=principal.user_id,
         created_at=datetime.now(),
         updated_at=datetime.now(),
     )
@@ -567,22 +537,25 @@ async def start_run(request: Request) -> JSONResponse:
 
 async def evaluate_run(request: Request) -> JSONResponse:
     try:
-        body = await parse_request_body(request, EndRunRequest)
-    except ValueError as e:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return bad_request("invalid JSON in request body")
+
+    try:
+        body = EndRunRequest(**data)
+    except ValidationError as e:
         return bad_request(str(e))
 
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
 
-    run_uuid = parse_uuid(body.runId)
-    if run_uuid is None:
+    try:
+        run_uuid = parse_uuid(body.runId)
+    except ValueError:
         return bad_request("invalid run id")
 
     try:
-        run = require_run_access(session, principal_id, str(run_uuid))
+        run = require_run_access(session, principal, str(run_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
@@ -654,17 +627,15 @@ async def evaluate_run(request: Request) -> JSONResponse:
 async def get_run_result(request: Request) -> JSONResponse:
     run_id = request.path_params["run_id"]
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
 
-    run_uuid = parse_uuid(run_id)
-    if run_uuid is None:
+    try:
+        run_uuid = parse_uuid(run_id)
+    except ValueError:
         return bad_request("invalid run id")
 
     try:
-        run = require_run_access(session, principal_id, str(run_uuid))
+        run = require_run_access(session, principal, str(run_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:
@@ -685,15 +656,17 @@ async def get_run_result(request: Request) -> JSONResponse:
 
 async def diff_run(request: Request) -> JSONResponse:
     try:
-        body = await parse_request_body(request, DiffRunRequest)
-    except ValueError as e:
+        data = await request.json()
+    except json.JSONDecodeError:
+        return bad_request("invalid JSON in request body")
+
+    try:
+        body = DiffRunRequest(**data)
+    except ValidationError as e:
         return bad_request(str(e))
 
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
 
     core_eval: CoreEvaluationEngine = request.app.state.coreEvaluationEngine
 
@@ -703,11 +676,12 @@ async def diff_run(request: Request) -> JSONResponse:
         return bad_request("provide exactly one of runId or (envId and beforeSuffix)")
 
     if body.runId:
-        run_uuid = parse_uuid(body.runId)
-        if run_uuid is None:
+        try:
+            run_uuid = parse_uuid(body.runId)
+        except ValueError:
             return bad_request("invalid run id")
         try:
-            run = require_run_access(session, principal_id, str(run_uuid))
+            run = require_run_access(session, principal, str(run_uuid))
         except ValueError as e:
             return not_found(str(e))
         except PermissionError:
@@ -721,11 +695,12 @@ async def diff_run(request: Request) -> JSONResponse:
         if before_suffix is None:
             return bad_request("before snapshot missing for run")
     else:
-        env_uuid = parse_uuid(body.envId or "")
-        if env_uuid is None:
+        try:
+            env_uuid = parse_uuid(body.envId or "")
+        except ValueError:
             return bad_request("invalid environment id")
         try:
-            env = require_environment_access(session, principal_id, str(env_uuid))
+            env = require_environment_access(session, principal, str(env_uuid))
         except ValueError as e:
             return not_found(str(e))
         except PermissionError:
@@ -751,17 +726,15 @@ async def diff_run(request: Request) -> JSONResponse:
 async def delete_environment(request: Request) -> JSONResponse:
     env_id = request.path_params["env_id"]
     session = request.state.db_session
-    try:
-        principal_id = _principal_id_from_request(request)
-    except PermissionError:
-        return unauthorized()
+    principal = _principal_from_request(request)
 
-    env_uuid = parse_uuid(env_id)
-    if env_uuid is None:
+    try:
+        env_uuid = parse_uuid(env_id)
+    except ValueError:
         return bad_request("invalid environment id")
 
     try:
-        env = require_environment_access(session, principal_id, str(env_uuid))
+        env = require_environment_access(session, principal, str(env_uuid))
     except ValueError as e:
         return not_found(str(e))
     except PermissionError:

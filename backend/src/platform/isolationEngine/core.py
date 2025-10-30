@@ -72,8 +72,9 @@ class CoreIsolationEngine:
         service: str,
         name: str,
         description: str | None = None,
-        visibility: str = "private",
-        owner_id: str | None = None,
+        owner_scope: str = "user",
+        owner_user_id: str | None = None,
+        owner_org_id: str | None = None,
         version: str = "v1",
     ) -> TemplateCreateResult:
         rte = self.environment_handler.require_environment(environment_id)
@@ -92,9 +93,10 @@ class CoreIsolationEngine:
             service=service,
             name=name,
             version=version,
-            visibility=visibility,
+            owner_scope=owner_scope,
             description=description,
-            owner_id=owner_id,
+            owner_org_id=owner_org_id,
+            owner_user_id=owner_user_id,
             kind="schema",
             location=target_schema,
         )
