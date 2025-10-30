@@ -76,6 +76,16 @@
       "role": "member"
     },
     {
+      "user_id": "U04OMER23",
+      "team_id": "T01WORKSPACE",
+      "role": "member"
+    },
+    {
+      "user_id": "U05MORGAN23",
+      "team_id": "T01WORKSPACE",
+      "role": "member"
+    },
+    {
       "user_id": "U03ROBERT23",
       "team_id": "T01WORKSPACE",
       "role": "admin"

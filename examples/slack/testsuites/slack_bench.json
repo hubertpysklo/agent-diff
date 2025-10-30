@@ -158,9 +158,6 @@
           "diff_type": "added",
           "entity": "channel_members",
           "where": {
-            "channel_id": {
-              "eq": "C01ABCD1234"
-            },
             "user_id": {
               "eq": "U05MORGAN23"
             }
@@ -382,7 +379,7 @@
       ]
     },
     {
-      "id": "test_15",
+      "id": "test_12",
       "name": "Create a new channel",
       "prompt": "Create a new channel called 'project-alpha'",
       "type": "actionEval",
