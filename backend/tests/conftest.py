@@ -77,33 +77,9 @@ def test_client(session_manager):
 
 
 @pytest.fixture(scope="session")
-def test_user_id(session_manager):
-    """Get or create a test user and return their ID."""
-    from src.platform.db.schema import User
-    from datetime import datetime
-
-    with session_manager.with_meta_session() as session:
-        # Try to find existing dev user
-        user = session.query(User).filter(User.email == "dev@localhost").first()
-        if user:
-            return user.id
-
-        # Create test user if not exists
-        user_id = str(uuid4())
-        test_user = User(
-            id=user_id,
-            email="test@test.com",
-            username="test",
-            password="test",
-            name="Test User",
-            is_platform_admin=True,
-            is_organization_admin=True,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-        )
-        session.add(test_user)
-        session.commit()
-        return user_id
+def test_user_id():
+    """Return a test principal ID for tests (matches dev mode default)."""
+    return "dev-user"
 
 
 @pytest.fixture(scope="function")
@@ -289,18 +265,9 @@ def create_env(core_isolation_engine):
 
 
 @pytest.fixture(scope="session")
-def test_api_key(session_manager, test_user_id):
-    """Generate API key for SDK integration tests."""
-    from src.platform.api.auth import KeyHandler
-
-    key_handler = KeyHandler(session_manager)
-    result = key_handler.create_api_key(
-        user_id=test_user_id,
-        days_valid=1,
-        is_platform_admin=True,
-        is_organization_admin=True,
-    )
-    return result.token
+def test_api_key(test_user_id):
+    """Return dummy API key for SDK integration tests (dev mode doesn't validate)."""
+    return "test-api-key"
 
 
 @pytest.fixture(scope="function")
@@ -313,7 +280,7 @@ def cleanup_test_templates(session_manager, test_user_id):
     # Delete all user-owned templates created during test
     with session_manager.with_meta_session() as s:
         s.query(TemplateEnvironment).filter(
-            TemplateEnvironment.owner_user_id == test_user_id
+            TemplateEnvironment.owner_id == test_user_id
         ).delete()
         s.commit()
 

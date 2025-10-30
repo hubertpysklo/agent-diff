@@ -7,12 +7,6 @@ from src.platform.evaluationEngine.assertion import AssertionEngine
 from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.session import SessionManager
 from uuid import uuid4
-from src.platform.evaluationEngine.testmanager import TestManager, TestSpec
-
-
-"""
-To do refractor TestManager from EvaluationEngine to services.
-"""
 
 
 @dataclass
@@ -26,7 +20,6 @@ class CoreEvaluationEngine:
     def __init__(self, sessions: SessionManager):
         self.sessions = sessions
         self.compiler = DSLCompiler()
-        self.test_manager = TestManager(self.compiler, self.sessions)
 
     @staticmethod
     def generate_suffix(prefix: str) -> str:
@@ -34,12 +27,6 @@ class CoreEvaluationEngine:
 
     def compile(self, spec: dict[str, Any]) -> dict[str, Any]:
         return self.compiler.compile(spec)
-
-    def add_test(self, test: TestSpec) -> None:
-        return self.test_manager.add_test(test)
-
-    def get_test(self, test_id: str):
-        return self.test_manager.get_test(test_id)
 
     def take_snapshot(
         self,

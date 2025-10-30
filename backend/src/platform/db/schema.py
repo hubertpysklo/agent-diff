@@ -10,64 +10,14 @@ class PlatformBase(DeclarativeBase):
     pass
 
 
-class Organization(PlatformBase):
-    __tablename__ = "organizations"
-    __table_args__ = ({"schema": "public"},)
-    id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now, nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now, nullable=False
-    )
-
-
-class User(PlatformBase):
-    __tablename__ = "users"
-    __table_args__ = ({"schema": "public"},)
-    id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    password: Mapped[str] = mapped_column(String(255), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    is_platform_admin: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false"
-    )
-    is_organization_admin: Mapped[bool] = mapped_column(
-        Boolean, default=False, server_default="false"
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now, nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now, nullable=False
-    )
-
-
-class OrganizationMembership(PlatformBase):
-    __tablename__ = "organization_memberships"
-    __table_args__ = ({"schema": "public"},)
-    user_id: Mapped[str] = mapped_column(
-        ForeignKey("public.users.id"), primary_key=True
-    )
-    organization_id: Mapped[str] = mapped_column(
-        ForeignKey("public.organizations.id"), primary_key=True
-    )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-
-
 class TemplateEnvironment(PlatformBase):
     __tablename__ = "environments"
     __table_args__ = (
         UniqueConstraint(
             "service",
-            "owner_scope",
-            "owner_org_id",
-            "owner_user_id",
             "name",
             "version",
+            "owner_id",
             name="uq_environments_identity",
         ),
         {"schema": "public"},
@@ -81,16 +31,15 @@ class TemplateEnvironment(PlatformBase):
     )  # 'linear', 'slack', …
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     version: Mapped[str] = mapped_column(String(32), nullable=False, default="v1")
-    owner_scope: Mapped[str] = mapped_column(
-        Enum("public", "org", "user", name="owner_scope"),
+    visibility: Mapped[str] = mapped_column(
+        Enum("public", "private", name="template_visibility"),
         nullable=False,
         default="public",
     )
     description: Mapped[str | None] = mapped_column(
         Text, nullable=True
-    )  # Run migrations remember
-    owner_org_id: Mapped[str | None] = mapped_column(nullable=True)
-    owner_user_id: Mapped[str | None] = mapped_column(nullable=True)
+    )
+    owner_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     kind: Mapped[str] = mapped_column(
         Enum("schema", "artifact", "jsonb", name="template_kind"),
         nullable=False,
@@ -132,9 +81,7 @@ class RunTimeEnvironment(PlatformBase):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     max_idle_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_by: Mapped[str] = mapped_column(
-        ForeignKey("public.users.id"), nullable=False
-    )
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.now, nullable=False
     )
@@ -143,22 +90,6 @@ class RunTimeEnvironment(PlatformBase):
     )
     impersonate_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     impersonate_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-
-class ApiKey(PlatformBase):
-    __tablename__ = "api_keys"
-    __table_args__ = ({"schema": "public"},)
-    id: Mapped[PyUUID] = mapped_column(
-        PgUUID(as_uuid=True), primary_key=True, default=uuid4
-    )
-    key_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    key_salt: Mapped[str] = mapped_column(String(255), nullable=False)
-    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
-    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
 
 
 class Diff(PlatformBase):
@@ -206,7 +137,7 @@ class TestSuite(PlatformBase):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    owner: Mapped[str] = mapped_column(ForeignKey("public.users.id"), nullable=False)
+    owner: Mapped[str] = mapped_column(String(255), nullable=False)
     visibility: Mapped[str] = mapped_column(
         Enum("public", "private", name="test_suite_visibility"),
         nullable=False,
@@ -266,8 +197,6 @@ class TestRun(PlatformBase):
     after_snapshot_suffix: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
-    created_by: Mapped[str] = mapped_column(
-        ForeignKey("public.users.id"), nullable=False
-    )
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.now)
