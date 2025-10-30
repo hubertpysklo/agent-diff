@@ -30,8 +30,8 @@ from .models import (
 class AgentDiff:
     def __init__(self, api_key: str | None = None, base_url: str | None = None):
         self.api_key = api_key or os.getenv("AGENT_DIFF_API_KEY")
-        self.base_url = (
-            base_url or os.getenv("AGENT_DIFF_BASE_URL") or "http://localhost:8000"
+        self.base_url = base_url if base_url is not None else (
+            os.getenv("AGENT_DIFF_BASE_URL") or "http://localhost:8000"
         )
 
     def _headers(self) -> dict[str, str]:
