@@ -161,7 +161,6 @@ class TemplateManager:
                 raise ValueError("template not found")
 
             t = matches[0]
-            check_template_access(principal_id, t)
             return t.location, t.service
 
         # Path 4: templateSchema
