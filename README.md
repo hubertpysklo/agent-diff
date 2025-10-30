@@ -34,13 +34,13 @@ docker-compose up --build
 ```python
 from agent_diff import AgentDiff
 
-# For self-hosting (no API key)
-client = AgentDiff(base_url="http://localhost:8000")
+# Self-hosted (defaults to http://localhost:8000)
+client = AgentDiff()
 
-# For service (with API key)
+# With authentication 
 client = AgentDiff(
     api_key="your-api-key",
-    base_url="https://api.yourdomain.com"
+    base_url="https://your-instance.com"
 )
 
 # Initialise isolated environment from template
