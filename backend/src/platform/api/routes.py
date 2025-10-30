@@ -341,16 +341,16 @@ async def get_test_suite(request: Request) -> JSONResponse:
         return unauthorized()
     if suite is None:
         return not_found("test suite not found")
-    payload = TestSuiteDetail(
-        id=suite.id,
-        name=suite.name,
-        description=suite.description,
-        owner=suite.owner,
-        visibility=Visibility(suite.visibility),
-        created_at=suite.created_at,
-        updated_at=suite.updated_at,
-        tests=(
-            [
+    if include_tests:
+        payload = TestSuiteDetail(
+            id=suite.id,
+            name=suite.name,
+            description=suite.description,
+            owner=suite.owner,
+            visibility=Visibility(suite.visibility),
+            created_at=suite.created_at,
+            updated_at=suite.updated_at,
+            tests=[
                 TestModel(
                     id=t.id,
                     name=t.name,
@@ -361,12 +361,20 @@ async def get_test_suite(request: Request) -> JSONResponse:
                     updated_at=t.updated_at,
                 )
                 for t in tests
+            ],
+        )
+        return JSONResponse(payload.model_dump(mode="json"))
+    else:
+        minimal_response = {
+            "tests": [
+                {
+                    "id": t.id,
+                    "prompt": t.prompt,
+                }
+                for t in tests
             ]
-            if include_tests
-            else []
-        ),
-    )
-    return JSONResponse(payload.model_dump(mode="json"))
+        }
+        return JSONResponse(minimal_response)
 
 
 async def init_environment(request: Request) -> JSONResponse:

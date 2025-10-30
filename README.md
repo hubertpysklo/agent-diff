@@ -80,6 +80,37 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 - **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - test cases covering message sending, channel ops, reactions, threading
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Check DSL docs on how it works.
 
+
+## Evaluations 
+
+To run evaluations:
+
+```python
+suite = client.get_test_suite("slack-bench")
+# Returns: {"tests": [{"id": "...", "prompt": "Send hello to #general"}, ...]}
+
+
+evaluation_results = []
+
+for test in suite['tests']:
+    prompt = test['prompt']
+    test_id = test['id']
+
+    env = client.init_env(testId = test_id)
+    run = client.start_run(envId = env.environmentId, testId = test_id)
+
+    #your LLM/ Agent function - you need to proxy the request on your own for endpoint recived in env.environmentUrl
+    ...
+    response = await Runner.run(triage_agent, prompt)
+    ... 
+
+    evaluation_result = client.evaluate_run(run.runId) #returns score runId, status and Score (0/1)
+
+    evaluation_results.append(evaluation_result) 
+
+    client.delete_env(envId=env.environmentId)
+```
+
 ## Services
 
 - **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.MD`](backend/src/services/slack/READEME.md). A few examples:
