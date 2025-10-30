@@ -88,7 +88,7 @@ To run evaluations:
 ```python
 suite = client.get_test_suite("slack-bench")
 # Returns: {"tests": [{"id": "...", "prompt": "Send hello to #general"}, ...]}
-
+# You can edit the file and add your own tests
 
 evaluation_results = []
 
@@ -96,16 +96,21 @@ for test in suite['tests']:
     prompt = test['prompt']
     test_id = test['id']
 
+    #In test suite you define which env seed template is used for each test
     env = client.init_env(testId = test_id)
-    run = client.start_run(envId = env.environmentId, testId = test_id)
+
+    # This function will take a snapshot before run
+    run = client.start_run(envId = env.environmentId, testId = test_id) 
 
     #your LLM/ Agent function - you need to proxy the request on your own for endpoint recived in env.environmentUrl
     ...
     response = await Runner.run(triage_agent, prompt)
     ... 
 
-    evaluation_result = client.evaluate_run(run.runId) #returns score runId, status and Score (0/1)
+    #This function will take a 2nd snapshot, run diff and assert results against expedted state defined in test suite
+    evaluation_result = client.evaluate_run(run.runId) 
 
+    #returns score runId, status and score (0/1)
     evaluation_results.append(evaluation_result) 
 
     client.delete_env(envId=env.environmentId)
@@ -113,7 +118,7 @@ for test in suite['tests']:
 
 ## Services
 
-- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.MD`](backend/src/services/slack/READEME.md). A few examples:
+- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.md`](backend/src/services/slack/READEME.md). A few examples:
 
   ```python
   "chat.postMessage"  # post messages in seeded channels/DMs
@@ -121,7 +126,7 @@ for test in suite['tests']:
   "reactions.add"  # add emoji reactions to seeded messages
   ```
 
-- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/READEME.MD`](backend/src/services/linear/READEME.MD). Sample operations:
+- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/READEME.md`](backend/src/services/linear/READEME.md). Sample operations:
 
   ```python
   "issues"            # query issues (list/pagination)
@@ -136,7 +141,7 @@ If you have requests for specific services + any feedback, mail me at hubert@uni
 ## Documentation
 
 - **[Getting Started Guide](docs/getting-started.md)** - Detailed setup and configuration
-- **[SDK README](sdk/agent_diff_pkg/README.md)** - Complete API reference
+- **[SDK](sdk/agent_diff_pkg/README.md)** - Complete API reference
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Write test assertions
 - **[API Reference](docs/api-reference.md)** - REST API documentation
 

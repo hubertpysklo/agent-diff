@@ -368,7 +368,7 @@ async def get_test_suite(request: Request) -> JSONResponse:
         minimal_response = {
             "tests": [
                 {
-                    "id": t.id,
+                    "id": str(t.id),
                     "prompt": t.prompt,
                 }
                 for t in tests
