@@ -14,18 +14,32 @@
       "email": "agent@example.com"
     },
     {
-      "user_id": "U02JOHNDOE1",
-      "username": "johndoe",
-      "display_name": "John",
-      "real_name": "John Doe",
-      "email": "john@example.com"
+      "user_id": "U02ARTEM23",
+      "username": "artembogdanov",
+      "display_name": "Artem",
+      "real_name": "Artem Bogdanov",
+      "email": "artem@example.com"
     },
     {
-      "user_id": "U03ROBERT23",
-      "username": "robertsmith",
-      "display_name": "Robert",
-      "real_name": "Robert Smith",
-      "email": "robert@example.com"
+      "user_id": "U03HUBERT23",
+      "username": "hubertmarek",
+      "display_name": "Hubert",
+      "real_name": "Hubert Marek",
+      "email": "hubert@example.com"
+    },
+    {
+      "user_id": "U04OMER23",
+      "username": "Omer",
+      "display_name": "Omer",
+      "real_name": "Omer Narwhal",
+      "email": "omer@example.com"
+    },
+    {
+      "user_id": "U05MORGAN23",
+      "username": "Morgan",
+      "display_name": "Morgan",
+      "real_name": "Morgan Stanley",
+      "email": "morgan@example.com"
     }
   ],
   "channels": [
