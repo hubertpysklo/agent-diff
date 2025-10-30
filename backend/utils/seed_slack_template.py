@@ -165,7 +165,7 @@ def create_template(engine, template_name: str, seed_file: Path | None = None):
 
 
 def main():
-    """Create both slack_base and slack_default templates."""
+    """Discover and create all Slack templates from examples/slack/seeds/."""
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
         print("ERROR: DATABASE_URL environment variable not set")
@@ -177,10 +177,14 @@ def main():
     # Create empty base template
     create_template(engine, "slack_base")
 
-    # Create default template with seed data
-    create_template(engine, "slack_default", seeds_dir / "slack_default.json")
+    # Discover and create templates for all seed JSON files
+    seed_files = list(seeds_dir.glob("*.json"))
 
-    print("\n All templates created successfully\n")
+    for seed_file in seed_files:
+        template_name = seed_file.stem  # e.g. "slack_default" from "slack_default.json"
+        create_template(engine, template_name, seed_file)
+
+    print(f"\n All {1 + len(seed_files)} Slack template(s) created successfully\n")
 
 
 if __name__ == "__main__":
