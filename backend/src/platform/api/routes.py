@@ -32,7 +32,6 @@ from src.platform.api.models import (
     CreateTemplateFromEnvResponse,
     Service,
     Visibility,
-    ListTestSuiteRequest,
     CreateTestsRequest,
     CreateTestsResponse,
 )
@@ -51,11 +50,9 @@ from src.platform.evaluationEngine.differ import Differ
 from src.platform.evaluationEngine.models import DiffResult
 from src.platform.isolationEngine.core import CoreIsolationEngine
 from src.platform.testManager.core import CoreTestManager
+from src.platform.isolationEngine.templateManager import TemplateManager
 from src.platform.api.resolvers import (
-    resolve_template_schema,
-    list_templates_for_principal,
     require_environment_access,
-    resolve_init_template,
     require_run_access,
     parse_uuid,
     resolve_and_validate_test_items,
@@ -84,8 +81,9 @@ async def list_environment_templates(
 ) -> JSONResponse:
     session = request.state.db_session
     principal_id = _principal_id_from_request(request)
+    template_manager: TemplateManager = request.app.state.templateManager
 
-    templates = list_templates_for_principal(session, principal_id)
+    templates = template_manager.list_templates(session, principal_id)
 
     response = TemplateEnvironmentListResponse(
         templates=[
@@ -228,6 +226,7 @@ async def create_test_suite(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal_id = _principal_id_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
+    template_manager: TemplateManager = request.app.state.templateManager
     suite = core_tests.create_test_suite(
         session,
         principal_id,
@@ -238,7 +237,7 @@ async def create_test_suite(request: Request) -> JSONResponse:
     if body.tests:
         for t in body.tests:
             try:
-                schema = resolve_template_schema(
+                schema = template_manager.resolve_template_schema(
                     session, principal_id, str(t.environmentTemplate)
                 )
                 core_tests.create_test(
@@ -270,21 +269,27 @@ async def create_test_suite(request: Request) -> JSONResponse:
 
 
 async def list_test_suites(request: Request) -> JSONResponse:
-    try:
-        body = await parse_request_body(request, ListTestSuiteRequest)
-    except ValueError as e:
-        return bad_request(str(e))
-
     session = request.state.db_session
     principal_id = _principal_id_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
 
+    name = request.query_params.get("name")
+    suite_id = request.query_params.get("id")
+    visibility_str = request.query_params.get("visibility")
+
+    visibility = None
+    if visibility_str:
+        try:
+            visibility = Visibility(visibility_str).value
+        except ValueError:
+            return bad_request(f"invalid visibility: {visibility_str}")
+
     suites = core_tests.list_test_suites(
         session,
         principal_id,
-        name=body.name,
-        suite_id=body.id,
-        visibility=body.visibility.value if body.visibility else None,
+        name=name,
+        suite_id=suite_id,
+        visibility=visibility,
     )
     response = TestSuiteListResponse(
         testSuites=[
@@ -348,9 +353,10 @@ async def init_environment(request: Request) -> JSONResponse:
 
     session = request.state.db_session
     principal_id = _principal_id_from_request(request)
+    template_manager: TemplateManager = request.app.state.templateManager
 
     try:
-        schema, selected_template_service = resolve_init_template(
+        schema, selected_template_service = template_manager.resolve_init_template(
             session, principal_id, body
         )
     except PermissionError:
@@ -399,6 +405,7 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
     session = request.state.db_session
     principal_id = _principal_id_from_request(request)
     core_tests: CoreTestManager = request.app.state.coreTestManager
+    template_manager: TemplateManager = request.app.state.templateManager
 
     try:
         body = await parse_request_body(request, CreateTestsRequest)
@@ -420,6 +427,7 @@ async def create_tests_in_suite(request: Request) -> JSONResponse:
             str(body.defaultEnvironmentTemplate)
             if body.defaultEnvironmentTemplate
             else None,
+            template_manager,
         )
     except ValueError as e:
         logger.warning(f"Test item resolution/validation failed: {e}")

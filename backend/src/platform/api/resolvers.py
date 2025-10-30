@@ -1,23 +1,14 @@
 from __future__ import annotations
 
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 
 from src.platform.api.models import (
-    InitEnvRequestBody,
     TestItem,
     CreateTestsRequest,
 )
-from src.platform.api.auth import (
-    require_resource_access,
-    check_template_access,
-)
+from src.platform.api.auth import require_resource_access
 from src.platform.db.schema import (
-    TestSuite,
-    TemplateEnvironment,
     RunTimeEnvironment,
-    Test,
-    TestMembership,
     TestRun,
 )
 from uuid import UUID
@@ -30,64 +21,6 @@ def parse_uuid(value: str) -> UUID:
         raise ValueError("invalid uuid") from exc
 
 
-def resolve_template_schema(
-    session: Session, principal_id: str, template_ref: str
-) -> str:
-    maybe_uuid = parse_uuid(template_ref)
-    if maybe_uuid:
-        t = (
-            session.query(TemplateEnvironment)
-            .filter(TemplateEnvironment.id == maybe_uuid)
-            .one_or_none()
-        )
-        if t is None:
-            raise ValueError("template not found")
-        check_template_access(principal_id, t)
-        return t.location
-
-    service: str | None = None
-    name = template_ref
-    if ":" in template_ref:
-        service, name = template_ref.split(":", 1)
-
-    query = session.query(TemplateEnvironment).filter(TemplateEnvironment.name == name)
-    if service:
-        query = query.filter(TemplateEnvironment.service == service)
-
-    # Filter by visibility
-    query = query.filter(
-        or_(
-            TemplateEnvironment.visibility == "public",
-            TemplateEnvironment.owner_id == principal_id,
-        )
-    )
-    matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
-    if not matches:
-        raise ValueError("template not found")
-
-    return matches[0].location
-
-
-def list_templates_for_principal(session: Session, principal_id: str):
-    """List templates accessible to principal_id."""
-    query = session.query(TemplateEnvironment).filter(
-        or_(
-            TemplateEnvironment.visibility == "public",
-            TemplateEnvironment.owner_id == principal_id,
-        )
-    )
-
-    all_templates = query.order_by(TemplateEnvironment.created_at.desc()).all()
-
-    seen = set()
-    deduplicated = []
-    for t in all_templates:
-        key = (t.service, t.name)
-        if key not in seen:
-            seen.add(key)
-            deduplicated.append(t)
-
-    return deduplicated
 
 
 def require_environment_access(
@@ -116,86 +49,6 @@ def require_run_access(session: Session, principal_id: str, run_id: str) -> Test
     return run
 
 
-def resolve_init_template(
-    session: Session, principal_id: str, body: InitEnvRequestBody
-) -> tuple[str, str]:
-    """Return (schema, service) for environment init selection."""
-    # Path 1: testId provided
-    if body.testId:
-        test = session.query(Test).filter(Test.id == body.testId).one_or_none()
-        if test is None:
-            raise ValueError("test not found")
-
-        # Validate access to its suite if private
-        suite = (
-            session.query(TestSuite)
-            .join(TestMembership, TestMembership.test_suite_id == TestSuite.id)
-            .filter(TestMembership.test_id == body.testId)
-            .first()
-        )
-        if suite and suite.visibility == "private":
-            require_resource_access(principal_id, suite.owner)
-
-        schema = body.templateSchema or test.template_schema
-        t = (
-            session.query(TemplateEnvironment)
-            .filter(TemplateEnvironment.location == schema)
-            .order_by(TemplateEnvironment.created_at.desc())
-            .first()
-        )
-        if t is None:
-            raise ValueError("template schema not registered")
-        return t.location, t.service
-
-    # Path 2: templateId
-    if body.templateId is not None:
-        t = (
-            session.query(TemplateEnvironment)
-            .filter(TemplateEnvironment.id == body.templateId)
-            .one_or_none()
-        )
-        if t is None:
-            raise ValueError("template not found")
-        check_template_access(principal_id, t)
-        return t.location, t.service
-
-    # Path 3: service + name
-    if body.templateService and body.templateName:
-        query = (
-            session.query(TemplateEnvironment)
-            .filter(
-                TemplateEnvironment.service == body.templateService,
-                TemplateEnvironment.name == body.templateName,
-            )
-            .filter(
-                or_(
-                    TemplateEnvironment.visibility == "public",
-                    TemplateEnvironment.owner_id == principal_id,
-                )
-            )
-        )
-        matches = query.order_by(TemplateEnvironment.created_at.desc()).all()
-        if len(matches) == 0:
-            raise ValueError("template not found")
-
-        t = matches[0]
-        return t.location, t.service
-
-    # Path 4: templateSchema
-    if body.templateSchema:
-        t = (
-            session.query(TemplateEnvironment)
-            .filter(TemplateEnvironment.location == body.templateSchema)
-            .order_by(TemplateEnvironment.created_at.desc())
-            .first()
-        )
-        if t is None:
-            raise ValueError("template schema not registered")
-        return t.location, t.service
-
-    raise ValueError(
-        "one of templateId, (templateService+templateName), templateSchema, or testId must be provided"
-    )
 
 
 def resolve_and_validate_test_items(
@@ -203,6 +56,7 @@ def resolve_and_validate_test_items(
     principal_id: str,
     items: list[TestItem],
     default_template: str | None,
+    template_manager,  # TemplateManager instance
 ) -> list[str]:
     """Resolve environment template for each item and validate DSL."""
     from src.platform.testManager.core import CoreTestManager
@@ -213,7 +67,9 @@ def resolve_and_validate_test_items(
         template_ref = item.environmentTemplate or default_template
         if not template_ref:
             raise ValueError(f"tests[{idx}]: environmentTemplate missing")
-        schema = resolve_template_schema(session, principal_id, str(template_ref))
+        schema = template_manager.resolve_template_schema(
+            session, principal_id, str(template_ref)
+        )
         core.validate_dsl(item.expected_output)
         resolved_schemas.append(schema)
     return resolved_schemas
