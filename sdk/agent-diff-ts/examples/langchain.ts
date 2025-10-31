@@ -29,8 +29,8 @@ async function main() {
   const run = await client.startRun({ envId: env.environmentId });
 
   // Create code executor tools
-  const tsExecutor = new TypeScriptExecutorProxy(env.environmentId);
-  const bashExecutor = new BashExecutorProxy(env.environmentId);
+  const tsExecutor = new TypeScriptExecutorProxy(env.environmentId, client.getBaseUrl(), env.token);
+  const bashExecutor = new BashExecutorProxy(env.environmentId, client.getBaseUrl(), env.token);
 
   const tsTool = createLangChainTool(tsExecutor);
   const bashTool = createLangChainTool(bashExecutor);

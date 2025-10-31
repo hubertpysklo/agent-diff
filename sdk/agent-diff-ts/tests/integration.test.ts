@@ -123,7 +123,8 @@ describe('Agent Diff Integration Tests', () => {
       expect('tests' in suite).toBe(true);
       if ('tests' in suite) {
         expect(Array.isArray(suite.tests)).toBe(true);
-        expect(suite.tests[0].createdAt).toBeInstanceOf(Date);
+        expect(suite.tests.length).toBeGreaterThan(0);
+        expect(suite.tests[0].id).toBeDefined();
       }
     }, TEST_TIMEOUT);
 

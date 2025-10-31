@@ -161,11 +161,16 @@ export class AgentDiff {
 
     if ('tests' in response) {
       return {
-        tests: response.tests.map((test: any) => ({
-          ...test,
-          createdAt: new Date(test.created_at),
-          updatedAt: new Date(test.updated_at),
-        })),
+        tests: response.tests.map((test: any) => {
+          const result: any = { ...test };
+          if (test.created_at) {
+            result.createdAt = new Date(test.created_at);
+          }
+          if (test.updated_at) {
+            result.updatedAt = new Date(test.updated_at);
+          }
+          return result;
+        }),
       };
     }
 

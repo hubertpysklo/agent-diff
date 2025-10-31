@@ -5,7 +5,7 @@ TypeScript/Node.js SDK for [Agent Diff](https://github.com/hubertpysklo/agent-di
 ## Installation
 
 ```bash
-npm install agent-diff
+npm install agent-diff-ts
 ```
 
 ## Quick Start
@@ -23,7 +23,7 @@ Backend runs on http://localhost:8000
 ### 2. Basic Usage
 
 ```typescript
-import { AgentDiff, TypeScriptExecutorProxy } from 'agent-diff';
+import { AgentDiff, TypeScriptExecutorProxy } from 'agent-diff-ts';
 
 const client = new AgentDiff();
 
@@ -38,7 +38,7 @@ const env = await client.initEnv({
 const run = await client.startRun({ envId: env.environmentId });
 
 // Execute code with automatic URL transformation
-const executor = new TypeScriptExecutorProxy(env.environmentId);
+const executor = new TypeScriptExecutorProxy(env.environmentId, client.getBaseUrl());
 await executor.execute(`
   const response = await fetch('https://slack.com/api/conversations.list');
   const data = await response.json();
@@ -60,7 +60,7 @@ console.log('Changes:', diff.diff);
 Executes TypeScript code in-process with `fetch` interception:
 
 ```typescript
-import { TypeScriptExecutorProxy } from 'agent-diff';
+import { TypeScriptExecutorProxy } from 'agent-diff-ts';
 
 const executor = new TypeScriptExecutorProxy(
   'env-id',
@@ -85,7 +85,7 @@ console.log(result.stdout); // Captured console.log output
 Executes Bash commands in subprocess with `curl` interception:
 
 ```typescript
-import { BashExecutorProxy } from 'agent-diff';
+import { BashExecutorProxy } from 'agent-diff-ts';
 
 const executor = new BashExecutorProxy(
   'env-id',
@@ -108,9 +108,9 @@ console.log(result.stdout); // curl output
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { TypeScriptExecutorProxy, createVercelAITool } from 'agent-diff';
+import { TypeScriptExecutorProxy, createVercelAITool } from 'agent-diff-ts';
 
-const executor = new TypeScriptExecutorProxy(envId);
+const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
 const tool = createVercelAITool(executor);
 
 const result = await generateText({
@@ -126,9 +126,9 @@ const result = await generateText({
 ```typescript
 import { ChatOpenAI } from '@langchain/openai';
 import { createAgent } from 'langchain';
-import { TypeScriptExecutorProxy, createLangChainTool } from 'agent-diff';
+import { TypeScriptExecutorProxy, createLangChainTool } from 'agent-diff-ts';
 
-const executor = new TypeScriptExecutorProxy(envId);
+const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
 const tool = createLangChainTool(executor);
 
 const agent = createAgent({
@@ -145,9 +145,9 @@ const result = await agent.invoke({
 
 ```typescript
 import { Agent } from '@openai/agents';
-import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from 'agent-diff';
+import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from 'agent-diff-ts';
 
-const executor = new TypeScriptExecutorProxy(envId);
+const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
 const tool = createOpenAIAgentsTool(executor);
 
 const agent = new Agent({
@@ -273,7 +273,7 @@ const env = await client.initEnv({
 const run = await client.startRun({ envId: env.environmentId });
 
 // Execute your agent code here...
-const executor = new TypeScriptExecutorProxy(env.environmentId);
+const executor = new TypeScriptExecutorProxy(env.environmentId, client.getBaseUrl());
 await executor.execute(`
   await fetch('https://slack.com/api/chat.postMessage', {
     method: 'POST',
@@ -335,7 +335,7 @@ npm run test:integration
 
 ## Related
 
-- [Python SDK](../agent-diff-python) - Python version of this SDK
+- [Python SDK](../agent_diff_pkg) - Python version of this SDK
 - [Agent Diff Backend](../../backend) - Self-hosted backend
 - [Documentation](../../docs) - Full platform documentation
 
