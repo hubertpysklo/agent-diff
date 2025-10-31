@@ -22,16 +22,17 @@ class BaseExecutorProxy:
         self.base_url = base_url
         self.token = token
 
-        # URL mappings for interception
         self.url_mappings = [
-            (
-                "https://api.slack.com",
-                f"{base_url}/api/env/{environment_id}/services/slack",
-            ),
+            # Real Slack Web API (https://slack.com/api/*)
             (
                 "https://slack.com",
                 f"{base_url}/api/env/{environment_id}/services/slack",
             ),
+            (
+                "https://api.slack.com",
+                f"{base_url}/api/env/{environment_id}/services/slack",
+            ),
+            # Linear API
             (
                 "https://api.linear.app",
                 f"{base_url}/api/env/{environment_id}/services/linear",
@@ -176,7 +177,9 @@ curl() {{
     for arg in "${{args[@]}}"; do
         modified_arg="$arg"
 
-        if [[ "$arg" == *"https://api.slack.com"* ]]; then
+        if [[ "$arg" == *"https://slack.com"* ]]; then
+            modified_arg="${{arg//https:\\/\\/slack.com/{self.base_url}/api/env/{self.environment_id}/services/slack}}"
+        elif [[ "$arg" == *"https://api.slack.com"* ]]; then
             modified_arg="${{arg//https:\\/\\/api.slack.com/{self.base_url}/api/env/{self.environment_id}/services/slack}}"
         elif [[ "$arg" == *"https://api.linear.app"* ]]; then
             modified_arg="${{arg//https:\\/\\/api.linear.app/{self.base_url}/api/env/{self.environment_id}/services/linear}}"
@@ -226,10 +229,10 @@ def create_openai_tool(executor: BaseExecutorProxy):
 
         @function_tool
         def execute_python(code: str) -> str:
-            """Execute Python code with automatic API interception.
+            """Execute Python code and return the output.
 
             Args:
-                code: Python code to execute. Network requests to Slack/Linear APIs are automatically routed to the test environment.
+                code: Python code to execute. Standard libraries like requests are available for HTTP calls.
             """
             return _format_execution_result(executor.execute(code))
 
@@ -239,10 +242,10 @@ def create_openai_tool(executor: BaseExecutorProxy):
 
         @function_tool
         def execute_bash(code: str) -> str:
-            """Execute Bash commands with automatic curl interception.
+            """Execute Bash commands and return the output.
 
             Args:
-                code: Bash commands to execute. curl requests to Slack/Linear APIs are automatically routed to the test environment.
+                code: Bash commands to execute. Standard utilities like curl are available.
             """
             return _format_execution_result(
                 executor.execute(code), "Commands executed successfully"
@@ -268,10 +271,10 @@ def create_langchain_tool(executor: BaseExecutorProxy):
 
         @tool
         def execute_python(code: str) -> str:
-            """Execute Python code. Network requests to Slack/Linear APIs work automatically.
+            """Execute Python code and return the output.
 
             Args:
-                code: Python code to execute
+                code: Python code to execute. Standard libraries like requests are available for HTTP calls.
 
             Returns:
                 The stdout from executing the code, or an error message if execution failed.
@@ -284,10 +287,10 @@ def create_langchain_tool(executor: BaseExecutorProxy):
 
         @tool
         def execute_bash(code: str) -> str:
-            """Execute Bash commands. curl requests to Slack/Linear APIs work automatically.
+            """Execute Bash commands and return the output.
 
             Args:
-                code: Bash commands to execute
+                code: Bash commands to execute. Standard utilities like curl are available.
 
             Returns:
                 The stdout from executing the commands, or an error message if execution failed.
@@ -316,7 +319,7 @@ def create_smolagents_tool(executor: BaseExecutorProxy):
 
         class PythonExecutorTool(Tool):
             name = "execute_python"
-            description = "Execute Python code. API calls to Slack/Linear automatically route to test environment."
+            description = "Execute Python code and return the output. Standard libraries like requests are available for HTTP calls."
             inputs = {"code": {"type": "text", "description": "Python code to execute"}}
             output_type = "text"
 
@@ -329,7 +332,7 @@ def create_smolagents_tool(executor: BaseExecutorProxy):
 
         class BashExecutorTool(Tool):
             name = "execute_bash"
-            description = "Execute Bash commands. curl to Slack/Linear APIs automatically routes to test environment."
+            description = "Execute Bash commands and return the output. Standard utilities like curl are available."
             inputs = {
                 "code": {"type": "text", "description": "Bash commands to execute"}
             }
