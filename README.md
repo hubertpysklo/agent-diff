@@ -37,8 +37,15 @@ If you have requests for specific services + any feedback, mail me at hubert@uni
 ## Quick Start
 
 ### 1. Install SDK
+
+**Python:**
 ```bash
 uv add agent-diff
+```
+
+**TypeScript/Node.js:**
+```bash
+npm install agent-diff-ts
 ```
 
 ### 2. Set up backend
@@ -115,6 +122,8 @@ client.delete_env(envId=env.environmentId)
 ```
 
 Every environment gets its own PostgreSQL schema. URLs bind requests to schemas. Snapshots diff exactly what changed in this specific isolated environment.
+
+**TypeScript/Node.js SDK also available:** `npm install agent-diff-ts` - [docs](sdk/agent-diff-ts/README.md)
 
 ## Templates & Test Suites
 
