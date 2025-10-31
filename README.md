@@ -82,7 +82,7 @@ run = client.start_run(envId=env.environmentId)
 #   to:   http://localhost:8000/api/env/{environmentId}/services/slack/conversations.list 
 
 # Using CodeExecutorProxy (With OpenAI Agents SDK Tool example, LangChain is also available)
-from agent_diff import PythonExecutorProxy, create_openai_tool
+from agent_diff import PythonExecutorProxy, BashExecutorProxy, create_openai_tool
 from agents import Agent, Runner
 
 # Pass base_url from client or use default
@@ -90,7 +90,6 @@ python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_ur
 bash_executor = BashExecutorProxy(env.environmentId, base_url=client.base_url)
 python_tool = create_openai_tool(python_executor) 
 bash_tool = create_openai_tool(bash_executor)
-
 
 agent = Agent(
         name="Slack Assistant",
