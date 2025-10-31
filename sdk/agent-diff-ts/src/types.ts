@@ -26,6 +26,7 @@ export interface InitEnvResponse {
   expiresAt: Date;
   schemaName: string;
   service: Service;
+  token?: string;
 }
 
 export interface DeleteEnvResponse {
@@ -88,7 +89,7 @@ export interface Test {
   name: string;
   prompt: string;
   type: TestType;
-  expectedOutput: Record<string, unknown>;
+  expected_output: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -122,7 +123,7 @@ export interface TestItem {
   name: string;
   prompt: string;
   type: TestType;
-  expectedOutput: Record<string, unknown> | string;
+  expected_output: Record<string, unknown> | string;
   environmentTemplate: string;
   impersonateUserId?: string;
 }

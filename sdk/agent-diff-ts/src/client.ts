@@ -44,6 +44,10 @@ export class AgentDiff {
       'http://localhost:8000';
   }
 
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   private headers(): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -138,19 +142,29 @@ export class AgentDiff {
     options?: { expand?: boolean }
   ): Promise<TestSuiteDetail | { tests: Test[] }> {
     const query = options?.expand ? '?expand=tests' : '';
-    const response = await this.request<TestSuiteDetail | { tests: Test[] }>(
+    const response = await this.request<any>(
       `/api/platform/testSuites/${suiteId}${query}`
     );
 
-    if (options?.expand && 'createdAt' in response) {
+    if (options?.expand && 'created_at' in response) {
       return {
         ...response,
-        createdAt: new Date(response.createdAt),
-        updatedAt: new Date(response.updatedAt),
-        tests: response.tests?.map((test) => ({
+        createdAt: new Date(response.created_at),
+        updatedAt: new Date(response.updated_at),
+        tests: response.tests?.map((test: any) => ({
           ...test,
-          createdAt: new Date(test.createdAt),
-          updatedAt: new Date(test.updatedAt),
+          createdAt: new Date(test.created_at),
+          updatedAt: new Date(test.updated_at),
+        })),
+      };
+    }
+
+    if ('tests' in response) {
+      return {
+        tests: response.tests.map((test: any) => ({
+          ...test,
+          createdAt: new Date(test.created_at),
+          updatedAt: new Date(test.updated_at),
         })),
       };
     }
@@ -159,12 +173,12 @@ export class AgentDiff {
   }
 
   async getTest(testId: string): Promise<Test> {
-    const response = await this.request<Test>(`/api/platform/tests/${testId}`);
+    const response = await this.request<any>(`/api/platform/tests/${testId}`);
 
     return {
       ...response,
-      createdAt: new Date(response.createdAt),
-      updatedAt: new Date(response.updatedAt),
+      createdAt: new Date(response.created_at),
+      updatedAt: new Date(response.updated_at),
     };
   }
 
@@ -181,7 +195,7 @@ export class AgentDiff {
     suiteId: string,
     request: CreateTestsRequest
   ): Promise<CreateTestsResponse> {
-    const response = await this.request<CreateTestsResponse>(
+    const response = await this.request<any>(
       `/api/platform/testSuites/${suiteId}/tests`,
       {
         method: 'POST',
@@ -190,10 +204,10 @@ export class AgentDiff {
     );
 
     return {
-      tests: response.tests.map((test) => ({
+      tests: response.tests.map((test: any) => ({
         ...test,
-        createdAt: new Date(test.createdAt),
-        updatedAt: new Date(test.updatedAt),
+        createdAt: new Date(test.created_at),
+        updatedAt: new Date(test.updated_at),
       })),
     };
   }
@@ -222,13 +236,13 @@ export class AgentDiff {
   }
 
   async getResultsForRun(runId: string): Promise<TestResultResponse> {
-    const response = await this.request<TestResultResponse>(
+    const response = await this.request<any>(
       `/api/platform/results/${runId}`
     );
 
     return {
       ...response,
-      createdAt: new Date(response.createdAt),
+      createdAt: new Date(response.createdAt || response.created_at),
     };
   }
 }

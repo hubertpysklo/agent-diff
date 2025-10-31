@@ -9,7 +9,7 @@ import {
   TypeScriptExecutorProxy,
   BashExecutorProxy,
   createOpenAIAgentsTool,
-} from '@agent-diff/sdk';
+} from 'agent-diff';
 
 async function main() {
   // Initialize Agent Diff client

@@ -26,10 +26,10 @@ export function createLangChainTool(executor: BaseExecutorProxy) {
   let tool: unknown;
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    tool = require('langchain').tool;
+    tool = require('@langchain/core/tools').tool;
   } catch {
     throw new Error(
-      'LangChain not installed. Install with: npm install langchain'
+      'LangChain not installed. Install with: npm install @langchain/core'
     );
   }
 

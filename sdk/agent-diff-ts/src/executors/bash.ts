@@ -28,7 +28,7 @@ export class BashExecutorProxy extends BaseExecutorProxy {
           status: code === 0 ? 'success' : 'error',
           stdout,
           stderr,
-          exitCode: code || 0,
+          exitCode: typeof code === 'number' ? code : undefined,
         });
       });
 

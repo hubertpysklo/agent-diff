@@ -5,7 +5,7 @@ TypeScript/Node.js SDK for [Agent Diff](https://github.com/hubertpysklo/agent-di
 ## Installation
 
 ```bash
-npm install @agent-diff/sdk
+npm install agent-diff
 ```
 
 ## Quick Start
@@ -23,7 +23,7 @@ Backend runs on http://localhost:8000
 ### 2. Basic Usage
 
 ```typescript
-import { AgentDiff, TypeScriptExecutorProxy } from '@agent-diff/sdk';
+import { AgentDiff, TypeScriptExecutorProxy } from 'agent-diff';
 
 const client = new AgentDiff();
 
@@ -47,9 +47,7 @@ await executor.execute(`
 
 // Get diff of changes
 const diff = await client.diffRun({
-  envId: env.environmentId,
   runId: run.runId,
-  beforeSuffix: run.beforeSnapshotId
 });
 
 console.log('Changes:', diff.diff);
@@ -62,7 +60,7 @@ console.log('Changes:', diff.diff);
 Executes TypeScript code in-process with `fetch` interception:
 
 ```typescript
-import { TypeScriptExecutorProxy } from '@agent-diff/sdk';
+import { TypeScriptExecutorProxy } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(
   'env-id',
@@ -87,7 +85,7 @@ console.log(result.stdout); // Captured console.log output
 Executes Bash commands in subprocess with `curl` interception:
 
 ```typescript
-import { BashExecutorProxy } from '@agent-diff/sdk';
+import { BashExecutorProxy } from 'agent-diff';
 
 const executor = new BashExecutorProxy(
   'env-id',
@@ -110,7 +108,7 @@ console.log(result.stdout); // curl output
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { TypeScriptExecutorProxy, createVercelAITool } from '@agent-diff/sdk';
+import { TypeScriptExecutorProxy, createVercelAITool } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(envId);
 const tool = createVercelAITool(executor);
@@ -128,7 +126,7 @@ const result = await generateText({
 ```typescript
 import { ChatOpenAI } from '@langchain/openai';
 import { createAgent } from 'langchain';
-import { TypeScriptExecutorProxy, createLangChainTool } from '@agent-diff/sdk';
+import { TypeScriptExecutorProxy, createLangChainTool } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(envId);
 const tool = createLangChainTool(executor);
@@ -147,7 +145,7 @@ const result = await agent.invoke({
 
 ```typescript
 import { Agent } from '@openai/agents';
-import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from '@agent-diff/sdk';
+import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(envId);
 const tool = createOpenAIAgentsTool(executor);
@@ -232,6 +230,76 @@ Supported services:
 - Slack: `https://api.slack.com` → `/api/env/{id}/services/slack`
 - Linear: `https://api.linear.app` → `/api/env/{id}/services/linear`
 
+## Test Evaluation and Assertions
+
+Agent Diff supports creating test suites with expected output assertions using a JSON DSL:
+
+```typescript
+const client = new AgentDiff();
+
+// Create test suite
+const suite = await client.createTestSuite({
+  name: 'Slack Message Tests',
+  description: 'Test AI agent message creation',
+  templateService: 'slack',
+  templateName: 'slack_default',
+  impersonateUserId: 'U01AGENBOT9',
+});
+
+// Add test with expected output
+await client.createTests(suite.suiteId, {
+  tests: [{
+    name: 'Creates welcome message',
+    description: 'Agent should post welcome message to general channel',
+    expectedOutput: {
+      insert: [{
+        table: 'messages',
+        where: [
+          { field: 'channel_id', predicate: 'eq', value: 'C01GENERAL99' },
+          { field: 'text', predicate: 'contains', value: 'welcome' },
+        ],
+      }],
+    },
+  }],
+});
+
+// Run test
+const env = await client.initEnv({
+  templateService: 'slack',
+  templateName: 'slack_default',
+  impersonateUserId: 'U01AGENBOT9',
+});
+
+const run = await client.startRun({ envId: env.environmentId });
+
+// Execute your agent code here...
+const executor = new TypeScriptExecutorProxy(env.environmentId);
+await executor.execute(`
+  await fetch('https://slack.com/api/chat.postMessage', {
+    method: 'POST',
+    body: JSON.stringify({
+      channel: 'C01GENERAL99',
+      text: 'Welcome to the team!'
+    })
+  });
+`);
+
+// Evaluate against expected output
+const result = await client.evaluateRun({ runId: run.runId });
+console.log('Test passed:', result.passed);
+console.log('Score:', result.score);
+```
+
+### Assertion DSL
+
+The `expectedOutput` supports:
+
+- **Operations**: `insert`, `update`, `delete`
+- **Predicates**: `eq`, `neq`, `gt`, `gte`, `lt`, `lte`, `contains`, `not_contains`, `in`, `not_in`
+- **Tables**: Any table in your service schema (e.g., `messages`, `channels`, `users`)
+
+See [evaluation DSL docs](../../docs/evaluation-dsl.md) for complete reference.
+
 ## Examples
 
 See the [examples/](./examples) directory for complete working examples:
@@ -267,7 +335,7 @@ npm run test:integration
 
 ## Related
 
-- [Python SDK](../agent_diff_pkg) - Python version of this SDK
+- [Python SDK](../agent-diff-python) - Python version of this SDK
 - [Agent Diff Backend](../../backend) - Self-hosted backend
 - [Documentation](../../docs) - Full platform documentation
 

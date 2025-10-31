@@ -10,7 +10,7 @@ import {
   TypeScriptExecutorProxy,
   BashExecutorProxy,
   createLangChainTool,
-} from '@agent-diff/sdk';
+} from 'agent-diff';
 
 async function main() {
   // Initialize Agent Diff client

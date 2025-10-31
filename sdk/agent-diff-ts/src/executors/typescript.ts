@@ -48,8 +48,21 @@ export class TypeScriptExecutorProxy extends BaseExecutorProxy {
     const token = this.token;
 
     return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-      let url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      const options: RequestInit = init || {};
+      let url: string;
+      let options: RequestInit;
+
+      if (input instanceof Request) {
+        url = input.url;
+        options = {
+          method: input.method,
+          headers: input.headers,
+          body: input.body,
+          ...init,
+        };
+      } else {
+        url = typeof input === 'string' ? input : input.toString();
+        options = init || {};
+      }
 
       for (const [oldUrl, newUrl] of mappings) {
         if (url.includes(oldUrl)) {

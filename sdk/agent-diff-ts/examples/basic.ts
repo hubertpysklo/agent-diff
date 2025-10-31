@@ -6,7 +6,7 @@ import {
   AgentDiff,
   TypeScriptExecutorProxy,
   BashExecutorProxy,
-} from '@agent-diff/sdk';
+} from 'agent-diff';
 
 async function main() {
   // Initialize client (defaults to http://localhost:8000)
@@ -33,7 +33,7 @@ async function main() {
   console.log('\nExecuting TypeScript code...');
   const tsExecutor = new TypeScriptExecutorProxy(
     env.environmentId,
-    client['baseUrl']
+    client.getBaseUrl()
   );
 
   const tsResult = await tsExecutor.execute(`
@@ -51,7 +51,7 @@ async function main() {
   console.log('\nExecuting Bash code...');
   const bashExecutor = new BashExecutorProxy(
     env.environmentId,
-    client['baseUrl']
+    client.getBaseUrl()
   );
 
   const bashResult = await bashExecutor.execute(`

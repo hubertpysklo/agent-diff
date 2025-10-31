@@ -1,6 +1,6 @@
 {
-  "name": "agent-diff-ts",
-  "version": "0.1.0",
+  "name": "agent-diff",
+  "version": "0.1.1",
   "description": "TypeScript SDK for Agent Diff - test AI agents against replicas of services",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -8,9 +8,9 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -20,8 +20,8 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
-    "test": "vitest",
-    "test:integration": "vitest run tests/integration",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration.test.ts",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts"
   },
