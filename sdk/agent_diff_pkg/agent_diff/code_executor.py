@@ -51,7 +51,6 @@ class BaseExecutorProxy:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                env=os.environ,
             )
 
             return {
