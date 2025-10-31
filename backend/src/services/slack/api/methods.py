@@ -1755,4 +1755,7 @@ SLACK_HANDLERS: dict[str, Callable[[Request], Awaitable[JSONResponse]]] = {
 }
 
 
-routes = [Route("/{endpoint}", slack_endpoint, methods=["GET", "POST"])]
+routes = [
+    Route("/{endpoint}", slack_endpoint, methods=["GET", "POST"]),
+    Route("/api/{endpoint}", slack_endpoint, methods=["GET", "POST"]),
+]

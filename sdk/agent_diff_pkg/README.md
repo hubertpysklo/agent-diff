@@ -65,7 +65,7 @@ Agent Diff provides **code execution proxies** that automatically intercept API 
 
 When your agent executes Python or Bash code:
 1. The executor wraps your code with interception logic
-2. API calls to `https://api.slack.com` → `http://localhost:8000/api/env/{env_id}/services/slack/api`
+2. API calls to `https://api.slack.com` → `http://localhost:8000/api/env/{env_id}/services/slack`
 3. API calls to `https://api.linear.app` → `http://localhost:8000/api/env/{env_id}/services/linear`
 4. Your agent sees real API responses from the isolated environment
 

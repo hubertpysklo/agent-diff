@@ -421,7 +421,7 @@ async def init_environment(request: Request) -> JSONResponse:
         return bad_request(str(e))
 
     service = selected_template_service
-    env_url = f"/api/env/{result.environment_id}/services/{service}/"
+    env_url = f"/api/env/{result.environment_id}/services/{service}"
     response = InitEnvResponse(
         environmentId=result.environment_id,
         templateSchema=schema,

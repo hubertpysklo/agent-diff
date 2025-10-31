@@ -77,9 +77,9 @@ run = client.start_run(envId=env.environmentId)
 # Your agent does stuff using the environment URL 
  
 # You can swap the URLs directly in MCPs or use the code executor tool for python or bash with proxy that will route the requests automatically
-# e.g. proxt GET 
-# from [https://slack.com/api/conversations.list]
-# to [http://localhost:8000/api/env/{environmentId}/services/slack]/conversations.list 
+# e.g. proxy transforms:
+#   from: https://api.slack.com/api/conversations.list
+#   to:   http://localhost:8000/api/env/{environmentId}/services/slack/conversations.list 
 
 # Using CodeExecutorProxy (With OpenAI Agents SDK Tool example, LangChain is also available)
 from agent_diff import PythonExecutorProxy, create_openai_tool
@@ -100,7 +100,7 @@ agent = Agent(
 
 response = await Runner.run(agent, "Post 'Hello' to Slack channel #general") 
 # The agent writes normal code like:
-# requests.post('https://api.slack.com/api/chat.postMessage', ...)
+# requests.post('https://api.slack.com/chat.postMessage', ...)
 # But it will be proxied to the temporary sandbox enviroment  
 
 # Compute diff and get results
