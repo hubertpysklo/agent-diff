@@ -26,7 +26,7 @@ class BaseExecutorProxy:
         self.url_mappings = [
             (
                 "https://api.slack.com",
-                f"{base_url}/api/env/{environment_id}/services/slack/api",
+                f"{base_url}/api/env/{environment_id}/services/slack",
             ),
             (
                 "https://slack.com",
@@ -177,7 +177,7 @@ curl() {{
         modified_arg="$arg"
 
         if [[ "$arg" == *"https://api.slack.com"* ]]; then
-            modified_arg="${{arg//https:\\/\\/api.slack.com/{self.base_url}/api/env/{self.environment_id}/services/slack/api}}"
+            modified_arg="${{arg//https:\\/\\/api.slack.com/{self.base_url}/api/env/{self.environment_id}/services/slack}}"
         elif [[ "$arg" == *"https://api.linear.app"* ]]; then
             modified_arg="${{arg//https:\\/\\/api.linear.app/{self.base_url}/api/env/{self.environment_id}/services/linear}}"
         fi
