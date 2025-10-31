@@ -42,7 +42,12 @@ run = client.start_run(envId=env.environmentId)
 # 4. Run your agent (API calls are automatically intercepted)
 from agents import Agent
 
-agent = Agent(model="gpt-4o", tools=[python_tool])
+agent = Agent(
+    name="Slack Assistant",
+    model="gpt-4o",
+    tools=[python_tool],
+    instructions="Use execute_python tool to interact with Slack at https://slack.com/api/*. Authentication is automatic."
+)
 response = agent.run("Send a message to #general saying 'Hello!'")
 
 # 5. Compute the diff
@@ -65,8 +70,8 @@ Agent Diff provides **code execution proxies** that automatically intercept API 
 
 When your agent executes Python or Bash code:
 1. The executor wraps your code with interception logic
-2. API calls to `https://api.slack.com` → `http://localhost:8000/api/env/{env_id}/services/slack`
-3. API calls to `https://api.linear.app` → `http://localhost:8000/api/env/{env_id}/services/linear`
+2. API calls to `https://slack.com/api/*` → `http://localhost:8000/api/env/{env_id}/services/slack/api/*`
+3. API calls to `https://api.linear.app/*` → `http://localhost:8000/api/env/{env_id}/services/linear/*`
 4. Your agent sees real API responses from the isolated environment
 
 ### Available Executors
@@ -82,7 +87,11 @@ python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_ur
 python_tool = create_openai_tool(python_executor)
 
 # Works with OpenAI Agents SDK, LangChain, smolagents
-agent = Agent(model="gpt-5", tools=[python_tool])
+agent = Agent(
+    model="gpt-4o",
+    tools=[python_tool],
+    instructions="Use execute_python tool to interact with Slack API at https://slack.com/api/*. Authentication is automatic."
+)
 agent.run("Send a Slack message to #general")
 ```
 
@@ -96,7 +105,11 @@ from agent_diff import BashExecutorProxy, create_openai_tool
 bash_executor = BashExecutorProxy(env.environmentId, base_url=client.base_url)
 bash_tool = create_openai_tool(bash_executor)
 
-agent = Agent(model="gpt-5", tools=[bash_tool])
+agent = Agent(
+    model="gpt-4o",
+    tools=[bash_tool],
+    instructions="Use execute_bash tool with curl to interact with Slack API at https://slack.com/api/*. Authentication is automatic."
+)
 agent.run("Use curl to post a message to Slack")
 ```
 
@@ -126,7 +139,7 @@ python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_ur
 
 result = python_executor.execute("""
 import requests
-response = requests.post('https://api.slack.com/api/chat.postMessage', json={
+response = requests.post('https://slack.com/api/chat.postMessage', json={
     'channel': '#general',
     'text': 'Hello from Agent Diff!'
 })
@@ -183,7 +196,11 @@ for test in suite['tests']:
     python_tool = create_openai_tool(python_executor)
 
     # Run your agent with the tool
-    agent = Agent(model="gpt-5", tools=[python_tool])
+    agent = Agent(
+        model="gpt-4o",
+        tools=[python_tool],
+        instructions="Use execute_python to interact with Slack at https://slack.com/api/*. Authentication is automatic."
+    )
     response = agent.run(prompt)
 
     evaluation_result = client.evaluate_run(run.runId)  # Returns score, runId, status and Score (0/1)

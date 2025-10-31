@@ -94,14 +94,14 @@ bash_tool = create_openai_tool(bash_executor)
 
 agent = Agent(
         name="Slack Assistant",
-        instructions="You can execute bash with Curl or Python with requests to interact with APIs. ",
+        instructions="Use execute_python or execute_bash tools to interact with Slack API at https://slack.com/api/*. Authentication is handled automatically.",
         tools=[python_tool, bash_tool]
     )
 
-response = await Runner.run(agent, "Post 'Hello' to Slack channel #general") 
+response = await Runner.run(agent, "Post 'Hello' to Slack channel #general")
 # The agent writes normal code like:
-# requests.post('https://api.slack.com/chat.postMessage', ...)
-# But it will be proxied to the temporary sandbox enviroment  
+# requests.post('https://slack.com/api/chat.postMessage', ...)
+# But it will be proxied to the temporary sandbox environment  
 
 # Compute diff and get results
 diff = client.diff_run(runId=run.runId)
@@ -157,7 +157,7 @@ for test in suite['tests']:
 
     agent = Agent(
         name="Slack Assistant",
-        instructions="You can execute Bash code with Curl to interact with APIs. Use the execute_code tool.",
+        instructions="Use execute_bash tool with curl to interact with Slack API at https://slack.com/api/*. Authentication is handled automatically.",
         tools=[bash_tool]
     )
 
@@ -181,7 +181,6 @@ Agent Diff is perfect for generating training data for LLMs with tool calling ca
 ```python
 from agent_diff import AgentDiff, PythonExecutorProxy, BashExecutorProxy, create_smolagents_tool
 from smolagents import CodeAgent, InferenceClientModel
-from 
 
 # Setup and evaluation
 client = AgentDiff()
