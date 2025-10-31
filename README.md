@@ -11,6 +11,28 @@ Use it for:
 - Regression tests (catch when changes break behaviour)
 - Training data generation (prompt → actions → diff → outcome)
 
+## Services
+
+- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.md`](backend/src/services/slack/READEME.md). A few examples:
+
+  ```python
+  "chat.postMessage"  # post messages in seeded channels/DMs
+  "conversations.open"  # spin up IM/MPIM threads
+  "reactions.add"  # add emoji reactions to seeded messages
+  ```
+
+- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/READEME.md`](backend/src/services/linear/READEME.md). Sample operations:
+
+  ```python
+  "issues"            # query issues (list/pagination)
+  "issueCreate"       # mutation to create an issue
+  "projectUpdate"     # mutation to update project metadata
+  ```
+
+- Gmail, GitHub, Jira (TBD).
+
+If you have requests for specific services + any feedback, mail me at hubert@uni.minerva.edu
+
 
 ## Quick Start
 
@@ -43,18 +65,43 @@ client = AgentDiff(
     base_url="https://your-instance.com"
 )
 
-# Initialise isolated environment from template
-env = client.init_env(templateService="slack", templateName="slack_default", impersonateUserId="U01AGENBOT9")
+# Initialise isolated environment from a template. See: examples/slack/seeds
+env = client.init_env(templateName="slack_bench_default", impersonateUserId="U01AGENBOT9")
+
+# e.g. env.environmentUrl = http://localhost:8000/api/env/{environmentId}/services/slack
 
 # Take before snapshot
 run = client.start_run(envId=env.environmentId)
 
 
 # Your agent does stuff using the environment URL 
-# You can either use a sidecar proxy (package coming soon) or swap the URLs directly in MCPs
-# e.g. proxt GET for /api/env/{envId}/services/slack/conversations.list
-# from https://slack.com/api/conversations.list 
-# to http://localhost:8000/api/env/c49bc3c27a4d468ea12a572c6b0b5bd0/services/slack/conversations.list 
+ 
+# You can swap the URLs directly in MCPs or use the code executor tool for python or bash with proxy that will route the requests automatically
+# e.g. proxt GET 
+# from [https://slack.com/api/conversations.list]
+# to [http://localhost:8000/api/env/{environmentId}/services/slack]/conversations.list 
+
+# Using CodeExecutorProxy (With OpenAI Agents SDK Tool example, LangChain is also available)
+from agent_diff import PythonExecutorProxy, create_openai_tool
+from agents import Agent, Runner
+
+# Pass base_url from client or use default
+python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_url)
+bash_executor = BashExecutorProxy(env.environmentId, base_url=client.base_url)
+python_tool = create_openai_tool(python_executor) 
+bash_tool = create_openai_tool(bash_executor)
+
+
+agent = Agent(
+        name="Slack Assistant",
+        instructions="You can execute bash with Curl or Python with requests to interact with APIs. ",
+        tools=[python_tool, bash_tool]
+    )
+
+response = await Runner.run(agent, "Post 'Hello' to Slack channel #general") 
+# The agent writes normal code like:
+# requests.post('https://api.slack.com/api/chat.postMessage', ...)
+# But it will be proxied to the temporary sandbox enviroment  
 
 # Compute diff and get results
 diff = client.diff_run(runId=run.runId)
@@ -102,10 +149,19 @@ for test in suite['tests']:
     # This function will take a snapshot before run
     run = client.start_run(envId = env.environmentId, testId = test_id) 
 
-    #your LLM/ Agent function - you need to proxy the request on your own for endpoint recived in env.environmentUrl
-    ...
-    response = await Runner.run(triage_agent, prompt)
-    ... 
+    from agent_diff import PythonExecutorProxy, create_openai_tool
+    from agents import Agent, Runner
+
+    bash_executor = BashExecutorProxy(env.environmentId, base_url=client.base_url)
+    bash_tool = create_openai_tool(bash_executor)
+
+    agent = Agent(
+        name="Slack Assistant",
+        instructions="You can execute Bash code with Curl to interact with APIs. Use the execute_code tool.",
+        tools=[bash_tool]
+    )
+
+    response = await Runner.run(agent, prompt)
 
     #This function will take a 2nd snapshot, run diff and assert results against expedted state defined in test suite
     evaluation_result = client.evaluate_run(run.runId) 
@@ -116,27 +172,60 @@ for test in suite['tests']:
     client.delete_env(envId=env.environmentId)
 ```
 
-## Services
+## Training & Fine-tuning
 
-- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.md`](backend/src/services/slack/READEME.md). A few examples:
+Agent Diff is perfect for generating training data for LLMs with tool calling capabilities:
 
-  ```python
-  "chat.postMessage"  # post messages in seeded channels/DMs
-  "conversations.open"  # spin up IM/MPIM threads
-  "reactions.add"  # add emoji reactions to seeded messages
-  ```
+### With Hugging Face (smolagents)
 
-- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/READEME.md`](backend/src/services/linear/READEME.md). Sample operations:
+```python
+from agent_diff import AgentDiff, PythonExecutorProxy, BashExecutorProxy, create_smolagents_tool
+from smolagents import CodeAgent, InferenceClientModel
+from 
 
-  ```python
-  "issues"            # query issues (list/pagination)
-  "issueCreate"       # mutation to create an issue
-  "projectUpdate"     # mutation to update project metadata
-  ```
+# Setup and evaluation
+client = AgentDiff()
 
-- Gmail, GitHub, Jira (TBD).
+# Load test suite with prompts
+test_suite = client.get_test_suite("slack-bench")
 
-If you have requests for specific services + any feedback, mail me at hubert@uni.minerva.edu
+training_data = []
+
+for test in test_suite['tests']:
+    # Initialize environment for each test
+    env = client.init_env(testId=test['id'])
+    run = client.start_run(envId=env.environmentId, testId=test['id'])
+
+    # Create HF agent with Python and/ or Bash tools
+    python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_url)
+    bash_executor = BashExecutorProxy(env.environmentId, base_url=client.base_url)
+    python_tool = create_smolagents_tool(python_executor)
+    bash_tool = create_smolagents_tool(bash_executor)
+
+    model = InferenceClientModel("meta-llama/Meta-Llama-3-70B-Instruct")
+    agent = CodeAgent(tools=[python_tool, bash_tool], model=model)
+
+    # Execute task with prompt from test suite
+    prompt = test['prompt']
+    response = agent.run(prompt)
+    trace = agent.get_last_run_trace()  # Full execution history
+
+    # Evaluate against expected outcomes
+    eval_result = client.evaluate_run(run.runId)
+
+    training_data.append({
+            "prompt": prompt,
+            "completion": json.dumps(trace),  # Full trace for learning reasoning
+            "label": eval_result.score == 1,  # True=passed, False=failed assertions
+        })
+
+    client.delete_env(envId=env.environmentId)
+
+
+# Use with HuggingFace TRL trainers (KTOTrainer, DPOTrainer, etc.)
+dataset = Dataset.from_list(training_data)
+dataset.save_to_disk("agent_training_data")
+```
 
 ## Documentation
 

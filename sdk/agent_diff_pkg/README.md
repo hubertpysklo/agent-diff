@@ -6,14 +6,13 @@ Python SDK for testing AI agents against isolated replicas of production service
 
 ```bash
 uv add agent-diff
-# or
-pip install agent-diff
 ```
 
 ## Quick Start
 
 ```python
 from agent_diff import AgentDiff
+from agent_diff import PythonExecutorProxy, create_openai_tool
 
 # Self-hosted (defaults to http://localhost:8000)
 client = AgentDiff()
@@ -32,14 +31,21 @@ env = client.init_env(
     ttlSeconds=1800
 )
 
+# 2. Create executor with automatic API interception
 
-# 2. Take before snapshot of the environment 
+python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_url)
+python_tool = create_openai_tool(python_executor)
+
+# 3. Take before snapshot
 run = client.start_run(envId=env.environmentId)
 
-# 3. Agents does it's thing to replica
-# (Use env.environmentUrl to call the service API)
+# 4. Run your agent (API calls are automatically intercepted)
+from agents import Agent
 
-# 4. Compute the diff
+agent = Agent(model="gpt-4o", tools=[python_tool])
+response = agent.run("Send a message to #general saying 'Hello!'")
+
+# 5. Compute the diff
 diff = client.diff_run(runId=run.runId)
 
 # Inspect changes
@@ -47,8 +53,90 @@ diff.diff['inserts']   # New records
 diff.diff['updates']   # Modified records
 diff.diff['deletes']   # Deleted records
 
-# 5. Cleanup
+# 6. Cleanup
 client.delete_env(envId=env.environmentId)
+```
+
+## Code Execution Proxies
+
+Agent Diff provides **code execution proxies** that automatically intercept API calls and route them to isolated test environments. This enables agents with code execution capabilities to interact with service replicas without any code changes.
+
+### How It Works
+
+When your agent executes Python or Bash code:
+1. The executor wraps your code with interception logic
+2. API calls to `https://api.slack.com` → `http://localhost:8000/api/env/{env_id}/services/slack/api`
+3. API calls to `https://api.linear.app` → `http://localhost:8000/api/env/{env_id}/services/linear`
+4. Your agent sees real API responses from the isolated environment
+
+### Available Executors
+
+#### PythonExecutorProxy
+
+Intercepts Python `requests` and `urllib` libraries:
+
+```python
+from agent_diff import PythonExecutorProxy, create_openai_tool
+
+python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_url)
+python_tool = create_openai_tool(python_executor)
+
+# Works with OpenAI Agents SDK, LangChain, smolagents
+agent = Agent(model="gpt-5", tools=[python_tool])
+agent.run("Send a Slack message to #general")
+```
+
+#### BashExecutorProxy
+
+Intercepts `curl` commands:
+
+```python
+from agent_diff import BashExecutorProxy, create_openai_tool
+
+bash_executor = BashExecutorProxy(env.environmentId, base_url=client.base_url)
+bash_tool = create_openai_tool(bash_executor)
+
+agent = Agent(model="gpt-5", tools=[bash_tool])
+agent.run("Use curl to post a message to Slack")
+```
+
+### Framework Support
+
+Create tools for popular agent frameworks:
+
+```python
+from agent_diff import create_openai_tool, create_langchain_tool, create_smolagents_tool
+
+# OpenAI Agents SDK
+openai_tool = create_openai_tool(python_executor)
+
+# LangChain
+langchain_tool = create_langchain_tool(python_executor)
+
+# HuggingFace smolagents
+smolagents_tool = create_smolagents_tool(python_executor)
+```
+
+### Direct Execution
+
+For custom frameworks or direct usage:
+
+```python
+python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_url)
+
+result = python_executor.execute("""
+import requests
+response = requests.post('https://api.slack.com/api/chat.postMessage', json={
+    'channel': '#general',
+    'text': 'Hello from Agent Diff!'
+})
+print(response.json())
+""")
+
+if result["status"] == "success":
+    print(result["stdout"])
+else:
+    print(result["stderr"])
 ```
 
 ## Environments
@@ -87,17 +175,20 @@ for test in suite['tests']:
     prompt = test['prompt']
     test_id = test['id']
 
-    env = client.init_env(testId = test_id)
-    run = client.start_run(envId = env.environmentId, testId = test_id)
+    env = client.init_env(testId=test_id)
+    run = client.start_run(envId=env.environmentId, testId=test_id)
 
-    #your LLM/ Agent function - you need to proxy the request on your own for endpoint recived in env.environmentUrl
-    ...
-    response = await Runner.run(triage_agent, prompt)
-    ... 
+    # Create executor with automatic API interception
+    python_executor = PythonExecutorProxy(env.environmentId, base_url=client.base_url)
+    python_tool = create_openai_tool(python_executor)
 
-    evaluation_result = client.evaluate_run(run.runId) #returns score runId, status and Score (0/1)
+    # Run your agent with the tool
+    agent = Agent(model="gpt-5", tools=[python_tool])
+    response = agent.run(prompt)
 
-    evaluation_results.append(evaluation_result) 
+    evaluation_result = client.evaluate_run(run.runId)  # Returns score, runId, status and Score (0/1)
+
+    evaluation_results.append(evaluation_result)
 
     client.delete_env(envId=env.environmentId)
 ```

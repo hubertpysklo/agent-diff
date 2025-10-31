@@ -219,7 +219,7 @@ class AgentDiff:
     def evaluate_run(
         self, request: EndRunRequest | None = None, **kwargs
     ) -> EndRunResponse:
-        """Evaluate a test run (computes diff and comperes to expected output in test suite). Pass EndRunRequest or runId."""
+        """Evaluate a test run (computes diff and compares to expected output in test suite). Pass EndRunRequest or runId."""
         if request is None:
             request = EndRunRequest(**kwargs)
         response = requests.post(
