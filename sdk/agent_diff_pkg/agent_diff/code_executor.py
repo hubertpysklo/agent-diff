@@ -87,12 +87,14 @@ import warnings
 warnings.filterwarnings("ignore")
 
 url_mappings = {json.dumps(self.url_mappings)}
-auth_token = "{self.token or ""}"
+auth_token = {json.dumps(self.token or "")}
 
 # Monkey-patch requests library
 try:
     import requests
+    import requests.sessions
     original_request = requests.request
+    original_session_request = requests.sessions.Session.request
 
     def patch_url_and_headers(url, kwargs):
         for old_url, new_url in url_mappings:
@@ -109,12 +111,20 @@ try:
         url, kwargs = patch_url_and_headers(url, kwargs)
         return original_request(method, url, **kwargs)
 
+    def patched_session_request(self, method, url, **kwargs):
+        url, kwargs = patch_url_and_headers(url, kwargs)
+        return original_session_request(self, method, url, **kwargs)
+
     requests.request = patched_request
     requests.get = lambda url, **kwargs: patched_request("GET", url, **kwargs)
     requests.post = lambda url, **kwargs: patched_request("POST", url, **kwargs)
     requests.put = lambda url, **kwargs: patched_request("PUT", url, **kwargs)
     requests.patch = lambda url, **kwargs: patched_request("PATCH", url, **kwargs)
     requests.delete = lambda url, **kwargs: patched_request("DELETE", url, **kwargs)
+
+    # Patch Session.request to intercept session-based calls
+    requests.sessions.Session.request = patched_session_request
+    requests.Session.request = patched_session_request
 except ImportError:
     pass
 
@@ -167,6 +177,14 @@ class BashExecutorProxy(BaseExecutorProxy):
 
     def execute(self, code: str) -> Dict[str, Any]:
         """Execute Bash code with curl interception."""
+        import shlex
+
+        # Safely escape token for shell if present
+        auth_header_line = ""
+        if self.token:
+            escaped_token = shlex.quote(self.token)
+            auth_header_line = f'new_args+=("-H" "Authorization: Bearer {escaped_token}")'
+
         wrapper_code = f"""#!/bin/bash
 
 # Override curl to intercept and modify URLs
@@ -189,7 +207,7 @@ curl() {{
     done
 
     # Add auth header if token provided
-    {f'new_args+=("-H" "Authorization: Bearer {self.token}")' if self.token else ""}
+    {auth_header_line}
 
     # Call real curl with modified arguments
     command curl "${{new_args[@]}}"
