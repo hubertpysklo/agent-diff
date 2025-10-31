@@ -1,0 +1,234 @@
+/**
+ * Agent Diff API Client
+ * Provides methods for managing environments, test suites, and runs
+ */
+
+import type {
+  InitEnvRequest,
+  InitEnvResponse,
+  DeleteEnvResponse,
+  TemplateEnvironmentListResponse,
+  TemplateEnvironmentDetail,
+  CreateTemplateFromEnvRequest,
+  CreateTemplateFromEnvResponse,
+  TestSuiteListResponse,
+  TestSuiteDetail,
+  Test,
+  CreateTestSuiteRequest,
+  CreateTestSuiteResponse,
+  CreateTestsRequest,
+  CreateTestsResponse,
+  StartRunRequest,
+  StartRunResponse,
+  EndRunRequest,
+  EndRunResponse,
+  DiffRunRequest,
+  DiffRunResponse,
+  TestResultResponse,
+} from './types';
+
+export interface AgentDiffOptions {
+  apiKey?: string;
+  baseUrl?: string;
+}
+
+export class AgentDiff {
+  private apiKey?: string;
+  private baseUrl: string;
+
+  constructor(options?: AgentDiffOptions) {
+    this.apiKey = options?.apiKey || process.env['AGENT_DIFF_API_KEY'];
+    this.baseUrl =
+      options?.baseUrl ||
+      process.env['AGENT_DIFF_BASE_URL'] ||
+      'http://localhost:8000';
+  }
+
+  private headers(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.apiKey) {
+      headers['X-API-Key'] = this.apiKey;
+    }
+    return headers;
+  }
+
+  private async request<T>(
+    path: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        ...this.headers(),
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(
+        `Request failed: ${response.status} ${response.statusText}\n${error}`
+      );
+    }
+
+    const data = await response.json();
+    return data as T;
+  }
+
+  // Environment Management
+
+  async initEnv(request: InitEnvRequest): Promise<InitEnvResponse> {
+    const response = await this.request<InitEnvResponse>(
+      '/api/platform/initEnv',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    return {
+      ...response,
+      expiresAt: new Date(response.expiresAt),
+    };
+  }
+
+  async deleteEnv(envId: string): Promise<DeleteEnvResponse> {
+    return this.request<DeleteEnvResponse>(`/api/platform/env/${envId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Template Management
+
+  async listTemplates(): Promise<TemplateEnvironmentListResponse> {
+    return this.request<TemplateEnvironmentListResponse>(
+      '/api/platform/templates'
+    );
+  }
+
+  async getTemplate(templateId: string): Promise<TemplateEnvironmentDetail> {
+    return this.request<TemplateEnvironmentDetail>(
+      `/api/platform/templates/${templateId}`
+    );
+  }
+
+  async createTemplateFromEnvironment(
+    request: CreateTemplateFromEnvRequest
+  ): Promise<CreateTemplateFromEnvResponse> {
+    return this.request<CreateTemplateFromEnvResponse>(
+      '/api/platform/templates/from-environment',
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+  }
+
+  // Test Suite Management
+
+  async listTestSuites(): Promise<TestSuiteListResponse> {
+    return this.request<TestSuiteListResponse>('/api/platform/testSuites');
+  }
+
+  async getTestSuite(
+    suiteId: string,
+    options?: { expand?: boolean }
+  ): Promise<TestSuiteDetail | { tests: Test[] }> {
+    const query = options?.expand ? '?expand=tests' : '';
+    const response = await this.request<TestSuiteDetail | { tests: Test[] }>(
+      `/api/platform/testSuites/${suiteId}${query}`
+    );
+
+    if (options?.expand && 'createdAt' in response) {
+      return {
+        ...response,
+        createdAt: new Date(response.createdAt),
+        updatedAt: new Date(response.updatedAt),
+        tests: response.tests?.map((test) => ({
+          ...test,
+          createdAt: new Date(test.createdAt),
+          updatedAt: new Date(test.updatedAt),
+        })),
+      };
+    }
+
+    return response;
+  }
+
+  async getTest(testId: string): Promise<Test> {
+    const response = await this.request<Test>(`/api/platform/tests/${testId}`);
+
+    return {
+      ...response,
+      createdAt: new Date(response.createdAt),
+      updatedAt: new Date(response.updatedAt),
+    };
+  }
+
+  async createTestSuite(
+    request: CreateTestSuiteRequest
+  ): Promise<CreateTestSuiteResponse> {
+    return this.request<CreateTestSuiteResponse>('/api/platform/testSuites', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async createTests(
+    suiteId: string,
+    request: CreateTestsRequest
+  ): Promise<CreateTestsResponse> {
+    const response = await this.request<CreateTestsResponse>(
+      `/api/platform/testSuites/${suiteId}/tests`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      }
+    );
+
+    return {
+      tests: response.tests.map((test) => ({
+        ...test,
+        createdAt: new Date(test.createdAt),
+        updatedAt: new Date(test.updatedAt),
+      })),
+    };
+  }
+
+  // Run Management
+
+  async startRun(request: StartRunRequest): Promise<StartRunResponse> {
+    return this.request<StartRunResponse>('/api/platform/startRun', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async evaluateRun(request: EndRunRequest): Promise<EndRunResponse> {
+    return this.request<EndRunResponse>('/api/platform/evaluateRun', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async diffRun(request: DiffRunRequest): Promise<DiffRunResponse> {
+    return this.request<DiffRunResponse>('/api/platform/diffRun', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  }
+
+  async getResultsForRun(runId: string): Promise<TestResultResponse> {
+    const response = await this.request<TestResultResponse>(
+      `/api/platform/results/${runId}`
+    );
+
+    return {
+      ...response,
+      createdAt: new Date(response.createdAt),
+    };
+  }
+}

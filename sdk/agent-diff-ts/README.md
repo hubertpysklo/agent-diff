@@ -1,0 +1,276 @@
+# Agent Diff TypeScript SDK
+
+TypeScript/Node.js SDK for [Agent Diff](https://github.com/hubertpysklo/agent-diff) - test AI agents against isolated replicas of services like Slack and Linear.
+
+## Installation
+
+```bash
+npm install @agent-diff/sdk
+```
+
+## Quick Start
+
+### 1. Start Backend
+
+```bash
+git clone https://github.com/hubertpysklo/agent-diff.git
+cd agent-diff/ops
+docker-compose up
+```
+
+Backend runs on http://localhost:8000
+
+### 2. Basic Usage
+
+```typescript
+import { AgentDiff, TypeScriptExecutorProxy } from '@agent-diff/sdk';
+
+const client = new AgentDiff();
+
+// Initialize isolated environment
+const env = await client.initEnv({
+  templateService: 'slack',
+  templateName: 'slack_default',
+  impersonateUserId: 'U01AGENBOT9'
+});
+
+// Take before snapshot
+const run = await client.startRun({ envId: env.environmentId });
+
+// Execute code with automatic URL transformation
+const executor = new TypeScriptExecutorProxy(env.environmentId);
+await executor.execute(`
+  const response = await fetch('https://slack.com/api/conversations.list');
+  const data = await response.json();
+  console.log('Channels:', data.channels.map(c => c.name));
+`);
+
+// Get diff of changes
+const diff = await client.diffRun({
+  envId: env.environmentId,
+  runId: run.runId,
+  beforeSuffix: run.beforeSnapshotId
+});
+
+console.log('Changes:', diff.diff);
+```
+
+## Code Executors
+
+### TypeScript Executor (In-Process)
+
+Executes TypeScript code in-process with `fetch` interception:
+
+```typescript
+import { TypeScriptExecutorProxy } from '@agent-diff/sdk';
+
+const executor = new TypeScriptExecutorProxy(
+  'env-id',
+  'http://localhost:8000',
+  'optional-token'
+);
+
+const result = await executor.execute(`
+  const response = await fetch('https://slack.com/api/conversations.list', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await response.json();
+  console.log(JSON.stringify(data, null, 2));
+`);
+
+console.log(result.stdout); // Captured console.log output
+```
+
+### Bash Executor (Subprocess)
+
+Executes Bash commands in subprocess with `curl` interception:
+
+```typescript
+import { BashExecutorProxy } from '@agent-diff/sdk';
+
+const executor = new BashExecutorProxy(
+  'env-id',
+  'http://localhost:8000'
+);
+
+const result = await executor.execute(`
+  curl -X POST https://slack.com/api/chat.postMessage \\
+    -H "Content-Type: application/json" \\
+    -d '{"channel": "C01ABCD1234", "text": "Hello!"}'
+`);
+
+console.log(result.stdout); // curl output
+```
+
+## Framework Integrations
+
+### Vercel AI SDK
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { TypeScriptExecutorProxy, createVercelAITool } from '@agent-diff/sdk';
+
+const executor = new TypeScriptExecutorProxy(envId);
+const tool = createVercelAITool(executor);
+
+const result = await generateText({
+  model: openai('gpt-4'),
+  tools: { execute_typescript: tool },
+  prompt: 'Post "Hello" to Slack channel C01ABCD1234',
+  maxSteps: 5
+});
+```
+
+### LangChain
+
+```typescript
+import { ChatOpenAI } from '@langchain/openai';
+import { createAgent } from 'langchain';
+import { TypeScriptExecutorProxy, createLangChainTool } from '@agent-diff/sdk';
+
+const executor = new TypeScriptExecutorProxy(envId);
+const tool = createLangChainTool(executor);
+
+const agent = createAgent({
+  model: new ChatOpenAI({ model: 'gpt-4' }),
+  tools: [tool]
+});
+
+const result = await agent.invoke({
+  messages: [{ role: 'user', content: 'List Slack channels' }]
+});
+```
+
+### OpenAI Agents SDK
+
+```typescript
+import { Agent } from '@openai/agents';
+import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from '@agent-diff/sdk';
+
+const executor = new TypeScriptExecutorProxy(envId);
+const tool = createOpenAIAgentsTool(executor);
+
+const agent = new Agent({
+  name: 'Slack Assistant',
+  instructions: 'Use execute_typescript tool to interact with Slack API',
+  tools: [tool]
+});
+
+const result = await agent.run('Post a message to Slack');
+```
+
+## API Reference
+
+### AgentDiff Client
+
+```typescript
+const client = new AgentDiff({
+  apiKey: 'your-api-key',  // Optional, defaults to AGENT_DIFF_API_KEY env var
+  baseUrl: 'http://localhost:8000'  // Optional
+});
+
+// Environment Management
+await client.initEnv(request: InitEnvRequest): Promise<InitEnvResponse>
+await client.deleteEnv(envId: string): Promise<DeleteEnvResponse>
+
+// Template Management
+await client.listTemplates(): Promise<TemplateEnvironmentListResponse>
+await client.getTemplate(templateId: string): Promise<TemplateEnvironmentDetail>
+await client.createTemplateFromEnvironment(request): Promise<CreateTemplateFromEnvResponse>
+
+// Test Suite Management
+await client.listTestSuites(): Promise<TestSuiteListResponse>
+await client.getTestSuite(suiteId: string, options?): Promise<TestSuiteDetail>
+await client.createTestSuite(request): Promise<CreateTestSuiteResponse>
+await client.getTest(testId: string): Promise<Test>
+
+// Run Management
+await client.startRun(request: StartRunRequest): Promise<StartRunResponse>
+await client.evaluateRun(request: EndRunRequest): Promise<EndRunResponse>
+await client.diffRun(request: DiffRunRequest): Promise<DiffRunResponse>
+await client.getResultsForRun(runId: string): Promise<TestResultResponse>
+```
+
+### Executors
+
+```typescript
+// TypeScript Executor
+const tsExecutor = new TypeScriptExecutorProxy(
+  environmentId: string,
+  baseUrl?: string,
+  token?: string
+);
+
+// Bash Executor
+const bashExecutor = new BashExecutorProxy(
+  environmentId: string,
+  baseUrl?: string,
+  token?: string
+);
+
+// Execute code
+const result: ExecutionResult = await executor.execute(code: string);
+// Result: { status, stdout, stderr, exitCode?, error? }
+```
+
+## URL Transformation
+
+Executors automatically transform API URLs:
+
+```typescript
+// Agent code makes request to:
+'https://slack.com/api/conversations.list'
+
+// Transformed to:
+'http://localhost:8000/api/env/{env-id}/services/slack/api/conversations.list'
+```
+
+Supported services:
+- Slack: `https://slack.com` → `/api/env/{id}/services/slack`
+- Slack: `https://api.slack.com` → `/api/env/{id}/services/slack`
+- Linear: `https://api.linear.app` → `/api/env/{id}/services/linear`
+
+## Examples
+
+See the [examples/](./examples) directory for complete working examples:
+
+- [basic.ts](./examples/basic.ts) - Basic environment lifecycle and code execution
+- [vercel-ai-sdk.ts](./examples/vercel-ai-sdk.ts) - Vercel AI SDK integration
+- [langchain.ts](./examples/langchain.ts) - LangChain integration
+- [openai-agents.ts](./examples/openai-agents.ts) - OpenAI Agents SDK integration
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Type check
+npm run type-check
+
+# Run tests
+npm test
+
+# Run integration tests (requires backend)
+npm run test:integration
+```
+
+## Requirements
+
+- Node.js >= 18.0.0
+- Backend running on http://localhost:8000 (or custom URL)
+
+## Related
+
+- [Python SDK](../agent_diff_pkg) - Python version of this SDK
+- [Agent Diff Backend](../../backend) - Self-hosted backend
+- [Documentation](../../docs) - Full platform documentation
+
+## License
+
+MIT
