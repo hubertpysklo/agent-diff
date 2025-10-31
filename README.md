@@ -66,7 +66,7 @@ client = AgentDiff(
 )
 
 # Initialise isolated environment from a template. See: examples/slack/seeds
-env = client.init_env(templateName="slack_bench_default", impersonateUserId="U01AGENBOT9")
+env = client.init_env(templateService="slack", templateName="slack_default", impersonateUserId="U01AGENBOT9") #impersonateUserId - seeded user (agent) in seed
 
 # e.g. env.environmentUrl = http://localhost:8000/api/env/{environmentId}/services/slack
 
