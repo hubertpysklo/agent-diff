@@ -21,8 +21,6 @@ def parse_uuid(value: str) -> UUID | None:
         return None
 
 
-
-
 def require_environment_access(
     session: Session, principal_id: str, env_id: str
 ) -> RunTimeEnvironment:
@@ -55,8 +53,6 @@ def require_run_access(session: Session, principal_id: str, run_id: str) -> Test
 
     require_resource_access(principal_id, run.created_by)
     return run
-
-
 
 
 def resolve_and_validate_test_items(

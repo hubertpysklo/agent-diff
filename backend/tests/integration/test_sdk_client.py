@@ -382,7 +382,7 @@ class TestSuiteOperations:
         created = sdk_client.create_test_suite(req)
 
         # Get with expand=tests
-        detail = sdk_client.get_test_suite(created.id, include_tests=True)
+        detail = sdk_client.get_test_suite(created.id, expand=True)
 
         assert detail.id == created.id
         assert detail.name == "Suite for Expand Test"
@@ -390,9 +390,10 @@ class TestSuiteOperations:
         assert detail.tests[0].name == "Expand Test 1"
 
         # Get without expand
-        summary = sdk_client.get_test_suite(created.id, include_tests=False)
-        assert summary.id == created.id
-        assert len(summary.tests) == 0
+        summary = sdk_client.get_test_suite(created.id, expand=False)
+        assert "tests" in summary
+        assert len(summary["tests"]) == 1
+        assert summary["tests"][0]["prompt"] == "Prompt"
 
 
 class TestOperations:
@@ -545,7 +546,7 @@ class TestOperations:
         suite = sdk_client.create_test_suite(suite_req)
 
         # Get suite with tests to find test ID
-        detail = sdk_client.get_test_suite(suite.id, include_tests=True)
+        detail = sdk_client.get_test_suite(suite.id, expand=True)
         test_id = detail.tests[0].id
 
         # Get individual test
@@ -615,7 +616,7 @@ class TestRunLifecycle:
             ],
         )
         suite = sdk_client.create_test_suite(suite_req)
-        suite_detail = sdk_client.get_test_suite(suite.id, include_tests=True)
+        suite_detail = sdk_client.get_test_suite(suite.id, expand=True)
         test_id = suite_detail.tests[0].id
 
         # Start run
@@ -684,7 +685,7 @@ class TestRunLifecycle:
             ],
         )
         suite = sdk_client.create_test_suite(suite_req)
-        suite_detail = sdk_client.get_test_suite(suite.id, include_tests=True)
+        suite_detail = sdk_client.get_test_suite(suite.id, expand=True)
         test_id = suite_detail.tests[0].id
 
         # Start run
@@ -756,7 +757,7 @@ class TestRunLifecycle:
             ],
         )
         suite = sdk_client.create_test_suite(suite_req)
-        suite_detail = sdk_client.get_test_suite(suite.id, include_tests=True)
+        suite_detail = sdk_client.get_test_suite(suite.id, expand=True)
         test_id = suite_detail.tests[0].id
 
         start_resp = sdk_client.start_run(
@@ -826,7 +827,7 @@ class TestDiffOperations:
             ],
         )
         suite = sdk_client.create_test_suite(suite_req)
-        suite_detail = sdk_client.get_test_suite(suite.id, include_tests=True)
+        suite_detail = sdk_client.get_test_suite(suite.id, expand=True)
         test_id = suite_detail.tests[0].id
 
         # Start run to get before snapshot
@@ -889,7 +890,7 @@ class TestDiffOperations:
             ],
         )
         suite = sdk_client.create_test_suite(suite_req)
-        suite_detail = sdk_client.get_test_suite(suite.id, include_tests=True)
+        suite_detail = sdk_client.get_test_suite(suite.id, expand=True)
         test_id = suite_detail.tests[0].id
 
         # Start run to capture before
@@ -1026,7 +1027,7 @@ class TestNameResolution:
         suite = sdk_client.create_test_suite(suite_req)
 
         # Verify test was created with resolved template
-        suite_detail = sdk_client.get_test_suite(suite.id, include_tests=True)
+        suite_detail = sdk_client.get_test_suite(suite.id, expand=True)
         assert len(suite_detail.tests) == 1
 
         with session_manager.with_meta_session() as s:

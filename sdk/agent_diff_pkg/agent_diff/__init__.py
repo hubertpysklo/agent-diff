@@ -13,8 +13,19 @@ from .models import (
     DeleteEnvResponse,
     TestResultResponse,
 )
+from .code_executor import (
+    # Core executor classes
+    BaseExecutorProxy,
+    PythonExecutorProxy,
+    BashExecutorProxy,
 
-__version__ = "0.0.1"
+    # Framework-specific tool factories
+    create_openai_tool,
+    create_langchain_tool,
+    create_smolagents_tool,
+)
+
+__version__ = "0.1.0"
 __all__ = [
     "AgentDiff",
     "InitEnvRequestBody",
@@ -29,4 +40,12 @@ __all__ = [
     "CreateTemplateFromEnvResponse",
     "DeleteEnvResponse",
     "TestResultResponse",
+    # Executors
+    "BaseExecutorProxy",
+    "PythonExecutorProxy",
+    "BashExecutorProxy",
+    # Tool factories
+    "create_openai_tool",
+    "create_langchain_tool",
+    "create_smolagents_tool",
 ]

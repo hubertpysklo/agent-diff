@@ -30,8 +30,10 @@ from .models import (
 class AgentDiff:
     def __init__(self, api_key: str | None = None, base_url: str | None = None):
         self.api_key = api_key or os.getenv("AGENT_DIFF_API_KEY")
-        self.base_url = base_url if base_url is not None else (
-            os.getenv("AGENT_DIFF_BASE_URL") or "http://localhost:8000"
+        self.base_url = (
+            base_url
+            if base_url is not None
+            else (os.getenv("AGENT_DIFF_BASE_URL") or "http://localhost:8000")
         )
 
     def _headers(self) -> dict[str, str]:
@@ -99,16 +101,32 @@ class AgentDiff:
         return TestSuiteListResponse.model_validate(response.json())
 
     def get_test_suite(
-        self, suite_id: UUID, include_tests: bool = True
-    ) -> TestSuiteDetail:
-        query = "?expand=tests" if include_tests else ""
+        self, suite_id: UUID, expand: bool = False
+    ) -> dict | TestSuiteDetail:
+        """
+        Get test suite.
+
+        Args:
+            suite_id: Suite ID
+            expand: If True, returns full TestSuiteDetail with all metadata.
+                   If False (default), returns minimal dict with just {"tests": [...]}
+
+        Returns:
+            dict: Minimal response with just test list (default)
+            TestSuiteDetail: Full suite details when expand=True
+        """
+        query = "?expand=tests" if expand else ""
         response = requests.get(
             f"{self.base_url}/api/platform/testSuites/{suite_id}{query}",
             headers=self._headers(),
             timeout=5,
         )
         response.raise_for_status()
-        return TestSuiteDetail.model_validate(response.json())
+
+        if expand:
+            return TestSuiteDetail.model_validate(response.json())
+        else:
+            return response.json()
 
     def get_test(self, test_id: UUID | None = None, **kwargs) -> Test:
         """Get a test by ID. Pass test_id or testId kwarg."""
@@ -186,7 +204,7 @@ class AgentDiff:
     def start_run(
         self, request: StartRunRequest | None = None, **kwargs
     ) -> StartRunResponse:
-        """Start a test run (takes initial environment snapshot). Pass StartRunRequest."""
+        """Start a test run (takes initial environment snapshot). Pass StartRunRequest (envID or testID)."""
         if request is None:
             request = StartRunRequest(**kwargs)
         response = requests.post(
@@ -201,7 +219,7 @@ class AgentDiff:
     def evaluate_run(
         self, request: EndRunRequest | None = None, **kwargs
     ) -> EndRunResponse:
-        """Evaluate a test run (computes diff and comperes to expected output in test suite). Pass EndRunRequest or runId."""
+        """Evaluate a test run (computes diff and compares to expected output in test suite). Pass EndRunRequest or runId."""
         if request is None:
             request = EndRunRequest(**kwargs)
         response = requests.post(
