@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import math
+import re
+from uuid import uuid4
 from typing import Any, Callable, Awaitable, NoReturn
-from sqlalchemy import select
+from sqlalchemy import select, or_, false
 from sqlalchemy.exc import IntegrityError
 
 from starlette.requests import Request
@@ -18,6 +21,7 @@ from src.services.slack.database.schema import (
     Message,
     UserTeam,
 )
+from sqlalchemy.sql.elements import ColumnElement as SAColumnElement
 
 
 # Common Slack reactions for MVP
@@ -1728,6 +1732,325 @@ async def slack_endpoint(request: Request) -> JSONResponse:
         )
 
 
+HIGHLIGHT_START = "\ue000"
+HIGHLIGHT_END = "\ue001"
+
+
+def _get_params(request: Request) -> dict[str, Any]:
+    # Convert QueryParams to dict[str, str]
+    return {k: request.query_params.get(k) for k in request.query_params}
+
+
+async def _get_params_async(request: Request) -> dict[str, Any]:
+    if request.method.upper() == "GET":
+        return _get_params(request)
+    try:
+        # Prefer JSON body; fall back to empty
+        return await request.json()
+    except Exception:
+        return {}
+
+
+def _parse_query_filters(q: str) -> tuple[list[str], str | None, str | None]:
+    terms: list[str] = []
+    in_channel: str | None = None
+    from_user: str | None = None
+
+    for raw in q.split():
+        if raw.startswith("in:") and len(raw) > 3:
+            in_channel = raw[3:]
+            continue
+        if raw.startswith("from:") and len(raw) > 5:
+            from_user = raw[5:]
+            continue
+        terms.append(raw)
+    return terms, in_channel, from_user
+
+
+def _ci_contains(text: str | None, term: str) -> bool:
+    if not text:
+        return False
+    return term.lower() in text.lower()
+
+
+def _count_ci_occurrences(text: str | None, term: str) -> int:
+    if not text:
+        return 0
+    return len(re.findall(re.escape(term), text, flags=re.IGNORECASE))
+
+
+def _highlight_text(text: str | None, terms: list[str]) -> str:
+    if not text:
+        return ""
+    highlighted = text
+    # Replace each term with markers (case-insensitive). To reduce overlaps, process longer terms first.
+    for term in sorted(set(t for t in terms if t), key=len, reverse=True):
+        pattern = re.compile(re.escape(term), flags=re.IGNORECASE)
+        highlighted = pattern.sub(
+            f"{HIGHLIGHT_START}\\g<0>{HIGHLIGHT_END}", highlighted
+        )
+    return highlighted
+
+
+def _build_channel_obj(
+    request: Request,
+    ch: Channel,
+    actor_id: str,
+    team_id: str,
+) -> dict[str, Any]:
+    # Determine name for IM: channel.name is other user id
+    name = ch.channel_name
+    if ch.is_dm:
+        try:
+            members = ops.list_members_in_channel(
+                session=_session(request), channel_id=ch.channel_id, team_id=team_id
+            )
+            other = next((m.user_id for m in members if m.user_id != actor_id), None)
+            if other:
+                name = other
+        except Exception:
+            name = ch.channel_name
+
+    return {
+        "id": _format_channel_id(ch.channel_id),
+        "name": name,
+        "is_private": ch.is_private,
+        "is_mpim": ch.is_gc,
+        "is_im": ch.is_dm,
+        "is_shared": False,
+        "is_ext_shared": False,
+        "is_org_shared": False,
+        "is_pending_ext_shared": False,
+        "pending_shared": [],
+    }
+
+
+async def search_messages(request: Request) -> JSONResponse:
+    params = await _get_params_async(request)
+    # Allow query from query params if GET
+    if request.method.upper() == "GET":
+        params.update(_get_params(request))
+
+    query_str = (params.get("query") or params.get("q") or "").strip()
+    if not query_str:
+        return _json_response(
+            {"ok": False, "error": "No query passed"},
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    highlight = str(params.get("highlight", "false")).lower() == "true"
+    sort = (params.get("sort") or "score").lower()
+    sort_dir = (params.get("sort_dir") or "desc").lower()
+    count = params.get("count")
+    page = params.get("page")
+
+    try:
+        per_page = max(1, min(100, int(count))) if count is not None else 20
+    except Exception:
+        per_page = 20
+    try:
+        page_num = max(1, int(page)) if page is not None else 1
+    except Exception:
+        page_num = 1
+
+    session = _session(request)
+    actor_id = _principal_user_id(request)
+    team_id = _get_env_team_id(request, channel_id=None, actor_user_id=actor_id)
+
+    # Parse filters according to docs (in:, from:)
+    terms, in_channel_filter, from_filter = _parse_query_filters(query_str)
+
+    # Resolve accessible channels
+    accessible_channels = ops.list_user_channels(
+        session=session, user_id=actor_id, team_id=team_id
+    )
+    accessible_ids = {c.channel_id for c in accessible_channels}
+
+    # Apply in: filter
+    channel_scope_ids = set(accessible_ids)
+    if in_channel_filter:
+        # Accept channel id or name
+        if (
+            in_channel_filter.startswith("C")
+            or in_channel_filter.startswith("D")
+            or in_channel_filter.startswith("G")
+        ):
+            cid = in_channel_filter
+            channel_scope_ids = {cid} if cid in accessible_ids else set()
+        else:
+            # Find by name among accessible
+            by_name = next(
+                (c for c in accessible_channels if c.channel_name == in_channel_filter),
+                None,
+            )
+            channel_scope_ids = {by_name.channel_id} if by_name else set()
+
+    # Resolve from: filter
+    from_user_id: str | None = None
+    if from_filter:
+        val = from_filter
+        if val.startswith("<@") and val.endswith(">"):
+            val = val[2:-1]
+        if val.startswith("@"):
+            val = val[1:]
+        if val.startswith("U"):
+            from_user_id = val
+        else:
+            # treat as username
+            urow = (
+                session.execute(select(User).where(User.username == val))
+                .scalars()
+                .first()
+            )
+            from_user_id = urow.user_id if urow is not None else None
+
+    # Build SQL filter
+    msg_filters: list[SAColumnElement[bool]] = []
+    if channel_scope_ids:
+        msg_filters.append(Message.channel_id.in_(list(channel_scope_ids)))
+    else:
+        msg_filters.append(false())
+    if from_user_id:
+        msg_filters.append(Message.user_id == from_user_id)
+
+    # Text match: at least one term, otherwise no text constraint
+    text_any: SAColumnElement[bool] | None = None
+    clean_terms = [t for t in terms if t]
+    if clean_terms:
+        ilikes = [
+            Message.message_text.contains(t, autoescape=True) for t in clean_terms
+        ]
+        # message_text can be NULL; add guard
+        text_any = or_(*ilikes)
+        msg_filters.append(text_any)
+
+    q = (
+        select(Message, Channel, User)
+        .join(Channel, Channel.channel_id == Message.channel_id)
+        .join(User, User.user_id == Message.user_id)
+        .where(*msg_filters)
+    )
+
+    # For timestamp sort we can pre-sort by created_at
+    if sort == "timestamp":
+        if sort_dir == "asc":
+            q = q.order_by(Message.created_at.asc())
+        else:
+            q = q.order_by(Message.created_at.desc())
+
+    rows = session.execute(q).all()
+
+    # Compute score and shape
+    results = []
+    for msg, ch, user in rows:
+        score = 0
+        if clean_terms:
+            score = sum(_count_ci_occurrences(msg.message_text, t) for t in clean_terms)
+        else:
+            score = 1  # neutral score if no terms
+        results.append((score, msg, ch, user))
+
+    # Score sort (default)
+    if sort != "timestamp":
+        reverse = sort_dir != "asc"
+        results.sort(key=lambda t: (t[0], t[1].created_at or 0), reverse=reverse)
+
+    total = len(results)
+    start_index = (page_num - 1) * per_page
+    end_index = start_index + per_page
+    page_items = results[start_index:end_index]
+
+    matches: list[dict[str, Any]] = []
+    for score, msg, ch, user in page_items:
+        text = msg.message_text or ""
+        text_out = (
+            _highlight_text(text, clean_terms) if highlight and clean_terms else text
+        )
+        ts_nodot = (msg.message_id or "").replace(".", "")
+        channel_obj = _build_channel_obj(
+            request, ch, actor_id=actor_id, team_id=team_id
+        )
+        matches.append(
+            {
+                "channel": channel_obj,
+                "iid": str(uuid4()),
+                "permalink": f"https://example.slack.com/archives/{ch.channel_id}/p{ts_nodot}",
+                "team": ch.team_id or "T00000000",
+                "text": text_out,
+                "ts": msg.message_id,
+                "type": "message",
+                "user": msg.user_id,
+                "username": user.username,
+            }
+        )
+
+    # Pagination blocks
+    paging = {
+        "count": per_page,
+        "page": page_num,
+        "pages": max(1, math.ceil(total / per_page)) if total else 1,
+        "total": total,
+    }
+    first_ordinal = (page_num - 1) * per_page + 1 if total else 0
+    last_ordinal = min(first_ordinal + len(matches) - 1, total) if total else 0
+    pagination = {
+        "first": first_ordinal,
+        "last": last_ordinal,
+        "page": page_num,
+        "page_count": paging["pages"],
+        "per_page": per_page,
+        "total_count": total,
+    }
+
+    payload = {
+        "ok": True,
+        "query": query_str,
+        "messages": {
+            "matches": matches,
+            "pagination": pagination,
+            "paging": paging,
+            "total": total,
+        },
+    }
+    return _json_response(payload)
+
+
+async def search_all(request: Request) -> JSONResponse:
+    # Delegate to search_messages for messages block; keep files/posts empty
+    msg_resp: JSONResponse = await search_messages(request)
+    msg_data = msg_resp.body
+    try:
+        # body may be bytes or memoryview; coerce to bytes
+        data = json.loads(bytes(msg_data))
+    except Exception:
+        # If body already dict, just return it
+        return msg_resp
+
+    files_block = {
+        "matches": [],
+        "total": 0,
+        "pagination": {
+            "first": 0,
+            "last": 0,
+            "page": data.get("messages", {}).get("paging", {}).get("page", 1),
+            "page_count": 0,
+            "per_page": data.get("messages", {}).get("paging", {}).get("count", 20),
+            "total_count": 0,
+        },
+        "paging": {
+            "count": data.get("messages", {}).get("paging", {}).get("count", 20),
+            "page": data.get("messages", {}).get("paging", {}).get("page", 1),
+            "pages": 1,
+            "total": 0,
+        },
+    }
+
+    out = dict(data)
+    out["files"] = files_block
+    out["posts"] = {"matches": [], "total": 0}
+    return _json_response(out)
+
+
 SLACK_HANDLERS: dict[str, Callable[[Request], Awaitable[JSONResponse]]] = {
     "chat.postMessage": chat_post_message,
     "chat.update": chat_update,
@@ -1752,6 +2075,8 @@ SLACK_HANDLERS: dict[str, Callable[[Request], Awaitable[JSONResponse]]] = {
     "users.info": users_info,
     "users.list": users_list,
     "users.conversations": users_conversations,
+    "search.messages": search_messages,
+    "search.all": search_all,
 }
 
 
