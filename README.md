@@ -144,18 +144,15 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 **Environments** are isolated, temporary copies of a template:
 
 - **Lifecycle**: Created → Used → Deleted (with automatic TTL expiry)
-- **Isolation**: Each gets its own PostgreSQL schema (`state_{env_id}`)
 - **URL**: Each environment has a unique service URL (e.g., `http://localhost:8000/api/env/{env_id}/services/slack`)
 - **Creation**: `client.init_env(templateService="slack", templateName="slack_default")`
 - **Cleanup**: `client.delete_env(envId)` or auto-expires after TTL
 
-**Relationship**: `Template` (permanent, shared) → `Environment` (temporary, isolated copy)
+`Template` (permanent, shared) → `Environment` (temporary, isolated copy)
 
 ### What are Test Suites?
-Collections of test cases with assertions. See [slack_bench.json](examples/slack/testsuites/slack_bench.json) for examples.
+Collections of test cases with assertions that you can run against agent runs using evaluations (see below).
 
-
-### Test Suites (DSL)
 - **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - test cases covering message sending, channel ops, reactions, threading
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Check DSL docs on how it works.
 
@@ -260,7 +257,6 @@ dataset.save_to_disk("agent_training_data")
 
 ## Documentation
 
-- **[Getting Started Guide](docs/getting-started.md)** - Detailed setup and configuration
 - **[Python SDK](sdk/agent-diff-python/README.md)** - Complete Python SDK reference
 - **[TS SDK](sdk/agent-diff-ts/README.md)** - Complete TS SDK reference
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Write test assertions
