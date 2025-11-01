@@ -988,3 +988,130 @@ class TestCompositeScenario:
         info_resp = await slack_client.get(f"/conversations.info?channel={dm_id}")
         assert info_resp.status_code == 200
         assert info_resp.json()["channel"]["is_im"] is True
+
+
+@pytest.mark.asyncio
+class TestSearchMessages:
+    async def test_requires_query(self, slack_client: AsyncClient):
+        resp = await slack_client.get("/search.messages")
+        assert resp.status_code == 400
+        data = resp.json()
+        assert data["ok"] is False
+        assert data["error"] == "No query passed"
+
+    async def test_basic_match_and_highlight(self, slack_client: AsyncClient):
+        # Post a distinctive message and search for it
+        term = "s3archUnique"
+        post = await slack_client.post(
+            "/chat.postMessage",
+            json={"channel": CHANNEL_GENERAL, "text": f"Message {term} content"},
+        )
+        assert post.status_code == 200
+
+        resp = await slack_client.get(f"/search.messages?query={term}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert "messages" in data
+        matches = data["messages"]["matches"]
+        assert len(matches) >= 1
+        assert any(term in m["text"] for m in matches)
+
+        # With highlight=true markers U+E000 and U+E001
+        resp_h = await slack_client.get(f"/search.messages?query={term}&highlight=true")
+        assert resp_h.status_code == 200
+        m2 = resp_h.json()["messages"]["matches"]
+        assert any("\ue000" in m["text"] and "\ue001" in m["text"] for m in m2)
+
+    async def test_sort_timestamp_and_pagination(self, slack_client: AsyncClient):
+        term = "pagetest"
+        # Create two messages containing the same term
+        p1 = await slack_client.post(
+            "/chat.postMessage",
+            json={"channel": CHANNEL_GENERAL, "text": f"{term} first"},
+        )
+        assert p1.status_code == 200
+        p2 = await slack_client.post(
+            "/chat.postMessage",
+            json={"channel": CHANNEL_GENERAL, "text": f"{term} second"},
+        )
+        assert p2.status_code == 200
+
+        # Ascending timestamp should put the earlier message first
+        resp = await slack_client.get(
+            f"/search.messages?query={term}&sort=timestamp&sort_dir=asc"
+        )
+        assert resp.status_code == 200
+        matches = resp.json()["messages"]["matches"]
+        assert len(matches) >= 2
+        ts_sorted = [m["ts"] for m in matches]
+        assert ts_sorted == sorted(ts_sorted)
+
+        # Pagination: count=1, page=2 returns one item
+        resp2 = await slack_client.get(
+            f"/search.messages?query={term}&sort=timestamp&sort_dir=asc&count=1&page=2"
+        )
+        assert resp2.status_code == 200
+        data2 = resp2.json()
+        assert data2["messages"]["paging"]["total"] >= 2
+        assert len(data2["messages"]["matches"]) == 1
+
+    async def test_filters_in_and_from(
+        self, slack_client: AsyncClient, slack_client_john: AsyncClient
+    ):
+        # Create a new private channel and post message there
+        create = await slack_client.post(
+            "/conversations.create", json={"name": "searchchan", "is_private": True}
+        )
+        assert create.status_code == 200
+        ch_id = create.json()["channel"]["id"]
+
+        p = await slack_client.post(
+            "/chat.postMessage", json={"channel": ch_id, "text": "infilter termX"}
+        )
+        assert p.status_code == 200
+
+        # in: by channel name
+        r1 = await slack_client.get("/search.messages?query=in:searchchan termX")
+        assert r1.status_code == 200
+        assert any(
+            m["channel"]["id"] == ch_id for m in r1.json()["messages"]["matches"]
+        )
+
+        # in: by channel id
+        r2 = await slack_client.get(f"/search.messages?query=in:{ch_id} termX")
+        assert r2.status_code == 200
+        assert any(
+            m["channel"]["id"] == ch_id for m in r2.json()["messages"]["matches"]
+        )
+
+        # from: by user id
+        # John posts in general
+        pj = await slack_client_john.post(
+            "/chat.postMessage",
+            json={"channel": CHANNEL_GENERAL, "text": "johnfilter termY"},
+        )
+        assert pj.status_code == 200
+        r3 = await slack_client.get(f"/search.messages?query=from:<@{USER_JOHN}> termY")
+        assert r3.status_code == 200
+        assert any(m["user"] == USER_JOHN for m in r3.json()["messages"]["matches"])
+
+
+@pytest.mark.asyncio
+class TestSearchAll:
+    async def test_search_all_shape(self, slack_client: AsyncClient):
+        term = "alltermZ"
+        p = await slack_client.post(
+            "/chat.postMessage",
+            json={"channel": CHANNEL_GENERAL, "text": f"contains {term}"},
+        )
+        assert p.status_code == 200
+
+        resp = await slack_client.get(f"/search.all?query={term}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert "messages" in data
+        assert "files" in data
+        assert "posts" in data
+        assert data["files"]["matches"] == []
