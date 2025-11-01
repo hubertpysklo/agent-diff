@@ -647,3 +647,325 @@ class TestIssueBatchCreate:
         assert issues[1]["team"]["key"] == "ENG"
         assert issues[0]["title"] == "First engineering issue"
         assert issues[1]["title"] == "Second engineering issue"
+
+
+# ==========================================
+# TIER 2 TESTS: Label Operations
+# ==========================================
+
+
+@pytest.mark.asyncio
+class TestIssueLabelCreate:
+    async def test_create_label_basic(self, linear_client: AsyncClient):
+        """Test creating a new issue label."""
+        query = """
+          mutation($input: IssueLabelCreateInput!) {
+            issueLabelCreate(input: $input) {
+              success
+              issueLabel {
+                id
+                name
+                color
+                team {
+                  id
+                  key
+                }
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "name": "Bug",
+                "color": "#e5484d",
+                "teamId": TEAM_ENG,
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]["issueLabelCreate"]
+        assert result["success"] is True
+        label = result["issueLabel"]
+        assert label["name"] == "Bug"
+        assert label["color"] == "#e5484d"
+        assert label["team"]["key"] == "ENG"
+
+    async def test_create_label_without_team(self, linear_client: AsyncClient):
+        """Test creating an organization-wide label (no team)."""
+        query = """
+          mutation($input: IssueLabelCreateInput!) {
+            issueLabelCreate(input: $input) {
+              success
+              issueLabel {
+                id
+                name
+                color
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "name": "Priority",
+                "color": "#f76808",
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]["issueLabelCreate"]
+        assert result["success"] is True
+        label = result["issueLabel"]
+        assert label["name"] == "Priority"
+        assert label["color"] == "#f76808"
+
+
+@pytest.mark.asyncio
+class TestIssueLabels:
+    async def test_add_label_to_issue(self, linear_client: AsyncClient):
+        """Test adding a label to an issue."""
+        # First, create a label
+        create_label_query = """
+          mutation($input: IssueLabelCreateInput!) {
+            issueLabelCreate(input: $input) {
+              success
+              issueLabel {
+                id
+                name
+              }
+            }
+          }
+        """
+        create_variables = {
+            "input": {
+                "name": "Frontend",
+                "color": "#3b82f6",
+                "teamId": TEAM_ENG,
+            }
+        }
+        create_response = await linear_client.post(
+            "/graphql", json={"query": create_label_query, "variables": create_variables}
+        )
+        assert create_response.status_code == 200
+        create_data = create_response.json()
+        label_id = create_data["data"]["issueLabelCreate"]["issueLabel"]["id"]
+
+        # Now add the label to an issue
+        add_label_query = """
+          mutation($id: String!, $labelId: String!) {
+            issueAddLabel(id: $id, labelId: $labelId) {
+              success
+              issue {
+                id
+                labels {
+                  nodes {
+                    id
+                    name
+                  }
+                }
+              }
+            }
+          }
+        """
+        add_variables = {
+            "id": ISSUE_ENG_001,
+            "labelId": label_id,
+        }
+        add_response = await linear_client.post(
+            "/graphql", json={"query": add_label_query, "variables": add_variables}
+        )
+        assert add_response.status_code == 200
+        add_data = add_response.json()
+        result = add_data["data"]["issueAddLabel"]
+        assert result["success"] is True
+        labels = result["issue"]["labels"]["nodes"]
+        assert len(labels) >= 1
+        assert any(label["id"] == label_id for label in labels)
+        assert any(label["name"] == "Frontend" for label in labels)
+
+    async def test_remove_label_from_issue(self, linear_client: AsyncClient):
+        """Test removing a label from an issue."""
+        # First, create a label and add it to an issue
+        create_label_query = """
+          mutation($input: IssueLabelCreateInput!) {
+            issueLabelCreate(input: $input) {
+              issueLabel {
+                id
+              }
+            }
+          }
+        """
+        create_response = await linear_client.post(
+            "/graphql",
+            json={
+                "query": create_label_query,
+                "variables": {
+                    "input": {
+                        "name": "Backend",
+                        "color": "#10b981",
+                        "teamId": TEAM_ENG,
+                    }
+                },
+            },
+        )
+        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"]["id"]
+
+        # Add the label
+        await linear_client.post(
+            "/graphql",
+            json={
+                "query": """
+                  mutation($id: String!, $labelId: String!) {
+                    issueAddLabel(id: $id, labelId: $labelId) {
+                      success
+                    }
+                  }
+                """,
+                "variables": {"id": ISSUE_ENG_001, "labelId": label_id},
+            },
+        )
+
+        # Now remove the label
+        remove_query = """
+          mutation($id: String!, $labelId: String!) {
+            issueRemoveLabel(id: $id, labelId: $labelId) {
+              success
+              issue {
+                id
+                labels {
+                  nodes {
+                    id
+                    name
+                  }
+                }
+              }
+            }
+          }
+        """
+        remove_variables = {
+            "id": ISSUE_ENG_001,
+            "labelId": label_id,
+        }
+        remove_response = await linear_client.post(
+            "/graphql", json={"query": remove_query, "variables": remove_variables}
+        )
+        assert remove_response.status_code == 200
+        remove_data = remove_response.json()
+        result = remove_data["data"]["issueRemoveLabel"]
+        assert result["success"] is True
+        labels = result["issue"]["labels"]["nodes"]
+        # Label should be removed
+        assert not any(label["id"] == label_id for label in labels)
+
+
+@pytest.mark.asyncio
+class TestIssueLabelUpdate:
+    async def test_update_label(self, linear_client: AsyncClient):
+        """Test updating a label's properties."""
+        # First create a label
+        create_query = """
+          mutation($input: IssueLabelCreateInput!) {
+            issueLabelCreate(input: $input) {
+              issueLabel {
+                id
+              }
+            }
+          }
+        """
+        create_response = await linear_client.post(
+            "/graphql",
+            json={
+                "query": create_query,
+                "variables": {
+                    "input": {
+                        "name": "Old Name",
+                        "color": "#000000",
+                        "teamId": TEAM_ENG,
+                    }
+                },
+            },
+        )
+        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"]["id"]
+
+        # Update the label
+        update_query = """
+          mutation($id: String!, $input: IssueLabelUpdateInput!) {
+            issueLabelUpdate(id: $id, input: $input) {
+              success
+              issueLabel {
+                id
+                name
+                color
+              }
+            }
+          }
+        """
+        update_variables = {
+            "id": label_id,
+            "input": {
+                "name": "New Name",
+                "color": "#ffffff",
+            },
+        }
+        update_response = await linear_client.post(
+            "/graphql", json={"query": update_query, "variables": update_variables}
+        )
+        assert update_response.status_code == 200
+        update_data = update_response.json()
+        result = update_data["data"]["issueLabelUpdate"]
+        assert result["success"] is True
+        label = result["issueLabel"]
+        assert label["name"] == "New Name"
+        assert label["color"] == "#ffffff"
+
+
+@pytest.mark.asyncio
+class TestIssueLabelDelete:
+    async def test_delete_label(self, linear_client: AsyncClient):
+        """Test deleting a label."""
+        # First create a label
+        create_query = """
+          mutation($input: IssueLabelCreateInput!) {
+            issueLabelCreate(input: $input) {
+              issueLabel {
+                id
+              }
+            }
+          }
+        """
+        create_response = await linear_client.post(
+            "/graphql",
+            json={
+                "query": create_query,
+                "variables": {
+                    "input": {
+                        "name": "Temporary",
+                        "color": "#888888",
+                        "teamId": TEAM_ENG,
+                    }
+                },
+            },
+        )
+        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"]["id"]
+
+        # Delete the label
+        delete_query = """
+          mutation($id: String!) {
+            issueLabelDelete(id: $id) {
+              success
+            }
+          }
+        """
+        delete_variables = {"id": label_id}
+        delete_response = await linear_client.post(
+            "/graphql", json={"query": delete_query, "variables": delete_variables}
+        )
+        assert delete_response.status_code == 200
+        delete_data = delete_response.json()
+        result = delete_data["data"]["issueLabelDelete"]
+        assert result["success"] is True
