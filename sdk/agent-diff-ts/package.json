@@ -1,0 +1,74 @@
+{
+  "name": "agent-diff",
+  "version": "0.1.6",
+  "description": "TypeScript SDK for Agent Diff - test AI agents against replicas of services",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration.test.ts",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": [
+    "agent-diff",
+    "ai-agents",
+    "testing",
+    "llm",
+    "slack",
+    "linear"
+  ],
+  "author": "Agent Diff",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hubertpysklo/agent-diff.git",
+    "directory": "sdk/agent-diff-ts"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "peerDependencies": {
+    "ai": ">=3.0.0",
+    "langchain": ">=0.3.0",
+    "@openai/agents": ">=1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ai": {
+      "optional": true
+    },
+    "langchain": {
+      "optional": true
+    },
+    "@openai/agents": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

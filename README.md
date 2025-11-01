@@ -37,8 +37,15 @@ If you have requests for specific services + any feedback, mail me at hubert@uni
 ## Quick Start
 
 ### 1. Install SDK
+
+**Python:**
 ```bash
 uv add agent-diff
+```
+
+**TypeScript/Node.js:**
+```bash
+npm install agent-diff
 ```
 
 ### 2. Set up backend
@@ -115,6 +122,8 @@ client.delete_env(envId=env.environmentId)
 ```
 
 Every environment gets its own PostgreSQL schema. URLs bind requests to schemas. Snapshots diff exactly what changed in this specific isolated environment.
+
+**TypeScript SDK also available:** `npm install agent-diff` - [docs](sdk/agent-diff-ts/README.md)
 
 ## Templates & Test Suites
 
@@ -228,7 +237,8 @@ dataset.save_to_disk("agent_training_data")
 ## Documentation
 
 - **[Getting Started Guide](docs/getting-started.md)** - Detailed setup and configuration
-- **[SDK](sdk/agent_diff_pkg/README.md)** - Complete API reference
+- **[Python SDK](sdk/agent-diff-python/README.md)** - Complete Python SDK reference
+- **[TS SDK](sdk/agent-diff-ts/README.md)** - Complete TS SDK reference
 - **[Evaluation DSL](docs/evaluation-dsl.md)** - Write test assertions
 - **[API Reference](docs/api-reference.md)** - REST API documentation
 
