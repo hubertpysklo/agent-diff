@@ -1523,6 +1523,7 @@ def resolve_issues(
     filter: Optional[dict] = None,
     first: Optional[int] = None,
     includeArchived: bool = False,
+    includeSubTeams: bool = False,
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
     sort: Optional[list] = None,
@@ -1538,6 +1539,7 @@ def resolve_issues(
         filter: IssueFilter to apply to results
         first: Number of items to return (forward pagination, defaults to 50)
         includeArchived: Whether to include archived issues (default: false)
+        includeSubTeams: Include issues from sub-teams when filtering by team (default: false)
         last: Number of items to return (backward pagination, defaults to 50)
         orderBy: Field to order by (createdAt or updatedAt, default: createdAt)
         sort: [INTERNAL] Sort options for issues
