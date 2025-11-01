@@ -3,7 +3,7 @@
 
 ## What This Is
 
-**A self-hosted interactive enviroments for testing AI agents & training LLMs against 3rd party services like Linear or Slack.** You run it locally (or deploy it), your agents call fake APIs, you get deterministic diffs. No external service, no rate limits, full control over test data and environments.
+**A self-hosted interactive enviroments for testing AI agents & training LLMs against 3rd party APIs like Linear or Slack.** You run it locally (or deploy it), your agents call fake APIs, you get deterministic diffs. No external service, no rate limits, full control over test data and environments.
 
 Use it for:
 - RL training loops (reset state between episodes)
@@ -11,7 +11,8 @@ Use it for:
 - Regression tests (catch when changes break behaviour)
 - Training data generation (prompt → actions → diff → outcome)
 
-## Services
+
+## Supported APIs
 
 - **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.md`](backend/src/services/slack/READEME.md). A few examples:
 
@@ -125,11 +126,34 @@ Every environment gets its own PostgreSQL schema. URLs bind requests to schemas.
 
 **TypeScript SDK also available:** `npm install agent-diff` - [docs](sdk/agent-diff-ts/README.md)
 
+
 ## Templates & Test Suites
 
-### Sample Templates
+### What are Templates?
+**Templates** are pre-configured database schemas that serve as the starting point for test environments. Think of them as snapshots of a service's state:
+
+- **Location**: Templates live in PostgreSQL schemas (e.g., `slack_default`, `linear_base`)
+- **Content**: Include seeded data like users, channels, messages, issues, etc.
+
+#### Example Templates (You can edit them)
 - **[slack_base](examples/slack/seeds/)** - Empty Slack workspace (no seed data)
 - **[slack_default](examples/slack/seeds/slack_bench_default.json)** - Seeded with sample users and messages for Slack Bench.
+
+
+### What are Environments?
+**Environments** are isolated, temporary copies of a template:
+
+- **Lifecycle**: Created → Used → Deleted (with automatic TTL expiry)
+- **Isolation**: Each gets its own PostgreSQL schema (`state_{env_id}`)
+- **URL**: Each environment has a unique service URL (e.g., `http://localhost:8000/api/env/{env_id}/services/slack`)
+- **Creation**: `client.init_env(templateService="slack", templateName="slack_default")`
+- **Cleanup**: `client.delete_env(envId)` or auto-expires after TTL
+
+**Relationship**: `Template` (permanent, shared) → `Environment` (temporary, isolated copy)
+
+### What are Test Suites?
+Collections of test cases with assertions. See [slack_bench.json](examples/slack/testsuites/slack_bench.json) for examples.
+
 
 ### Test Suites (DSL)
 - **[slack_bench.json](examples/slack/testsuites/slack_bench.json)** - test cases covering message sending, channel ops, reactions, threading
