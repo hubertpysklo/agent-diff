@@ -108,10 +108,19 @@ console.log(result.stdout); // curl output
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { TypeScriptExecutorProxy, createVercelAITool } from 'agent-diff';
+import { AgentDiff, TypeScriptExecutorProxy, createVercelAITool } from 'agent-diff';
 
-const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
-const tool = createVercelAITool(executor);
+const client = new AgentDiff();
+const env = await client.initEnv({
+  templateService: 'slack',
+  templateName: 'slack_default'
+});
+
+const executor = new TypeScriptExecutorProxy(env.environmentId, client.getBaseUrl());
+const tool = await createVercelAITool(executor);
+
+// Start run and take before snapshot
+const run = await client.startRun({ envId: env.environmentId });
 
 const result = await generateText({
   model: openai('gpt-5-mini'),
@@ -119,6 +128,10 @@ const result = await generateText({
   prompt: 'Post "Hello" to Slack channel C01ABCD1234. Slack authentication token will be injected automatically for requests.',
   maxSteps: 5
 });
+
+// Get diff of changes
+const diff = await client.diffRun({ runId: run.runId });
+console.log('Changes:', diff.diff);
 ```
 
 ### LangChain
@@ -126,29 +139,51 @@ const result = await generateText({
 ```typescript
 import { ChatOpenAI } from '@langchain/openai';
 import { createAgent } from 'langchain';
-import { TypeScriptExecutorProxy, createLangChainTool } from 'agent-diff';
+import { AgentDiff, TypeScriptExecutorProxy, createLangChainTool } from 'agent-diff';
 
-const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
-const tool = createLangChainTool(executor);
+const client = new AgentDiff();
+const env = await client.initEnv({
+  templateService: 'slack',
+  templateName: 'slack_default'
+});
+
+const executor = new TypeScriptExecutorProxy(env.environmentId, client.getBaseUrl());
+const tool = await createLangChainTool(executor);
+
+// Start run and take before snapshot
+const run = await client.startRun({ envId: env.environmentId });
 
 const agent = createAgent({
-  model: new ChatOpenAI({ model: 'gpt-4' }),
+  model: new ChatOpenAI({ model: 'gpt-5-mini' }),
   tools: [tool]
 });
 
 const result = await agent.invoke({
   messages: [{ role: 'user', content: 'List Slack channels' }]
 });
+
+// Get diff of changes
+const diff = await client.diffRun({ runId: run.runId });
+console.log('Changes:', diff.diff);
 ```
 
 ### OpenAI Agents SDK
 
 ```typescript
 import { Agent } from '@openai/agents';
-import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from 'agent-diff';
+import { AgentDiff, TypeScriptExecutorProxy, createOpenAIAgentsTool } from 'agent-diff';
 
-const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
-const tool = createOpenAIAgentsTool(executor);
+const client = new AgentDiff();
+const env = await client.initEnv({
+  templateService: 'slack',
+  templateName: 'slack_default'
+});
+
+const executor = new TypeScriptExecutorProxy(env.environmentId, client.getBaseUrl());
+const tool = await createOpenAIAgentsTool(executor);
+
+// Start run and take before snapshot
+const run = await client.startRun({ envId: env.environmentId });
 
 const agent = new Agent({
   name: 'Slack Assistant',
@@ -157,6 +192,10 @@ const agent = new Agent({
 });
 
 const result = await agent.run('Post a message to Slack');
+
+// Get diff of changes
+const diff = await client.diffRun({ runId: run.runId });
+console.log('Changes:', diff.diff);
 ```
 
 ## API Reference
