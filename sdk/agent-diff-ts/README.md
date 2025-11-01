@@ -5,7 +5,7 @@ TypeScript/Node.js SDK for [Agent Diff](https://github.com/hubertpysklo/agent-di
 ## Installation
 
 ```bash
-npm install agent-diff-ts
+npm install agent-diff
 ```
 
 ## Quick Start
@@ -23,7 +23,7 @@ Backend runs on http://localhost:8000
 ### 2. Basic Usage
 
 ```typescript
-import { AgentDiff, TypeScriptExecutorProxy } from 'agent-diff-ts';
+import { AgentDiff, TypeScriptExecutorProxy } from 'agent-diff';
 
 const client = new AgentDiff();
 
@@ -60,7 +60,7 @@ console.log('Changes:', diff.diff);
 Executes TypeScript code in-process with `fetch` interception:
 
 ```typescript
-import { TypeScriptExecutorProxy } from 'agent-diff-ts';
+import { TypeScriptExecutorProxy } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(
   'env-id',
@@ -85,7 +85,7 @@ console.log(result.stdout); // Captured console.log output
 Executes Bash commands in subprocess with `curl` interception:
 
 ```typescript
-import { BashExecutorProxy } from 'agent-diff-ts';
+import { BashExecutorProxy } from 'agent-diff';
 
 const executor = new BashExecutorProxy(
   'env-id',
@@ -108,7 +108,7 @@ console.log(result.stdout); // curl output
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { TypeScriptExecutorProxy, createVercelAITool } from 'agent-diff-ts';
+import { TypeScriptExecutorProxy, createVercelAITool } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
 const tool = createVercelAITool(executor);
@@ -126,7 +126,7 @@ const result = await generateText({
 ```typescript
 import { ChatOpenAI } from '@langchain/openai';
 import { createAgent } from 'langchain';
-import { TypeScriptExecutorProxy, createLangChainTool } from 'agent-diff-ts';
+import { TypeScriptExecutorProxy, createLangChainTool } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
 const tool = createLangChainTool(executor);
@@ -145,7 +145,7 @@ const result = await agent.invoke({
 
 ```typescript
 import { Agent } from '@openai/agents';
-import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from 'agent-diff-ts';
+import { TypeScriptExecutorProxy, createOpenAIAgentsTool } from 'agent-diff';
 
 const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
 const tool = createOpenAIAgentsTool(executor);
