@@ -6289,7 +6289,13 @@ def resolve_commentResolve(obj, info, **kwargs):
             if resolving_comment and hasattr(resolving_comment, "userId"):
                 comment.resolvingUserId = resolving_comment.userId
 
-        return comment
+        # Return CommentPayload
+        now_ts = datetime.now(timezone.utc)
+        return {
+            "comment": comment,
+            "success": True,
+            "lastSyncId": float(now_ts.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to resolve comment: {str(e)}")
@@ -6325,7 +6331,13 @@ def resolve_commentUnresolve(obj, info, **kwargs):
         comment.resolvingUserId = None
         comment.updatedAt = datetime.now(timezone.utc)
 
-        return comment
+        # Return CommentPayload
+        now_ts = datetime.now(timezone.utc)
+        return {
+            "comment": comment,
+            "success": True,
+            "lastSyncId": float(now_ts.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to unresolve comment: {str(e)}")
@@ -6392,7 +6404,13 @@ def resolve_commentUpdate(obj, info, **kwargs):
         # Always update updatedAt
         comment.updatedAt = datetime.now(timezone.utc)
 
-        return comment
+        # Return CommentPayload
+        now_ts = datetime.now(timezone.utc)
+        return {
+            "comment": comment,
+            "success": True,
+            "lastSyncId": float(now_ts.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to update comment: {str(e)}")
@@ -8129,7 +8147,12 @@ def resolve_cycleCreate(obj, info, **kwargs):
 
         session.add(new_cycle)
 
-        return new_cycle
+        # Return CyclePayload
+        return {
+            "cycle": new_cycle,
+            "success": True,
+            "lastSyncId": float(now.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to create cycle: {str(e)}")
@@ -8228,7 +8251,12 @@ def resolve_cycleShiftAll(obj, info, **kwargs):
             cycle.endsAt = cycle.endsAt + shift_delta
             cycle.updatedAt = now
 
-        return starting_cycle
+        # Return CyclePayload
+        return {
+            "cycle": starting_cycle,
+            "success": True,
+            "lastSyncId": float(now.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to shift cycles: {str(e)}")
@@ -8294,7 +8322,12 @@ def resolve_cycleStartUpcomingCycleToday(obj, info, **kwargs):
             cycle.endsAt = cycle.endsAt + shift_delta
             cycle.updatedAt = now
 
-        return upcoming_cycle
+        # Return CyclePayload
+        return {
+            "cycle": upcoming_cycle,
+            "success": True,
+            "lastSyncId": float(now.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to start upcoming cycle today: {str(e)}")
@@ -8353,7 +8386,12 @@ def resolve_cycleUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         cycle.updatedAt = datetime.now(timezone.utc)
 
-        return cycle
+        # Return CyclePayload
+        return {
+            "cycle": cycle,
+            "success": True,
+            "lastSyncId": float(datetime.now(timezone.utc).timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to update cycle: {str(e)}")
@@ -9066,8 +9104,13 @@ def resolve_issueAddLabel(obj, info, **kwargs):
 
         # Check if the label is already associated with the issue
         if label in issue.labels:
-            # Label already exists, just return the issue
-            return issue
+            # Label already exists, just return payload with the current issue
+            now = datetime.now(timezone.utc)
+            return {
+                "success": True,
+                "issue": issue,
+                "lastSyncId": float(now.timestamp()),
+            }
 
         # Add the label to the issue
         issue.labels.append(label)
@@ -9138,8 +9181,13 @@ def resolve_issueRemoveLabel(obj, info, **kwargs):
 
         # Check if the label is associated with the issue
         if label not in issue.labels:
-            # Label is not associated, just return the issue
-            return issue
+            # Label is not associated, just return payload with the current issue
+            now = datetime.now(timezone.utc)
+            return {
+                "success": True,
+                "issue": issue,
+                "lastSyncId": float(now.timestamp()),
+            }
 
         # Remove the label from the issue
         issue.labels.remove(label)
@@ -9848,7 +9896,7 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
                 projectMilestoneId=project_milestone_id,
                 stateId=state_id,
                 description=description,
-                descriptionState=description_data,  # Map descriptionData to descriptionState
+                descriptionData=description_data,
                 createdAt=created_at if isinstance(created_at, datetime) else now,
                 updatedAt=now,
                 completedAt=completed_at,
@@ -15339,7 +15387,12 @@ def resolve_teamUpdate(obj, info, **kwargs):
         # Update the updatedAt timestamp
         team.updatedAt = datetime.now(timezone.utc)
 
-        return team
+        # Return TeamPayload
+        return {
+            "team": team,
+            "success": True,
+            "lastSyncId": float(datetime.now(timezone.utc).timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to update team: {str(e)}")
@@ -15379,7 +15432,12 @@ def resolve_teamCyclesDelete(obj, info, id: str):
         # Update the team's updatedAt timestamp
         team.updatedAt = datetime.now(timezone.utc)
 
-        return team
+        # Return TeamPayload
+        return {
+            "team": team,
+            "success": True,
+            "lastSyncId": float(datetime.now(timezone.utc).timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to delete team cycles: {str(e)}")
