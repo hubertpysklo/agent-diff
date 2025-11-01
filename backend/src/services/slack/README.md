@@ -25,5 +25,6 @@ SLACK_HANDLERS = {
     "users.info": users_info,
     "users.list": users_list,
     "users.conversations": users_conversations,
+    "search.messages": search_messages,
 }
 ```
