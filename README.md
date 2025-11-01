@@ -22,7 +22,7 @@ Use it for:
   "reactions.add"  # add emoji reactions to seeded messages
   ```
 
-- **Linear** – GraphQL API with 58 queries and 105 mutations implemented. See [`backend/src/services/linear/README.md`](backend/src/services/linear/README.md). A few examples:
+- **Linear** – GraphQL API. See [`backend/src/services/linear/README.md`](backend/src/services/linear/README.md). A few examples:
 
   ```python
   "issues"            # list/filter issues with pagination
