@@ -38,7 +38,7 @@ async function main() {
   // Run agent with tools
   console.log('\nRunning agent...');
   const result = await generateText({
-    model: openai('gpt-4'),
+    model: openai('gpt-5-mini'),
     tools: {
       execute_typescript: tsTools,
       execute_bash: bashTool,

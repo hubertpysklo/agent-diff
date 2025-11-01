@@ -114,9 +114,9 @@ const executor = new TypeScriptExecutorProxy(envId, client.getBaseUrl());
 const tool = createVercelAITool(executor);
 
 const result = await generateText({
-  model: openai('gpt-4'),
+  model: openai('gpt-5-mini'),
   tools: { execute_typescript: tool },
-  prompt: 'Post "Hello" to Slack channel C01ABCD1234',
+  prompt: 'Post "Hello" to Slack channel C01ABCD1234. Slack authentication token will be injected automatically for requests.',
   maxSteps: 5
 });
 ```
