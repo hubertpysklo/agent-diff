@@ -1917,7 +1917,9 @@ async def search_messages(request: Request) -> JSONResponse:
     text_any: SAColumnElement[bool] | None = None
     clean_terms = [t for t in terms if t]
     if clean_terms:
-        ilikes = [Message.message_text.ilike(f"%{t}%") for t in clean_terms]
+        ilikes = [
+            Message.message_text.contains(t, autoescape=True) for t in clean_terms
+        ]
         # message_text can be NULL; add guard
         text_any = or_(*ilikes)
         msg_filters.append(text_any)
