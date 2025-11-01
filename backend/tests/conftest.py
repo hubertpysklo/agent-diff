@@ -397,3 +397,166 @@ def sdk_client(test_api_key, cleanup_test_templates):
         api_key=test_api_key,
         base_url="http://backend:8000",
     )
+
+
+@pytest_asyncio.fixture
+async def linear_client(
+    test_user_id, core_isolation_engine, core_evaluation_engine, session_manager, environment_handler
+):
+    """Create an AsyncClient for testing Linear GraphQL API as U01AGENT (agent)."""
+    from httpx import AsyncClient, ASGITransport
+    from src.services.linear.api.graphql_linear import LinearGraphQL
+    from ariadne import load_schema_from_path, make_executable_schema
+    from src.services.linear.api.resolvers import query, mutation
+    from starlette.applications import Starlette
+
+    env_result = core_isolation_engine.create_environment(
+        template_schema="linear_default",
+        ttl_seconds=3600,
+        created_by=test_user_id,
+        impersonate_user_id="U01AGENT",
+        impersonate_email="agent@example.com",
+    )
+
+    async def add_db_session(request, call_next):
+        with session_manager.with_session_for_environment(
+            env_result.environment_id
+        ) as session:
+            request.state.db_session = session
+            request.state.environment_id = env_result.environment_id
+            request.state.impersonate_user_id = "U01AGENT"
+            request.state.impersonate_email = "agent@example.com"
+            response = await call_next(request)
+            return response
+
+    # Create Linear GraphQL schema
+    linear_schema_path = "src/services/linear/api/schema/Linear-API.graphql"
+    linear_type_defs = load_schema_from_path(linear_schema_path)
+    linear_schema = make_executable_schema(linear_type_defs, query, mutation)
+
+    linear_graphql = LinearGraphQL(
+        linear_schema,
+        coreIsolationEngine=core_isolation_engine,
+        coreEvaluationEngine=core_evaluation_engine,
+    )
+
+    app = Starlette()
+    app.middleware("http")(add_db_session)
+    app.mount("/", linear_graphql)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    environment_handler.drop_schema(env_result.schema_name)
+
+
+@pytest_asyncio.fixture
+async def linear_client_john(
+    test_user_id, core_isolation_engine, core_evaluation_engine, session_manager, environment_handler
+):
+    """Create an AsyncClient for testing Linear GraphQL API as U02JOHN (John Doe)."""
+    from httpx import AsyncClient, ASGITransport
+    from src.services.linear.api.graphql_linear import LinearGraphQL
+    from ariadne import load_schema_from_path, make_executable_schema
+    from src.services.linear.api.resolvers import query, mutation
+    from starlette.applications import Starlette
+
+    env_result = core_isolation_engine.create_environment(
+        template_schema="linear_default",
+        ttl_seconds=3600,
+        created_by=test_user_id,
+        impersonate_user_id="U02JOHN",
+        impersonate_email="john@example.com",
+    )
+
+    async def add_db_session(request, call_next):
+        with session_manager.with_session_for_environment(
+            env_result.environment_id
+        ) as session:
+            request.state.db_session = session
+            request.state.environment_id = env_result.environment_id
+            request.state.impersonate_user_id = "U02JOHN"
+            request.state.impersonate_email = "john@example.com"
+            response = await call_next(request)
+            return response
+
+    linear_schema_path = "src/services/linear/api/schema/Linear-API.graphql"
+    linear_type_defs = load_schema_from_path(linear_schema_path)
+    linear_schema = make_executable_schema(linear_type_defs, query, mutation)
+
+    linear_graphql = LinearGraphQL(
+        linear_schema,
+        coreIsolationEngine=core_isolation_engine,
+        coreEvaluationEngine=core_evaluation_engine,
+    )
+
+    app = Starlette()
+    app.middleware("http")(add_db_session)
+    app.mount("/", linear_graphql)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
+
+    environment_handler.drop_schema(env_result.schema_name)
+
+
+@pytest_asyncio.fixture
+async def linear_client_with_differ(
+    test_user_id, core_isolation_engine, core_evaluation_engine, session_manager, environment_handler
+):
+    """Create AsyncClient and Differ for the same Linear environment."""
+    from httpx import AsyncClient, ASGITransport
+    from src.services.linear.api.graphql_linear import LinearGraphQL
+    from ariadne import load_schema_from_path, make_executable_schema
+    from src.services.linear.api.resolvers import query, mutation
+    from starlette.applications import Starlette
+    from src.platform.evaluationEngine.differ import Differ
+
+    env_result = core_isolation_engine.create_environment(
+        template_schema="linear_default",
+        ttl_seconds=3600,
+        created_by=test_user_id,
+        impersonate_user_id="U01AGENT",
+        impersonate_email="agent@example.com",
+    )
+
+    async def add_db_session(request, call_next):
+        with session_manager.with_session_for_environment(
+            env_result.environment_id
+        ) as session:
+            request.state.db_session = session
+            request.state.environment_id = env_result.environment_id
+            request.state.impersonate_user_id = "U01AGENT"
+            request.state.impersonate_email = "agent@example.com"
+            response = await call_next(request)
+            return response
+
+    linear_schema_path = "src/services/linear/api/schema/Linear-API.graphql"
+    linear_type_defs = load_schema_from_path(linear_schema_path)
+    linear_schema = make_executable_schema(linear_type_defs, query, mutation)
+
+    linear_graphql = LinearGraphQL(
+        linear_schema,
+        coreIsolationEngine=core_isolation_engine,
+        coreEvaluationEngine=core_evaluation_engine,
+    )
+
+    app = Starlette()
+    app.middleware("http")(add_db_session)
+    app.mount("/", linear_graphql)
+
+    transport = ASGITransport(app=app)
+
+    # Create differ for same environment
+    differ = Differ(
+        schema=env_result.schema_name,
+        environment_id=env_result.environment_id,
+        session_manager=session_manager,
+    )
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield {"client": client, "differ": differ, "env_id": env_result.environment_id}
+
+    environment_handler.drop_schema(env_result.schema_name)
