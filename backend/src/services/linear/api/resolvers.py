@@ -9683,8 +9683,10 @@ def resolve_issueCreate(obj, info, **kwargs):
         issue.identifier = f"{team.key}-{int(next_number)}"
         issue.url = issue.url or f"/issues/{issue.identifier}"
 
-        # Add to session
+        # Add to session and flush so relationships (e.g., team) resolve
         session.add(issue)
+        session.flush()
+        session.refresh(issue)
 
         # Return the payload
         return {"issue": issue, "success": True, "lastSyncId": float(now.timestamp())}
@@ -9876,6 +9878,11 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
             # Add to session
             session.add(issue)
             created_issues.append(issue)
+
+        # Flush so relationships on returned issues resolve in the response
+        session.flush()
+        for created in created_issues:
+            session.refresh(created)
 
         # Return the payload
         return {
