@@ -35,7 +35,7 @@ export function createVercelAITool(executor: BaseExecutorProxy) {
 
   const toolFn = tool as (config: {
     description: string;
-    parameters: z.ZodType;
+    inputSchema: z.ZodType;
     execute: (args: { code: string }) => Promise<string>;
   }) => unknown;
 
@@ -43,7 +43,7 @@ export function createVercelAITool(executor: BaseExecutorProxy) {
     return toolFn({
       description:
         'Execute TypeScript code and return the output. Standard libraries like fetch are available for HTTP calls.',
-      parameters: z.object({
+      inputSchema: z.object({
         code: z.string().describe('TypeScript code to execute'),
       }),
       execute: async ({ code }: { code: string }) => {
@@ -57,7 +57,7 @@ export function createVercelAITool(executor: BaseExecutorProxy) {
     return toolFn({
       description:
         'Execute Bash commands and return the output. Standard utilities like curl are available.',
-      parameters: z.object({
+      inputSchema: z.object({
         code: z.string().describe('Bash commands to execute'),
       }),
       execute: async ({ code }: { code: string }) => {
