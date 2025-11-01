@@ -14,7 +14,7 @@ Use it for:
 
 ## Supported APIs
 
-- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/READEME.md`](backend/src/services/slack/READEME.md). A few examples:
+- **Slack** – core Web API coverage for conversations, chat, reactions, users, etc. Full list here [`backend/src/services/slack/README.md`](backend/src/services/slack/README.md). A few examples:
 
   ```python
   "chat.postMessage"  # post messages in seeded channels/DMs
@@ -22,7 +22,7 @@ Use it for:
   "reactions.add"  # add emoji reactions to seeded messages
   ```
 
-- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/READEME.md`](backend/src/services/linear/READEME.md). Sample operations:
+- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/README.md`](backend/src/services/linear/README.md). Sample operations:
 
   ```python
   "issues"            # query issues (list/pagination)
