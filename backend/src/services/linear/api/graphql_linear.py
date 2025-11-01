@@ -19,11 +19,11 @@ class LinearGraphQL(GraphQL):
         coreIsolationEngine: CoreIsolationEngine,
         coreEvaluationEngine: CoreEvaluationEngine,
     ):
-        super().__init__(schema)
+        super().__init__(schema, context_value=self._build_context)
         self.coreIsolationEngine = coreIsolationEngine
         self.coreEvaluationEngine = coreEvaluationEngine
 
-    async def context_value(self, request):
+    def _build_context(self, request, data):
         """
         Extract context from request for GraphQL resolvers.
 
@@ -32,6 +32,10 @@ class LinearGraphQL(GraphQL):
         - request.state.environment_id: UUID of the environment
         - request.state.impersonate_user_id: User ID to impersonate (optional)
         - request.state.impersonate_email: User email to impersonate (optional)
+
+        Args:
+            request: Starlette Request object
+            data: GraphQL request data (query, variables, etc.)
         """
         session = getattr(request.state, "db_session", None)
         env_id = getattr(request.state, "environment_id", None)

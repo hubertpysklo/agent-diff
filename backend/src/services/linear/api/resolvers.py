@@ -38,11 +38,61 @@ import json
 import uuid
 from datetime import datetime, timezone, timedelta
 
+from ariadne import ObjectType
+
 query = QueryType()
 mutation = MutationType()
+issue_type = ObjectType("Issue")
 
 # Export query and mutation objects for use in schema binding
-__all__ = ["query", "mutation"]
+__all__ = ["query", "mutation", "issue_type"]
+
+
+@issue_type.field("labels")
+def resolve_issue_labels(issue, info, after=None, before=None, filter=None, first=50, includeArchived=False, last=None, orderBy="createdAt"):
+    """
+    Resolve the labels field to return an IssueLabelConnection.
+
+    Args:
+        issue: The parent Issue object
+        info: GraphQL resolve info
+        after: Cursor for forward pagination
+        before: Cursor for backward pagination
+        filter: IssueLabelFilter to filter results
+        first: Number of items for forward pagination (default: 50)
+        includeArchived: Include archived labels (default: False)
+        last: Number of items for backward pagination
+        orderBy: Order by field - "createdAt" or "updatedAt" (default: "createdAt")
+
+    Returns:
+        IssueLabelConnection with nodes field
+    """
+    # Get labels from the relationship
+    labels = issue.labels if hasattr(issue, "labels") and issue.labels is not None else []
+
+    # Filter archived labels unless includeArchived is True
+    if not includeArchived:
+        labels = [label for label in labels if not label.archivedAt]
+
+    # Apply custom filter if provided
+    if filter:
+        # TODO: Implement IssueLabelFilter logic (name, team, etc.)
+        pass
+
+    # Sort by orderBy field
+    if orderBy == "updatedAt":
+        labels = sorted(labels, key=lambda l: l.updatedAt or l.createdAt)
+    else:  # Default to createdAt
+        labels = sorted(labels, key=lambda l: l.createdAt)
+
+    # Apply pagination (simplified - full cursor-based pagination would be more complex)
+    if first and first < len(labels):
+        labels = labels[:first]
+    elif last and last < len(labels):
+        labels = labels[-last:]
+
+    # Return in IssueLabelConnection format
+    return {"nodes": labels}
 
 # Helper functions for cursor-based pagination
 def encode_cursor(item, order_field="createdAt"):
@@ -1473,6 +1523,7 @@ def resolve_issues(
     filter: Optional[dict] = None,
     first: Optional[int] = None,
     includeArchived: bool = False,
+    includeSubTeams: bool = False,
     last: Optional[int] = None,
     orderBy: Optional[str] = None,
     sort: Optional[list] = None,
@@ -1488,6 +1539,7 @@ def resolve_issues(
         filter: IssueFilter to apply to results
         first: Number of items to return (forward pagination, defaults to 50)
         includeArchived: Whether to include archived issues (default: false)
+        includeSubTeams: Include issues from sub-teams when filtering by team (default: false)
         last: Number of items to return (backward pagination, defaults to 50)
         orderBy: Field to order by (createdAt or updatedAt, default: createdAt)
         sort: [INTERNAL] Sort options for issues
@@ -6158,9 +6210,17 @@ def resolve_commentCreate(obj, info, **kwargs):
             subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
             comment.subscribers = subscribers
 
-        session.add(comment)
+        # Get current user from context for comment author
+        current_user_id = info.context.get("user_id") or info.context.get("impersonate_user_id")
+        if current_user_id:
+            comment.userId = current_user_id
 
-        return comment
+        session.add(comment)
+        session.flush()
+        session.refresh(comment)
+
+        now_timestamp = datetime.now(timezone.utc)
+        return {"success": True, "comment": comment, "lastSyncId": float(now_timestamp.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to create comment: {str(e)}")
@@ -8993,9 +9053,17 @@ def resolve_issueAddLabel(obj, info, **kwargs):
             issue.labelIds.append(label_id)
 
         # Update the updatedAt timestamp
-        issue.updatedAt = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        issue.updatedAt = now
 
-        return issue
+        session.flush()
+
+        # Eagerly load the labels relationship
+        from sqlalchemy.orm import selectinload
+        issue = session.query(Issue).options(selectinload(Issue.labels)).filter_by(id=issue_id).first()
+
+        # Return IssuePayload
+        return {"success": True, "issue": issue, "lastSyncId": float(now.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to add label to issue: {str(e)}")
@@ -9051,9 +9119,17 @@ def resolve_issueRemoveLabel(obj, info, **kwargs):
             issue.labelIds.remove(label_id)
 
         # Update the updatedAt timestamp
-        issue.updatedAt = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        issue.updatedAt = now
 
-        return issue
+        session.flush()
+
+        # Eagerly load the labels relationship
+        from sqlalchemy.orm import selectinload
+        issue = session.query(Issue).options(selectinload(Issue.labels)).filter_by(id=issue_id).first()
+
+        # Return IssuePayload
+        return {"success": True, "issue": issue, "lastSyncId": float(now.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to remove label from issue: {str(e)}")
@@ -10786,8 +10862,12 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
                 # Archive the old team-specific label
                 team_label.archivedAt = now
 
-        # Return the created label
-        return issue_label
+        # Flush and refresh to load relationships
+        session.flush()
+        session.refresh(issue_label)
+
+        # Return IssueLabelPayload
+        return {"success": True, "issueLabel": issue_label, "lastSyncId": float(now.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to create issue label: {str(e)}")
@@ -10878,8 +10958,12 @@ def resolve_issueLabelUpdate(obj, info, **kwargs):
                 team_label.archivedAt = now
                 team_label.updatedAt = now
 
-        # Return the updated label
-        return issue_label
+        # Flush and refresh
+        session.flush()
+        session.refresh(issue_label)
+
+        # Return IssueLabelPayload
+        return {"success": True, "issueLabel": issue_label, "lastSyncId": float(now.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to update issue label: {str(e)}")
@@ -14839,8 +14923,12 @@ def resolve_teamCreate(obj, info, **kwargs):
         if backlog_state_id:
             new_team.defaultIssueStateId = backlog_state_id
 
-        # Return the team entity (TeamPayload structure expects just the entity)
-        return new_team
+        # Flush and refresh to load relationships
+        session.flush()
+        session.refresh(new_team)
+
+        # Return TeamPayload structure
+        return {"success": True, "team": new_team, "lastSyncId": float(now.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to create team: {str(e)}")

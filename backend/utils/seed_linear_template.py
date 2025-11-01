@@ -109,26 +109,54 @@ def insert_seed_data(conn, schema_name: str, seed_data: dict):
         print(f"  Inserting {len(records)} {table_name}...")
 
         for record in records:
-            columns = ", ".join(record.keys())
-            placeholders = ", ".join([f":{k}" for k in record.keys()])
+            # Convert dict/list values to JSON strings for PostgreSQL
+            processed_record = {}
+            for k, v in record.items():
+                if isinstance(v, (dict, list)):
+                    processed_record[k] = json.dumps(v)
+                else:
+                    processed_record[k] = v
+
+            # Quote column names to preserve case sensitivity in PostgreSQL
+            columns = ", ".join([f'"{k}"' for k in processed_record.keys()])
+            placeholders = ", ".join([f":{k}" for k in processed_record.keys()])
             sql = f"INSERT INTO {schema_name}.{table_name} ({columns}) VALUES ({placeholders})"
-            conn.execute(text(sql), record)
+            conn.execute(text(sql), processed_record)
 
 
 def register_public_template(
     conn, *, service: str, name: str, location: str, description: str | None = None
 ):
-    """Register a template in platform meta DB as public (owner_scope='public')."""
+    """Register a template in platform meta DB as public."""
+    # Check if template already exists
+    check_sql = text(
+        """
+        SELECT id FROM public.environments
+        WHERE service = :service
+          AND name = :name
+          AND version = :version
+          AND visibility = 'public'
+          AND owner_id IS NULL
+        LIMIT 1
+        """
+    )
+    existing = conn.execute(
+        check_sql, {"service": service, "name": name, "version": "v1"}
+    ).fetchone()
+
+    if existing:
+        print(f"Template {name} already exists, skipping")
+        return
+
     sql = text(
         """
         INSERT INTO public.environments (
-            id, service, name, version, owner_scope, description,
-            owner_org_id, owner_user_id, kind, location, created_at, updated_at
+            id, service, name, version, visibility, description,
+            owner_id, kind, location, created_at, updated_at
         ) VALUES (
             :id, :service, :name, :version, 'public', :description,
-            NULL, NULL, 'schema', :location, NOW(), NOW()
+            NULL, 'schema', :location, NOW(), NOW()
         )
-        ON CONFLICT ON CONSTRAINT uq_environments_identity DO NOTHING
         """
     )
     params = {

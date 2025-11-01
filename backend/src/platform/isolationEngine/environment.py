@@ -104,12 +104,21 @@ class EnvironmentHandler:
             meta = MetaData()
             meta.reflect(bind=engine, schema=template_schema)
             ordered = [t.name for t in meta.sorted_tables]
-            for tbl in ordered:
-                conn.execute(
-                    text(
-                        f'INSERT INTO "{target_schema}".{tbl} SELECT * FROM "{template_schema}".{tbl}'
+
+            # Temporarily disable triggers to handle circular foreign key dependencies
+            conn.execute(text('SET session_replication_role = replica'))
+
+            try:
+                for tbl in ordered:
+                    conn.execute(
+                        text(
+                            f'INSERT INTO "{target_schema}".{tbl} SELECT * FROM "{template_schema}".{tbl}'
+                        )
                     )
-                )
+            finally:
+                # Re-enable triggers
+                conn.execute(text('SET session_replication_role = DEFAULT'))
+
             self._reset_sequences(conn, target_schema, ordered)
 
     def set_runtime_environment(
