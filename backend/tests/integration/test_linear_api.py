@@ -390,3 +390,260 @@ class TestIssueUpdate:
         issue = result["issue"]
         assert issue["state"]["id"] == STATE_IN_PROGRESS
         assert issue["state"]["name"] == "In Progress"
+
+
+# ==========================================
+# TIER 2 TESTS: Common Operations
+# ==========================================
+
+
+@pytest.mark.asyncio
+class TestSearchIssues:
+    async def test_search_issues_by_text(self, linear_client: AsyncClient):
+        """Test full-text search across issues."""
+        query = """
+          query($term: String!) {
+            searchIssues(term: $term) {
+              nodes {
+                id
+                identifier
+                title
+              }
+            }
+          }
+        """
+        variables = {"term": "authentication"}
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        issues = data["data"]["searchIssues"]["nodes"]
+        # Should find at least the "Fix authentication bug in login flow" issue
+        assert len(issues) >= 1
+        assert any("authentication" in issue["title"].lower() for issue in issues)
+
+    async def test_search_issues_no_results(self, linear_client: AsyncClient):
+        """Test search with no matching results."""
+        query = """
+          query($term: String!) {
+            searchIssues(term: $term) {
+              nodes {
+                id
+                title
+              }
+            }
+          }
+        """
+        variables = {"term": "NONEXISTENT_SEARCH_TERM_12345"}
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        issues = data["data"]["searchIssues"]["nodes"]
+        assert len(issues) == 0
+
+
+@pytest.mark.asyncio
+class TestCommentCreate:
+    async def test_create_comment_basic(self, linear_client: AsyncClient):
+        """Test creating a comment on an issue."""
+        query = """
+          mutation($input: CommentCreateInput!) {
+            commentCreate(input: $input) {
+              success
+              comment {
+                id
+                body
+                issue {
+                  id
+                }
+                user {
+                  id
+                  name
+                }
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "issueId": ISSUE_ENG_001,
+                "body": "This is a test comment from integration test",
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]["commentCreate"]
+        assert result["success"] is True
+        comment = result["comment"]
+        assert comment["body"] == "This is a test comment from integration test"
+        assert comment["issue"]["id"] == ISSUE_ENG_001
+        assert comment["user"]["id"] == "U01AGENT"
+
+    async def test_create_comment_invalid_issue(self, linear_client: AsyncClient):
+        """Test creating a comment with invalid issueId fails."""
+        query = """
+          mutation($input: CommentCreateInput!) {
+            commentCreate(input: $input) {
+              success
+              comment {
+                id
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "issueId": "INVALID_ISSUE_ID",
+                "body": "This should fail",
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "errors" in data
+
+
+@pytest.mark.asyncio
+class TestTeamCreate:
+    async def test_create_team_basic(self, linear_client: AsyncClient):
+        """Test creating a new team."""
+        query = """
+          mutation($input: TeamCreateInput!) {
+            teamCreate(input: $input) {
+              success
+              team {
+                id
+                name
+                key
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "name": "Product Team",
+                "key": "PROD",
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]["teamCreate"]
+        assert result["success"] is True
+        team = result["team"]
+        assert team["name"] == "Product Team"
+        assert team["key"] == "PROD"
+
+    async def test_create_team_duplicate_key(self, linear_client: AsyncClient):
+        """Test creating team with duplicate key fails."""
+        query = """
+          mutation($input: TeamCreateInput!) {
+            teamCreate(input: $input) {
+              success
+              team {
+                id
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "name": "Another Engineering Team",
+                "key": "ENG",  # This key already exists
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert "errors" in data
+
+
+@pytest.mark.asyncio
+class TestIssueBatchCreate:
+    async def test_batch_create_issues(self, linear_client: AsyncClient):
+        """Test creating multiple issues at once."""
+        query = """
+          mutation($input: IssueBatchCreateInput!) {
+            issueBatchCreate(input: $input) {
+              success
+              issues {
+                id
+                title
+                team {
+                  id
+                  key
+                }
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "issues": [
+                    {"teamId": TEAM_ENG, "title": "Batch issue 1"},
+                    {"teamId": TEAM_ENG, "title": "Batch issue 2"},
+                    {"teamId": TEAM_ENG, "title": "Batch issue 3"},
+                ]
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]["issueBatchCreate"]
+        assert result["success"] is True
+        issues = result["issues"]
+        assert len(issues) == 3
+        assert all(issue["team"]["key"] == "ENG" for issue in issues)
+        assert issues[0]["title"] == "Batch issue 1"
+
+    async def test_batch_create_mixed_teams(self, linear_client: AsyncClient):
+        """Test batch creating issues with different titles in same team."""
+        query = """
+          mutation($input: IssueBatchCreateInput!) {
+            issueBatchCreate(input: $input) {
+              success
+              issues {
+                id
+                title
+                team {
+                  key
+                }
+              }
+            }
+          }
+        """
+        variables = {
+            "input": {
+                "issues": [
+                    {"teamId": TEAM_ENG, "title": "First engineering issue"},
+                    {"teamId": TEAM_ENG, "title": "Second engineering issue"},
+                ]
+            }
+        }
+        response = await linear_client.post(
+            "/graphql", json={"query": query, "variables": variables}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        result = data["data"]["issueBatchCreate"]
+        assert result["success"] is True
+        issues = result["issues"]
+        assert len(issues) == 2
+        assert issues[0]["team"]["key"] == "ENG"
+        assert issues[1]["team"]["key"] == "ENG"
+        assert issues[0]["title"] == "First engineering issue"
+        assert issues[1]["title"] == "Second engineering issue"

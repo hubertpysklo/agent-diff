@@ -6158,9 +6158,17 @@ def resolve_commentCreate(obj, info, **kwargs):
             subscribers = session.query(User).filter(User.id.in_(subscriber_ids)).all()
             comment.subscribers = subscribers
 
-        session.add(comment)
+        # Get current user from context for comment author
+        current_user_id = info.context.get("user_id") or info.context.get("impersonate_user_id")
+        if current_user_id:
+            comment.userId = current_user_id
 
-        return comment
+        session.add(comment)
+        session.flush()
+        session.refresh(comment)
+
+        now_timestamp = datetime.now(timezone.utc)
+        return {"success": True, "comment": comment, "lastSyncId": float(now_timestamp.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to create comment: {str(e)}")
@@ -14839,8 +14847,12 @@ def resolve_teamCreate(obj, info, **kwargs):
         if backlog_state_id:
             new_team.defaultIssueStateId = backlog_state_id
 
-        # Return the team entity (TeamPayload structure expects just the entity)
-        return new_team
+        # Flush and refresh to load relationships
+        session.flush()
+        session.refresh(new_team)
+
+        # Return TeamPayload structure
+        return {"success": True, "team": new_team, "lastSyncId": float(now.timestamp())}
 
     except Exception as e:
         raise Exception(f"Failed to create team: {str(e)}")

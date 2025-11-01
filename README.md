@@ -22,12 +22,14 @@ Use it for:
   "reactions.add"  # add emoji reactions to seeded messages
   ```
 
-- **Linear** – GraphQL schema and resolvers for issues/projects (still WIP). See [`backend/src/services/linear/README.md`](backend/src/services/linear/README.md). Sample operations:
+- **Linear** – GraphQL API with 58 queries and 105 mutations implemented. See [`backend/src/services/linear/README.md`](backend/src/services/linear/README.md). A few examples:
 
   ```python
-  "issues"            # query issues (list/pagination)
-  "issueCreate"       # mutation to create an issue
-  "projectUpdate"     # mutation to update project metadata
+  "issues"            # list/filter issues with pagination
+  "teams"             # list teams
+  "issueCreate"       # create new issue
+  "issueUpdate"       # update issue (state, assignee, priority, etc.)
+  "commentCreate"     # add comment to issue
   ```
 
 - Gmail, GitHub, Jira (TBD).
