@@ -530,7 +530,7 @@ class TestTeamCreate:
         variables = {
             "input": {
                 "name": "Product Team",
-                "key": "PROD",
+                "key": "PRODX",  # avoid collision with seeded PROD team
             }
         }
         response = await linear_client.post(
@@ -542,7 +542,7 @@ class TestTeamCreate:
         assert result["success"] is True
         team = result["team"]
         assert team["name"] == "Product Team"
-        assert team["key"] == "PROD"
+        assert team["key"] == "PRODX"
 
     async def test_create_team_duplicate_key(self, linear_client: AsyncClient):
         """Test creating team with duplicate key fails."""
@@ -749,7 +749,8 @@ class TestIssueLabels:
             }
         }
         create_response = await linear_client.post(
-            "/graphql", json={"query": create_label_query, "variables": create_variables}
+            "/graphql",
+            json={"query": create_label_query, "variables": create_variables},
         )
         assert create_response.status_code == 200
         create_data = create_response.json()
@@ -813,7 +814,9 @@ class TestIssueLabels:
                 },
             },
         )
-        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"]["id"]
+        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"][
+            "id"
+        ]
 
         # Add the label
         await linear_client.post(
@@ -890,7 +893,9 @@ class TestIssueLabelUpdate:
                 },
             },
         )
-        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"]["id"]
+        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"][
+            "id"
+        ]
 
         # Update the label
         update_query = """
@@ -951,7 +956,9 @@ class TestIssueLabelDelete:
                 },
             },
         )
-        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"]["id"]
+        label_id = create_response.json()["data"]["issueLabelCreate"]["issueLabel"][
+            "id"
+        ]
 
         # Delete the label
         delete_query = """

@@ -386,11 +386,18 @@ def sdk_client(test_api_key, cleanup_test_templates):
     """AgentDiff SDK client for integration tests."""
     import sys
 
-    sdk_path = "/sdk/agent_diff_pkg"
-    if sdk_path not in sys.path:
-        sys.path.insert(0, sdk_path)
+    # Support multiple local SDK path variants mounted by docker-compose
+    sdk_paths = [
+        "/sdk/agent-diff-python",  # current folder name
+        "/sdk/agent_diff_python",  # legacy underscore variant
+    ]
+    for sdk_path in sdk_paths:
+        if sdk_path not in sys.path:
+            sys.path.insert(0, sdk_path)
 
-    from agent_diff.client import AgentDiff
+    import importlib
+
+    AgentDiff = importlib.import_module("agent_diff.client").AgentDiff
 
     # Use backend service name for inter-container communication
     return AgentDiff(
@@ -401,7 +408,11 @@ def sdk_client(test_api_key, cleanup_test_templates):
 
 @pytest_asyncio.fixture
 async def linear_client(
-    test_user_id, core_isolation_engine, core_evaluation_engine, session_manager, environment_handler
+    test_user_id,
+    core_isolation_engine,
+    core_evaluation_engine,
+    session_manager,
+    environment_handler,
 ):
     """Create an AsyncClient for testing Linear GraphQL API as U01AGENT (agent)."""
     from httpx import AsyncClient, ASGITransport
@@ -432,7 +443,9 @@ async def linear_client(
     # Create Linear GraphQL schema
     linear_schema_path = "src/services/linear/api/schema/Linear-API.graphql"
     linear_type_defs = load_schema_from_path(linear_schema_path)
-    linear_schema = make_executable_schema(linear_type_defs, query, mutation, issue_type)
+    linear_schema = make_executable_schema(
+        linear_type_defs, query, mutation, issue_type
+    )
 
     linear_graphql = LinearGraphQL(
         linear_schema,
@@ -453,7 +466,11 @@ async def linear_client(
 
 @pytest_asyncio.fixture
 async def linear_client_john(
-    test_user_id, core_isolation_engine, core_evaluation_engine, session_manager, environment_handler
+    test_user_id,
+    core_isolation_engine,
+    core_evaluation_engine,
+    session_manager,
+    environment_handler,
 ):
     """Create an AsyncClient for testing Linear GraphQL API as U02JOHN (John Doe)."""
     from httpx import AsyncClient, ASGITransport
@@ -483,7 +500,9 @@ async def linear_client_john(
 
     linear_schema_path = "src/services/linear/api/schema/Linear-API.graphql"
     linear_type_defs = load_schema_from_path(linear_schema_path)
-    linear_schema = make_executable_schema(linear_type_defs, query, mutation, issue_type)
+    linear_schema = make_executable_schema(
+        linear_type_defs, query, mutation, issue_type
+    )
 
     linear_graphql = LinearGraphQL(
         linear_schema,
@@ -504,7 +523,11 @@ async def linear_client_john(
 
 @pytest_asyncio.fixture
 async def linear_client_with_differ(
-    test_user_id, core_isolation_engine, core_evaluation_engine, session_manager, environment_handler
+    test_user_id,
+    core_isolation_engine,
+    core_evaluation_engine,
+    session_manager,
+    environment_handler,
 ):
     """Create AsyncClient and Differ for the same Linear environment."""
     from httpx import AsyncClient, ASGITransport
@@ -535,7 +558,9 @@ async def linear_client_with_differ(
 
     linear_schema_path = "src/services/linear/api/schema/Linear-API.graphql"
     linear_type_defs = load_schema_from_path(linear_schema_path)
-    linear_schema = make_executable_schema(linear_type_defs, query, mutation, issue_type)
+    linear_schema = make_executable_schema(
+        linear_type_defs, query, mutation, issue_type
+    )
 
     linear_graphql = LinearGraphQL(
         linear_schema,
