@@ -49,7 +49,17 @@ __all__ = ["query", "mutation", "issue_type"]
 
 
 @issue_type.field("labels")
-def resolve_issue_labels(issue, info, after=None, before=None, filter=None, first=50, includeArchived=False, last=None, orderBy="createdAt"):
+def resolve_issue_labels(
+    issue,
+    info,
+    after=None,
+    before=None,
+    filter=None,
+    first=50,
+    includeArchived=False,
+    last=None,
+    orderBy="createdAt",
+):
     """
     Resolve the labels field to return an IssueLabelConnection.
 
@@ -68,7 +78,9 @@ def resolve_issue_labels(issue, info, after=None, before=None, filter=None, firs
         IssueLabelConnection with nodes field
     """
     # Get labels from the relationship
-    labels = issue.labels if hasattr(issue, "labels") and issue.labels is not None else []
+    labels = (
+        issue.labels if hasattr(issue, "labels") and issue.labels is not None else []
+    )
 
     # Filter archived labels unless includeArchived is True
     if not includeArchived:
@@ -93,6 +105,7 @@ def resolve_issue_labels(issue, info, after=None, before=None, filter=None, firs
 
     # Return in IssueLabelConnection format
     return {"nodes": labels}
+
 
 # Helper functions for cursor-based pagination
 def encode_cursor(item, order_field="createdAt"):
@@ -6211,7 +6224,9 @@ def resolve_commentCreate(obj, info, **kwargs):
             comment.subscribers = subscribers
 
         # Get current user from context for comment author
-        current_user_id = info.context.get("user_id") or info.context.get("impersonate_user_id")
+        current_user_id = info.context.get("user_id") or info.context.get(
+            "impersonate_user_id"
+        )
         if current_user_id:
             comment.userId = current_user_id
 
@@ -6220,7 +6235,11 @@ def resolve_commentCreate(obj, info, **kwargs):
         session.refresh(comment)
 
         now_timestamp = datetime.now(timezone.utc)
-        return {"success": True, "comment": comment, "lastSyncId": float(now_timestamp.timestamp())}
+        return {
+            "success": True,
+            "comment": comment,
+            "lastSyncId": float(now_timestamp.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to create comment: {str(e)}")
@@ -9060,7 +9079,13 @@ def resolve_issueAddLabel(obj, info, **kwargs):
 
         # Eagerly load the labels relationship
         from sqlalchemy.orm import selectinload
-        issue = session.query(Issue).options(selectinload(Issue.labels)).filter_by(id=issue_id).first()
+
+        issue = (
+            session.query(Issue)
+            .options(selectinload(Issue.labels))
+            .filter_by(id=issue_id)
+            .first()
+        )
 
         # Return IssuePayload
         return {"success": True, "issue": issue, "lastSyncId": float(now.timestamp())}
@@ -9126,7 +9151,13 @@ def resolve_issueRemoveLabel(obj, info, **kwargs):
 
         # Eagerly load the labels relationship
         from sqlalchemy.orm import selectinload
-        issue = session.query(Issue).options(selectinload(Issue.labels)).filter_by(id=issue_id).first()
+
+        issue = (
+            session.query(Issue)
+            .options(selectinload(Issue.labels))
+            .filter_by(id=issue_id)
+            .first()
+        )
 
         # Return IssuePayload
         return {"success": True, "issue": issue, "lastSyncId": float(now.timestamp())}
@@ -9641,6 +9672,17 @@ def resolve_issueCreate(obj, info, **kwargs):
             trashed=False,
         )
 
+        # Generate sequential issue number and identifier based on team
+        team = session.query(Team).filter(Team.id == team_id).first()
+        if team is None:
+            raise Exception(f"Team not found: {team_id}")
+
+        next_number = float((team.issueCount or 0) + 1)
+        team.issueCount = int(next_number)
+        issue.number = next_number
+        issue.identifier = f"{team.key}-{int(next_number)}"
+        issue.url = issue.url or f"/issues/{issue.identifier}"
+
         # Add to session
         session.add(issue)
 
@@ -9690,6 +9732,8 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
             raise ValueError("At least one issue must be provided in the batch")
 
         created_issues = []
+        # Cache per-team counters to avoid extra queries when batching
+        team_counters: dict[str, int] = {}
         now = datetime.now(timezone.utc)
 
         # Create each issue in the batch
@@ -9813,6 +9857,21 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
                 archivedAt=None,
                 trashed=False,
             )
+
+            # Generate sequential issue number and identifier based on team
+            team = session.query(Team).filter(Team.id == team_id).first()
+            if team is None:
+                raise Exception(f"Team not found: {team_id}")
+
+            # Determine the next number for this team within the batch
+            current_count = team_counters.get(team_id, team.issueCount or 0)
+            next_number = current_count + 1
+            team_counters[team_id] = next_number
+
+            team.issueCount = int(next_number)
+            issue.number = float(next_number)
+            issue.identifier = f"{team.key}-{int(next_number)}"
+            issue.url = issue.url or f"/issues/{issue.identifier}"
 
             # Add to session
             session.add(issue)
@@ -10867,7 +10926,11 @@ def resolve_issueLabelCreate(obj, info, **kwargs):
         session.refresh(issue_label)
 
         # Return IssueLabelPayload
-        return {"success": True, "issueLabel": issue_label, "lastSyncId": float(now.timestamp())}
+        return {
+            "success": True,
+            "issueLabel": issue_label,
+            "lastSyncId": float(now.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to create issue label: {str(e)}")
@@ -10963,7 +11026,11 @@ def resolve_issueLabelUpdate(obj, info, **kwargs):
         session.refresh(issue_label)
 
         # Return IssueLabelPayload
-        return {"success": True, "issueLabel": issue_label, "lastSyncId": float(now.timestamp())}
+        return {
+            "success": True,
+            "issueLabel": issue_label,
+            "lastSyncId": float(now.timestamp()),
+        }
 
     except Exception as e:
         raise Exception(f"Failed to update issue label: {str(e)}")
@@ -15841,6 +15908,7 @@ def resolve_workflowStates(
     # Use the centralized pagination helper
     return apply_pagination(items, after, before, first, last, order_field)
 
+
 @mutation.field("workflowStateArchive")
 def resolve_workflowStateArchive(obj, info, **kwargs):
     """
@@ -15891,6 +15959,7 @@ def resolve_workflowStateArchive(obj, info, **kwargs):
 
     except Exception as e:
         raise Exception(f"Failed to archive workflow state: {e}") from e
+
 
 @mutation.field("workflowStateCreate")
 def resolve_workflowStateCreate(obj, info, **kwargs):
@@ -15972,6 +16041,7 @@ def resolve_workflowStateCreate(obj, info, **kwargs):
 
     except Exception as e:
         raise Exception(f"Failed to create workflow state: {str(e)}")
+
 
 @mutation.field("workflowStateUpdate")
 def resolve_workflowStateUpdate(obj, info, **kwargs):
