@@ -6242,6 +6242,11 @@ def resolve_commentCreate(obj, info, **kwargs):
         }
 
     except Exception as e:
+        # Ensure the DB session is clean for middleware commit
+        try:
+            session.rollback()
+        except Exception:
+            pass
         raise Exception(f"Failed to create comment: {str(e)}")
 
 
@@ -9672,21 +9677,37 @@ def resolve_issueCreate(obj, info, **kwargs):
             trashed=False,
         )
 
-        # Generate sequential issue number and identifier based on team
-        team = session.query(Team).filter(Team.id == team_id).first()
-        if team is None:
-            raise Exception(f"Team not found: {team_id}")
+        # Generate sequential issue number and identifier with row lock to avoid races
+        from sqlalchemy.exc import OperationalError
 
-        next_number = float((team.issueCount or 0) + 1)
-        team.issueCount = int(next_number)
-        issue.number = next_number
-        issue.identifier = f"{team.key}-{int(next_number)}"
-        issue.url = issue.url or f"/issues/{issue.identifier}"
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                team = (
+                    session.query(Team)
+                    .filter(Team.id == team_id)
+                    .with_for_update()
+                    .one_or_none()
+                )
+                if team is None:
+                    raise Exception(f"Team not found: {team_id}")
 
-        # Add to session and flush so relationships (e.g., team) resolve
-        session.add(issue)
-        session.flush()
-        session.refresh(issue)
+                next_number_int = int((team.issueCount or 0) + 1)
+                team.issueCount = next_number_int
+                issue.number = float(next_number_int)
+                issue.identifier = f"{team.key}-{next_number_int}"
+                issue.url = issue.url or f"/issues/{issue.identifier}"
+
+                # Persist while holding the lock
+                session.add(issue)
+                session.flush()
+                session.refresh(issue)
+                break
+            except OperationalError as oe:
+                if "deadlock detected" in str(oe).lower() and attempt < max_retries - 1:
+                    session.rollback()
+                    continue
+                raise
 
         # Return the payload
         return {"issue": issue, "success": True, "lastSyncId": float(now.timestamp())}
@@ -9734,8 +9755,10 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
             raise ValueError("At least one issue must be provided in the batch")
 
         created_issues = []
-        # Cache per-team counters to avoid extra queries when batching
+        # Cache per-team data while holding row locks
         team_counters: dict[str, int] = {}
+        team_rows: dict[str, Team] = {}
+        team_keys: dict[str, str] = {}
         now = datetime.now(timezone.utc)
 
         # Create each issue in the batch
@@ -9860,29 +9883,46 @@ def resolve_issueBatchCreate(obj, info, **kwargs):
                 trashed=False,
             )
 
-            # Generate sequential issue number and identifier based on team
-            team = session.query(Team).filter(Team.id == team_id).first()
-            if team is None:
-                raise Exception(f"Team not found: {team_id}")
-
-            # Determine the next number for this team within the batch
-            current_count = team_counters.get(team_id, team.issueCount or 0)
-            next_number = current_count + 1
-            team_counters[team_id] = next_number
-
-            team.issueCount = int(next_number)
-            issue.number = float(next_number)
-            issue.identifier = f"{team.key}-{int(next_number)}"
+            # Generate sequential issue number and identifier with row lock
+            if team_id not in team_counters:
+                # Lock the team row on first encounter in this batch
+                team_row = (
+                    session.query(Team)
+                    .filter(Team.id == team_id)
+                    .with_for_update()
+                    .one_or_none()
+                )
+                if team_row is None:
+                    raise Exception(f"Team not found: {team_id}")
+                team_rows[team_id] = team_row
+                team_keys[team_id] = team_row.key
+                team_counters[team_id] = int(team_row.issueCount or 0)
+            # Increment atomically within the transaction
+            next_number_int = team_counters[team_id] + 1
+            team_counters[team_id] = next_number_int
+            team_rows[team_id].issueCount = next_number_int
+            issue.number = float(next_number_int)
+            issue.identifier = f"{team_keys[team_id]}-{next_number_int}"
             issue.url = issue.url or f"/issues/{issue.identifier}"
 
             # Add to session
             session.add(issue)
             created_issues.append(issue)
 
-        # Flush so relationships on returned issues resolve in the response
-        session.flush()
-        for created in created_issues:
-            session.refresh(created)
+        from sqlalchemy.exc import OperationalError
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                session.flush()
+                for created in created_issues:
+                    session.refresh(created)
+                break
+            except OperationalError as oe:
+                if "deadlock detected" in str(oe).lower() and attempt < max_retries - 1:
+                    session.rollback()
+                    continue
+                raise
 
         # Return the payload
         return {
@@ -15005,6 +15045,11 @@ def resolve_teamCreate(obj, info, **kwargs):
         return {"success": True, "team": new_team, "lastSyncId": float(now.timestamp())}
 
     except Exception as e:
+        # Ensure the DB session is clean so request teardown doesn't fail
+        try:
+            session.rollback()
+        except Exception:
+            pass
         raise Exception(f"Failed to create team: {str(e)}")
 
 
